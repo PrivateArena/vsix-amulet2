@@ -199,18 +199,24 @@ export interface ToolExecutionEnd {
   isError?: boolean;
 }
 
+/**
+ * `message` is optional on all three: the runtime does emit these without a
+ * payload, and typing it as required (plus an `as any` at the read site) let a
+ * missing one through as an uncaught `undefined.content` that blanked the view.
+ * Keep it optional so consumers are forced to handle the gap.
+ */
 export interface MessageStartEvent {
   type: 'message_start';
-  message: AppMessage;
+  message?: AppMessage;
 }
 export interface MessageUpdateEvent {
   type: 'message_update';
   assistantMessageEvent?: unknown;
-  message: AppMessage;
+  message?: AppMessage;
 }
 export interface MessageEndEvent {
   type: 'message_end';
-  message: AppMessage;
+  message?: AppMessage;
 }
 
 /**

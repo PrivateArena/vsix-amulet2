@@ -101,6 +101,44 @@
   box-shadow: var(--pintra-shadow-sm);
 }
 
+/* A long question would fill the whole panel — and because the bubble is
+   sticky, it would stay there and leave the streaming answer with nowhere to
+   show. Cap it to roughly four lines and fade the cut edge; the toggle below
+   lifts the cap. `em` keeps that line count stable across font sizes, and the
+   vh term shrinks it further in a short panel. */
+.bubble-clamp {
+  max-height: min(7em, 20vh);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom,
+      #000 calc(100% - 20px),
+      transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+
+.bubble-clamp.is-expanded {
+  max-height: none;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.bubble-toggle {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pintra-fg-muted, var(--vscode-descriptionForeground));
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.bubble-toggle:hover {
+  color: var(--vscode-textLink-foreground, var(--pintra-fg));
+  text-decoration: underline;
+}
+
 /* Keep prose snug against the bubble edges. */
 .entry-bubble .entry-content-md>*:first-child {
   margin-top: 0;

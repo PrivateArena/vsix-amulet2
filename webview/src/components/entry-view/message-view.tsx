@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { LuCheck, LuCopy, LuGitBranch } from 'react-icons/lu';
 import type { Attachment, ContentBlock } from '../../../../shared/protocol';
 import {
@@ -90,6 +90,57 @@ function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
   );
 }
 
+/**
+ * A user turn. The bubble is sticky (it pins to the top while the reply streams
+ * below), so a long question would otherwise cover the whole panel and leave no
+ * room for the answer. Clamp it and offer an expand toggle instead.
+ */
+function UserBubble({
+  message,
+  tools,
+  attachments,
+}: MessageViewProps & { attachments: Attachment[] | undefined }) {
+  const clampRef = useRef<HTMLDivElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  // Measure only while collapsed: expanding drops the max-height, so the
+  // element stops overflowing and the toggle would remove itself.
+  useEffect(() => {
+    if (expanded) return;
+    const el = clampRef.current;
+    if (!el) return;
+    const check = () => setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    check();
+    // Catches panel resizes — a narrower sidebar reflows text taller.
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [expanded, message.content]);
+
+  return (
+    <div className="entry-bubble">
+      <div
+        ref={clampRef}
+        className={`bubble-clamp${expanded ? ' is-expanded' : ''}`}>
+        {attachments && attachments.length > 0 && (
+          <AttachmentGallery attachments={attachments} />
+        )}
+        {message.content.map((block, i) => renderBlock(block, i, tools))}
+      </div>
+      {overflowing && (
+        <button
+          type="button"
+          className="bubble-toggle"
+          onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+      <UserMessageActions message={message} />
+    </div>
+  );
+}
+
 export const EntryView = memo(function EntryView({
   message,
   tools,
@@ -113,13 +164,11 @@ export const EntryView = memo(function EntryView({
         )}
         <div className="entry-content">
           {isUser ? (
-            <div className="entry-bubble">
-              {attachments && attachments.length > 0 && (
-                <AttachmentGallery attachments={attachments} />
-              )}
-              {content.map((block, i) => renderBlock(block, i, tools))}
-              <UserMessageActions message={message} />
-            </div>
+            <UserBubble
+              message={message}
+              tools={tools}
+              attachments={attachments}
+            />
           ) : (
             <>
               {content.map((block, i) =>

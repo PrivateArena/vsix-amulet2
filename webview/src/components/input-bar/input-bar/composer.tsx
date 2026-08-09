@@ -8,6 +8,7 @@ import { useSlashCommands } from '../../../hooks/use-slash-commands';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
 import { openProviderLogin } from '../../../stores/provider-login-store';
+import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
 import { ContextMeter } from '../ctx-meter';
 import { ModelPicker } from '../model-picker';
@@ -105,6 +106,20 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     useEffect(() => {
       actions.requestCommands?.();
     }, []);
+
+    // Publish the draft handle so host commands can drive this textarea. The
+    // draft lives here, so without this the shell's handlers have nothing to
+    // write to. Registering flushes anything the host sent before we mounted.
+    useEffect(
+      () =>
+        useComposerStore.getState().register({
+          insertText: (text) =>
+            setInput((v) => (v && !v.endsWith(' ') ? `${v} ` : v) + text),
+          setText: (text) => setInput(text),
+          focus: () => localRef.current?.focus(),
+        }),
+      [],
+    );
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // First, let the slash command handler try to consume the event

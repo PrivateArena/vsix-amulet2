@@ -1,0 +1,52 @@
+.crash {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  height: 100%;
+}
+
+.crash-title {
+  margin: 0;
+  font-size: 1.05em;
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.crash-hint {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.crash-detail {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--pintra-border-subtle);
+  border-radius: var(--pintra-radius-md, 6px);
+  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.82em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.crash-stack {
+  opacity: 0.75;
+}
+
+.crash-retry {
+  align-self: flex-start;
+  padding: 4px 12px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: var(--pintra-radius-md, 6px);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.crash-retry:hover {
+  background: var(--vscode-button-hoverBackground);
+}

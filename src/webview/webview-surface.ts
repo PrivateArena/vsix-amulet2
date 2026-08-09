@@ -18,6 +18,12 @@ export interface CreateWebviewSurfaceOptions {
   isVisible: () => boolean;
   /** When true, the surface opens on a fresh session instead of resuming (see {@link ChatBridge}). */
   openFresh?: boolean;
+  /**
+   * Called when the webview app signals `ready`. Until then `postMessage` is
+   * dropped on the floor by VS Code, so anything the host wants to push at a
+   * cold-started view has to wait for this. Fires again after a hot reload.
+   */
+  onReady?: () => void;
 }
 
 /**
@@ -48,6 +54,7 @@ export function createWebviewSurface(
   );
 
   const sub = webview.onDidReceiveMessage((message: WebviewMessage) => {
+    if (message.type === 'ready') options.onReady?.();
     void bridge.handleMessage(message);
   });
 

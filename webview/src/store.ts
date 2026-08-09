@@ -5,6 +5,9 @@ import type {
   ContentBlock,
   ExtensionUiRequest,
   HostMessage,
+  MessageEndEvent,
+  MessageStartEvent,
+  MessageUpdateEvent,
   ModelInfo,
   RpcEvent,
   RuntimeStatus,
@@ -234,8 +237,10 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         seq: state.seq + 1,
       };
     case 'message_start': {
-      const msg = (event as any).message as AppMessage;
-      if (!isDisplayableRole(msg.role)) {
+      // RpcEvent ends in an open `{ type: string }` member, so `case` doesn't
+      // narrow — cast to the specific event to get its optional `message` back.
+      const msg = (event as MessageStartEvent).message;
+      if (!msg || !isDisplayableRole(msg.role)) {
         return { ...state, currentUid: null };
       }
       const ui = toUiMessage(msg);
@@ -262,8 +267,10 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       };
     }
     case 'message_update': {
-      const msg = (event as any).message as AppMessage;
-      if (!state.currentUid) return state;
+      const msg = (event as MessageUpdateEvent).message;
+      // Nothing to merge without a payload — leave the turn streaming so the
+      // `message_end` that follows still finalizes it.
+      if (!msg || !state.currentUid) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
@@ -278,17 +285,19 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       };
     }
     case 'message_end': {
-      const msg = (event as any).message as AppMessage;
+      const msg = (event as MessageEndEvent).message;
       if (!state.currentUid) return state;
+      // A missing payload still has to end the turn — otherwise the message
+      // keeps its blinking caret and `streaming: true` forever.
       return {
         ...state,
         messages: state.messages.map((m) =>
           m.uid === state.currentUid
             ? {
                 ...m,
-                content: msg.content ?? m.content,
-                usage: msg.usage ?? m.usage,
-                model: msg.model ?? m.model,
+                content: msg?.content ?? m.content,
+                usage: msg?.usage ?? m.usage,
+                model: msg?.model ?? m.model,
                 streaming: false,
               }
             : m,

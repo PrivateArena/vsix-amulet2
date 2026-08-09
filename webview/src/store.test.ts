@@ -145,6 +145,56 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
     expect(s.currentUid).toBeNull();
   });
 
+  it('survives message events that arrive without a payload', () => {
+    // The runtime does emit these bare. Reading `.content` off the missing
+    // message used to throw inside the reducer, which unmounted the whole view
+    // and left the panel blank.
+    let s = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: { type: 'message_start', message: { role: 'assistant', content: [] } },
+      }),
+    );
+    const uid = s.currentUid;
+
+    expect(() => {
+      s = reducer(s, host({ type: 'rpcEvent', event: { type: 'message_update' } }));
+    }).not.toThrow();
+    // A payload-less update changes nothing and leaves the turn streaming.
+    expect(s.currentUid).toBe(uid);
+    expect(s.messages[0].streaming).toBe(true);
+
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'message_update',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+        },
+      }),
+    );
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
+
+    // A payload-less end still has to finalize, keeping the content it had.
+    expect(() => {
+      s = reducer(s, host({ type: 'rpcEvent', event: { type: 'message_end' } }));
+    }).not.toThrow();
+    expect(s.messages[0].streaming).toBe(false);
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
+    expect(s.currentUid).toBeNull();
+  });
+
+  it('ignores a message_start with no payload', () => {
+    const s = reducer(
+      initialState,
+      host({ type: 'rpcEvent', event: { type: 'message_start' } }),
+    );
+    expect(s.messages).toHaveLength(0);
+    expect(s.currentUid).toBeNull();
+  });
+
   it('links pending attachments to a new user message', () => {
     let s = reducer(initialState, {
       type: 'addPendingAttachments',

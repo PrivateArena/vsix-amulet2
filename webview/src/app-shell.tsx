@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { HostMessage } from '../../shared/protocol';
 import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
+import { composer } from './stores/composer-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
 import { ChatScreen } from './screens/session-screen';
@@ -22,24 +23,24 @@ type ViewMessageHandlers = {
 export function Shell() {
   const state = useChatState();
   const dispatch = useChatDispatch();
-  const [, setInput] = useState('');
   const [forkMode, setForkMode] = useState<ForkMode | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     // A few host messages steer view-local UI (focus, drafts, fork mode,
     // attachments); route those here and let everything else fall through to
     // the store so there's a single reducer path for chat state.
+    // Draft edits go through the composer store — the textarea's value lives in
+    // the composer, which isn't mounted yet while the splash screen is up.
     const handlers: ViewMessageHandlers = {
-      focusInput: () => textareaRef.current?.focus(),
+      focusInput: () => composer.focus(),
       insertText: (message) => {
-        setInput((v) => (v && !v.endsWith(' ') ? v + ' ' : v) + message.text);
-        textareaRef.current?.focus();
+        composer.insertText(message.text);
+        composer.focus();
       },
       enterForkMode: (message) => {
         setForkMode({ entryId: message.entryId, text: message.text });
-        setInput(message.text);
-        textareaRef.current?.focus();
+        composer.setText(message.text);
+        composer.focus();
       },
       pickedFiles: (message) =>
         dispatch({ type: 'addPendingAttachments', attachments: message.files }),
@@ -80,7 +81,7 @@ export function Shell() {
             className="ext-link"
             onClick={() => {
               setForkMode(null);
-              setInput('');
+              composer.setText('');
             }}>
             Cancel
           </button>
