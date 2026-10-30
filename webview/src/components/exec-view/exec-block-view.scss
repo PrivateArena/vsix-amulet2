@@ -207,6 +207,19 @@ body.spacing-compact .exec-block.exec-joined-prev {
   font-variation-settings: 'MONO' 1;
 }
 
+/* Right-aligned elapsed time in a summary bar (subagent cards, long-running tools). */
+.exec-header .tool-duration {
+  margin-left: auto;
+  color: var(--pintra-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The duration already absorbs the free space, so the chevron tucks in behind it. */
+.exec-header .tool-duration + .exec-chevron {
+  margin-left: 0;
+}
+
 /* Disclosure chevron */
 .exec-chevron {
   display: inline-flex;

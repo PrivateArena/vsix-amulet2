@@ -18,6 +18,7 @@ import type {
   ToolExecutionEnd,
   ToolExecutionStart,
   ToolExecutionUpdate,
+  ToolResultMessage,
 } from '../../shared/protocol';
 import {
   applyAssistantEvent,
@@ -36,6 +37,24 @@ export interface ToolExec {
   resultText?: string;
   resultBlocks?: ContentBlock[];
   isError?: boolean;
+  /**
+   * Id of the tool call that made this one (`ctx.executeTool()`). Nested calls get
+   * no message of their own, so they hang off the parent instead of the timeline.
+   */
+  parentToolCallId?: string;
+  /** Wall-clock duration, from `tool_execution_end`. */
+  durationMs?: number;
+  /** The tool's own `details` payload (subagent progress card, report, …). */
+  details?: unknown;
+  /**
+   * Set when pi dropped this nested call's arguments from its record to stay under
+   * the size budget — the byte count it omitted, for the row's preview.
+   */
+  argsOmittedBytes?: number;
+  /** Ids of the calls this tool made, in arrival order. */
+  childIds?: string[];
+  /** False when pi truncated the nested-call record (count/size limits). */
+  nestedComplete?: boolean;
 }
 
 export interface UiMessage {
@@ -130,21 +149,84 @@ function seedToolsFromHistory(
         };
     }
   }
-  for (const m of messages as any[]) {
-    if (m.role === 'toolResult' && m.toolCallId) {
-      const id = m.toolCallId as string;
-      tools[id] = {
-        toolCallId: id,
-        toolName: m.toolName ?? tools[id]?.toolName ?? 'tool',
-        args: tools[id]?.args,
-        status: m.isError ? 'error' : 'done',
-        isError: !!m.isError,
-        resultBlocks: normalizeContent(m.content),
-        resultText: textOfContent(m.content),
+  const settled = (
+    messages as unknown as (AppMessage | ToolResultMessage)[]
+  ).filter(
+    (m): m is ToolResultMessage =>
+      (m as { role?: string }).role === 'toolResult' &&
+      typeof (m as ToolResultMessage).toolCallId === 'string',
+  );
+  for (const result of settled) {
+    const id = result.toolCallId;
+    tools[id] = {
+      toolCallId: id,
+      toolName: result.toolName ?? tools[id]?.toolName ?? 'tool',
+      args: tools[id]?.args,
+      status: result.isError ? 'error' : 'done',
+      isError: !!result.isError,
+      durationMs: result.durationMs,
+      details: result.details,
+      resultBlocks: normalizeContent(result.content),
+      resultText: textOfContent(result.content),
+    };
+    // Nested calls are only recoverable from the parent's record: the child never
+    // produces messages in this session. Outputs are not persisted, so a reloaded
+    // card lists calls without expandable results.
+    const nested = result.nestedCalls;
+    if (!nested?.calls?.length) continue;
+    const childIds: string[] = [];
+    for (const call of nested.calls) {
+      if (!call?.id || tools[call.id]) continue;
+      childIds.push(call.id);
+      tools[call.id] = {
+        toolCallId: call.id,
+        toolName: call.name,
+        args: call.arguments,
+        argsOmittedBytes: call.argumentsBytes,
+        parentToolCallId: id,
+        status:
+          call.status === 'ok'
+            ? 'done'
+            : call.status === 'error'
+              ? 'error'
+              : 'running',
+        isError: call.status === 'error',
+        durationMs: call.durationMs,
       };
     }
+    tools[id] = {
+      ...tools[id],
+      childIds,
+      nestedComplete: nested.complete,
+    };
   }
   return tools;
+}
+
+/**
+ * Link a nested call to the tool that made it, keeping arrival order. Returns the
+ * same map when there is nothing to do, so unrelated tool cards keep their identity.
+ */
+function linkChild(
+  tools: Record<string, ToolExec>,
+  parentId: string,
+  childId: string,
+): Record<string, ToolExec> {
+  const parent = tools[parentId];
+  if (!parent || parent.childIds?.includes(childId)) return tools;
+  return {
+    ...tools,
+    [parentId]: { ...parent, childIds: [...(parent.childIds ?? []), childId] },
+  };
+}
+
+function withParentLink(
+  tools: Record<string, ToolExec>,
+  entry: ToolExec,
+): Record<string, ToolExec> {
+  return entry.parentToolCallId
+    ? linkChild(tools, entry.parentToolCallId, entry.toolCallId)
+    : tools;
 }
 
 export type Action =
@@ -249,7 +331,27 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       // narrow — cast to the specific event to get its optional `message` back.
       const msg = (event as MessageStartEvent).message;
       if (!msg || !isDisplayableRole(msg.role)) {
-        return { ...state, currentUid: null };
+        // A settled tool result carries pi's authoritative record of the calls that
+        // tool made and whether pi truncated it (count/size limits). The live list
+        // is already complete for the UI, so only the flag is harvested here.
+        const result = msg as unknown as ToolResultMessage | undefined;
+        const nested = result?.nestedCalls;
+        const parent =
+          nested && result ? state.tools[result.toolCallId] : undefined;
+        if (!nested || !parent || parent.nestedComplete === nested.complete) {
+          return { ...state, currentUid: null };
+        }
+        return {
+          ...state,
+          currentUid: null,
+          tools: {
+            ...state.tools,
+            [result!.toolCallId]: {
+              ...parent,
+              nestedComplete: nested.complete,
+            },
+          },
+        };
       }
       const ui = toUiMessage(msg);
       ui.streaming = msg.role === 'assistant';
@@ -325,60 +427,68 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
     }
     case 'tool_execution_start': {
       const e = event as ToolExecutionStart;
+      const entry: ToolExec = {
+        toolCallId: e.toolCallId,
+        toolName: e.toolName,
+        args: e.args,
+        status: 'running',
+        parentToolCallId: e.parentToolCallId,
+      };
       return {
         ...state,
-        tools: {
-          ...state.tools,
-          [e.toolCallId]: {
-            toolCallId: e.toolCallId,
-            toolName: e.toolName,
-            args: e.args,
-            status: 'running',
-          },
-        },
+        tools: withParentLink({ ...state.tools, [e.toolCallId]: entry }, entry),
       };
     }
     case 'tool_execution_update': {
       const e = event as ToolExecutionUpdate;
       const existing = state.tools[e.toolCallId];
+      const entry: ToolExec = {
+        toolCallId: e.toolCallId,
+        toolName: e.toolName,
+        args: e.args ?? existing?.args,
+        status: 'running',
+        parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
+        details: e.partialResult?.details ?? existing?.details,
+        // A progress heartbeat rebuilds the entry, so the list of calls this tool
+        // made — and pi's truncation flag — have to be carried across explicitly.
+        childIds: existing?.childIds,
+        nestedComplete: existing?.nestedComplete,
+        resultBlocks:
+          e.partialResult?.content !== undefined
+            ? normalizeContent(e.partialResult.content)
+            : existing?.resultBlocks,
+        resultText:
+          textOfContent(e.partialResult?.content) || existing?.resultText,
+      };
       return {
         ...state,
-        tools: {
-          ...state.tools,
-          [e.toolCallId]: {
-            toolCallId: e.toolCallId,
-            toolName: e.toolName,
-            args: e.args ?? existing?.args,
-            status: 'running',
-            resultBlocks: e.partialResult
-              ? normalizeContent(e.partialResult.content)
-              : existing?.resultBlocks,
-            resultText:
-              textOfContent(e.partialResult?.content) || existing?.resultText,
-          },
-        },
+        tools: withParentLink({ ...state.tools, [e.toolCallId]: entry }, entry),
       };
     }
     case 'tool_execution_end': {
       const e = event as ToolExecutionEnd;
       const existing = state.tools[e.toolCallId];
+      const entry: ToolExec = {
+        toolCallId: e.toolCallId,
+        toolName: e.toolName,
+        args: existing?.args,
+        status: e.isError ? 'error' : 'done',
+        isError: e.isError,
+        durationMs: e.durationMs ?? existing?.durationMs,
+        parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
+        details: e.result?.details ?? existing?.details,
+        // The live list is already complete for the UI; keep it across the end event.
+        childIds: existing?.childIds,
+        nestedComplete: existing?.nestedComplete,
+        resultBlocks:
+          e.result && e.result.content !== undefined
+            ? normalizeContent(e.result.content)
+            : existing?.resultBlocks,
+        resultText: textOfContent(e.result?.content),
+      };
       return {
         ...state,
-        tools: {
-          ...state.tools,
-          [e.toolCallId]: {
-            toolCallId: e.toolCallId,
-            toolName: e.toolName,
-            args: existing?.args,
-            status: e.isError ? 'error' : 'done',
-            isError: e.isError,
-            resultBlocks:
-              e.result && e.result.content !== undefined
-                ? normalizeContent(e.result.content)
-                : existing?.resultBlocks,
-            resultText: textOfContent(e.result?.content),
-          },
-        },
+        tools: withParentLink({ ...state.tools, [e.toolCallId]: entry }, entry),
       };
     }
     case 'compaction_start':

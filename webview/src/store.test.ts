@@ -392,3 +392,231 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
     expect(s.tools.t1.resultText).toBe('output text');
   });
 });
+describe('reducer — nested (subagent) tool calls', () => {
+  // Recorded from `pi --mode rpc` with a real subagent run (scripts/rpc-probe.mjs).
+  // A tool that calls `ctx.executeTool()` emits ordinary `tool_execution_*` events
+  // for each nested call, tagged with `parentToolCallId` and an id of
+  // `<parentToolCallId>/<n>`; the child produces no messages of its own.
+  const event = (e: unknown) => host({ type: 'rpcEvent', event: e as never });
+
+  const PARENT = 'call_sub';
+  const start = {
+    type: 'tool_execution_start',
+    toolCallId: PARENT,
+    toolName: 'subagent',
+    args: {
+      role: 'explore',
+      task: 'Survey the directory and describe each file.',
+    },
+  };
+  const nestedStart = (n: number, command: string) => ({
+    type: 'tool_execution_start',
+    toolCallId: `${PARENT}/${n}`,
+    toolName: 'bash',
+    args: { command },
+    parentToolCallId: PARENT,
+  });
+
+  it('hangs nested calls off the calling tool, in arrival order', () => {
+    let s = reducer(initialState, event(start));
+    s = reducer(s, event(nestedStart(1, 'ls -la /tmp/probe-ws')));
+    s = reducer(s, event(nestedStart(2, 'find /tmp/probe-ws -maxdepth 3')));
+
+    expect(s.tools[PARENT].childIds).toEqual([`${PARENT}/1`, `${PARENT}/2`]);
+    expect(s.tools[`${PARENT}/1`]).toMatchObject({
+      toolName: 'bash',
+      parentToolCallId: PARENT,
+      status: 'running',
+      args: { command: 'ls -la /tmp/probe-ws' },
+    });
+    // A nested event must not disturb the parent's own entry.
+    expect(s.tools[PARENT]).toMatchObject({
+      toolName: 'subagent',
+      status: 'running',
+      args: start.args,
+    });
+  });
+
+  it('settles a nested call with its result and duration, then the parent with its report', () => {
+    let s = reducer(initialState, event(start));
+    s = reducer(s, event(nestedStart(1, 'ls -la /tmp/probe-ws')));
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_update',
+        toolCallId: `${PARENT}/1`,
+        toolName: 'bash',
+        parentToolCallId: PARENT,
+        partialResult: {
+          content: [{ type: 'text', text: 'total 12\nprobe.log' }],
+        },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: `${PARENT}/1`,
+        toolName: 'bash',
+        parentToolCallId: PARENT,
+        result: { content: [{ type: 'text', text: 'total 12\nprobe.log' }] },
+        isError: false,
+        durationMs: 6,
+      }),
+    );
+    expect(s.tools[`${PARENT}/1`]).toMatchObject({
+      status: 'done',
+      durationMs: 6,
+      resultText: 'total 12\nprobe.log',
+    });
+    // The parent's live progress heartbeat carries the card metadata.
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_update',
+        toolCallId: PARENT,
+        toolName: 'subagent',
+        partialResult: {
+          content: [{ type: 'text', text: 'subagent running · turn 2' }],
+          details: {
+            status: 'running',
+            role: 'explore',
+            displayName: 'Explore',
+            turns: 2,
+            toolCalls: 3,
+            activity: 'bash',
+            elapsedMs: 14863,
+            pendant: { title: 'Explore', subtitle: 'Survey the directory.' },
+          },
+        },
+      }),
+    );
+    expect((s.tools[PARENT].details as { elapsedMs?: number })?.elapsedMs).toBe(
+      14863,
+    );
+
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: PARENT,
+        toolName: 'subagent',
+        result: {
+          content: [
+            { type: 'text', text: '[subagent explore · DONE]\n\nTwo files.' },
+          ],
+          details: { status: 'completed', exit: 'done', report: 'Two files.' },
+        },
+        isError: false,
+        durationMs: 13000,
+      }),
+    );
+    expect(s.tools[PARENT]).toMatchObject({
+      status: 'done',
+      durationMs: 13000,
+      // the list built while it ran survives the end event
+      childIds: [`${PARENT}/1`],
+    });
+    expect((s.tools[PARENT].details as { report?: string })?.report).toBe(
+      'Two files.',
+    );
+  });
+
+  it('records a truncated nested-call list from the settled tool result', () => {
+    let s = reducer(initialState, event(start));
+    s = reducer(s, event(nestedStart(1, 'ls')));
+    s = reducer(
+      s,
+      event({
+        type: 'message_start',
+        message: {
+          role: 'toolResult',
+          toolCallId: PARENT,
+          toolName: 'subagent',
+          content: [{ type: 'text', text: 'Two files.' }],
+          nestedCalls: {
+            calls: [{ id: `${PARENT}/1`, name: 'bash', status: 'ok' }],
+            complete: false,
+          },
+        },
+      }),
+    );
+    expect(s.tools[PARENT].nestedComplete).toBe(false);
+    // A tool result with no nested record leaves the map alone.
+    const untouched = reducer(
+      s,
+      event({
+        type: 'message_start',
+        message: { role: 'toolResult', toolCallId: 'other', content: 'x' },
+      }),
+    );
+    expect(untouched.tools).toBe(s.tools);
+  });
+
+  it('rebuilds the nested list, details and omitted arguments from history', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'toolCall',
+            id: PARENT,
+            name: 'subagent',
+            arguments: { task: 'Survey' },
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: PARENT,
+        toolName: 'subagent',
+        content: [{ type: 'text', text: 'Two files.' }],
+        durationMs: 13000,
+        details: { status: 'completed', report: 'Two files.' },
+        nestedCalls: {
+          calls: [
+            {
+              id: `${PARENT}/1`,
+              name: 'bash',
+              status: 'ok',
+              arguments: { command: 'ls -la' },
+              durationMs: 6,
+            },
+            {
+              id: `${PARENT}/2`,
+              name: 'read',
+              status: 'error',
+              argumentsBytes: 40000,
+              error: 'EISDIR',
+            },
+            { id: `${PARENT}/3`, name: 'bash', status: 'unfinished' },
+          ],
+          complete: false,
+        },
+      },
+    ] as unknown as AppMessage[];
+
+    const s = reducer(initialState, host({ type: 'history', messages }));
+
+    expect(s.tools[PARENT]).toMatchObject({
+      status: 'done',
+      durationMs: 13000,
+      childIds: [`${PARENT}/1`, `${PARENT}/2`, `${PARENT}/3`],
+      nestedComplete: false,
+    });
+    expect(s.tools[`${PARENT}/1`]).toMatchObject({
+      status: 'done',
+      durationMs: 6,
+      args: { command: 'ls -la' },
+    });
+    expect(s.tools[`${PARENT}/2`]).toMatchObject({
+      status: 'error',
+      argsOmittedBytes: 40000,
+    });
+    expect(s.tools[`${PARENT}/3`]?.status).toBe('running');
+    // The report comes off the persisted `details`, so it survives a reload.
+    expect((s.tools[PARENT].details as { report?: string })?.report).toBe(
+      'Two files.',
+    );
+  });
+});

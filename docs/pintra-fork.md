@@ -92,6 +92,40 @@ extension; `src/webview/extension-ui.ts` already ignores it correctly).
 Version bump: `1.0.5` → `1.0.6` so the running build is identifiable in the welcome screen and in
 the installed-extension folder name.
 
+## Nested tool calls (subagent commands) — wire contract
+
+A tool that runs other tools through `ctx.executeTool()` (the `subagent` tool from
+`pi-disciple`, pi's `codemode`) makes **every child call visible on the parent's RPC
+stream** as ordinary `tool_execution_start/update/end` events carrying
+`parentToolCallId`, with the child id being `<parentToolCallId>/<n>` — see
+`pi-coding-agent/dist/core/nested-tool-calls.d.ts`. Verified by capture
+(`scripts/rpc-probe.mjs` with a prompt that spawns a subagent): the events carry the
+child's real `args` (full bash commands), `partialResult.content` (live output),
+`isError` and `durationMs`. Capture method and replay-into-`reducer()` are covered by
+the `reducer — nested (subagent) tool calls` suite in `webview/src/store.test.ts`.
+
+Three facts that are easy to get wrong:
+
+1. `message.nestedCalls` (on the settled `role: "toolResult"` message, and in
+   `get_messages`) is `{ calls: NestedToolCallRecord[], complete: boolean }` — pi's
+   bounded record (256 calls, 8 KB/call, 32 KB total; oversized args come back as
+   `argumentsBytes` only). **Outputs are not persisted**, so a reloaded card lists the
+   calls without expandable results.
+2. `details.nestedCalls` inside the subagent payload is a **number**; do not conflate
+   it with `message.nestedCalls`.
+3. pi's own TUI deliberately does not draw nested calls (`interactive-mode.js` skips
+   events with `parentToolCallId`), so the renderer is ours. `details` carries
+   `{ status, exit, report, pendant: { title, subtitle }, tokens, turns, toolCalls,
+   activity, elapsedMs, childSessionFile, childSessionId }` — the running card's live
+   elapsed time comes from the extension's 2 s `elapsedMs` heartbeat, not a timer.
+
+Rendered in `webview/src/components/exec-view/subagent-calls/` (call list + report)
+inside the existing `ExecBlock` card; state lives in `ToolExec.childIds` /
+`parentToolCallId` / `details` on `webview/src/store.ts` — nested entries never become
+message blocks, so they cannot leak into the timeline as top-level rows. Display
+mapping (labels, one-line previews, durations) moved to `exec-view/tool-display.ts` so
+the child rows and the parent header render identically.
+
 ## Known gaps for the next session
 
 1. **Display issues in the editor-tab frontend** — the reported bug class. Start at the layout map:

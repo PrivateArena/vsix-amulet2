@@ -235,6 +235,7 @@ function renderBlock(
         tool={tools[call.id]}
         name={call.name}
         args={call.arguments}
+        tools={tools}
       />
     );
 

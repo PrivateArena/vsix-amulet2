@@ -1,54 +1,38 @@
-import type { ComponentType } from 'react';
 import { useState } from 'react';
-import type { IconBaseProps } from 'react-icons';
-import {
-  LuChevronRight,
-  LuEye,
-  LuFilePen,
-  LuFolderOpen,
-  LuPencil,
-  LuSearch,
-  LuTerminal,
-  LuWrench,
-} from 'react-icons/lu';
-import type { ToolExec } from '../../store';
+import { LuBot, LuChevronRight, LuWrench } from 'react-icons/lu';
+import type { ToolExec, ToolStatus } from '../../store';
 import { PatchView } from '../patch-view';
 import { CodeBlock } from '../code-block';
+import { Tooltip } from '../ui/tooltip';
+import {
+  FILE_TOOLS,
+  TOOL_ICONS,
+  TOOL_LABELS,
+  asRecord,
+  basename,
+  childCalls,
+  formatDuration,
+  statusClass,
+  summarize,
+} from './tool-display';
+import {
+  SUBAGENT_TITLE,
+  SubagentCalls,
+  cleanReport,
+  resolveSubagentCard,
+  type SubagentDetailsView,
+} from './subagent-calls';
 import './exec-block-view.scss';
 
 interface ToolCallViewProps {
   tool: ToolExec | undefined;
   name: string;
   args?: unknown;
-}
-
-function asRecord(v: unknown): Record<string, unknown> {
-  return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
-}
-
-function summarize(name: string, args: Record<string, unknown>): string {
-  const first = (...keys: string[]) => {
-    for (const k of keys) {
-      const v = args[k];
-      if (typeof v === 'string' && v.length > 0) return v;
-    }
-    return '';
-  };
-  switch (name) {
-    case 'bash':
-      return first('command', 'cmd');
-    case 'read':
-    case 'write':
-    case 'edit':
-      return first('path', 'file', 'filePath', 'file_path');
-    case 'grep':
-    case 'find':
-      return first('pattern', 'query', 'path');
-    case 'ls':
-      return first('path', 'dir') || '.';
-    default:
-      return first('path', 'file', 'command', 'pattern', 'query', 'url');
-  }
+  /**
+   * The session's whole tool map. A card needs it to look up the calls this tool
+   * made through `ctx.executeTool()` — subagent commands, codemode calls.
+   */
+  tools?: Record<string, ToolExec>;
 }
 
 function extractEdits(
@@ -68,50 +52,19 @@ function extractEdits(
   return [];
 }
 
-const TOOL_ICONS: Record<string, ComponentType<IconBaseProps>> = {
-  bash: LuTerminal,
-  read: LuEye,
-  write: LuFilePen,
-  edit: LuPencil,
-  grep: LuSearch,
-  find: LuFolderOpen,
-  ls: LuFolderOpen,
-};
-
-const TOOL_LABELS: Record<string, string> = {
-  bash: 'Terminal',
-  read: 'Read',
-  write: 'Write',
-  edit: 'Edit',
-  grep: 'Search',
-  find: 'Find',
-  ls: 'List',
-};
-
-const FILE_TOOLS = new Set(['read', 'write', 'edit']);
-
-function basename(p: string): string {
-  const clean = p.replace(/[/\\]+$/, '');
-  const idx = Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\'));
-  return idx >= 0 ? clean.slice(idx + 1) : clean;
+interface NestedView {
+  /** Non-null when this tool is a subagent call (recognised by its `details`). */
+  subagent: SubagentDetailsView | null;
+  /** Calls this tool made, in arrival order. */
+  nested: ToolExec[];
+  tools: Record<string, ToolExec>;
+  report?: string;
+  nestedComplete?: boolean;
 }
 
-function statusClass(status: string): string {
-  switch (status) {
-    case 'running':
-      return 'pending';
-    case 'done':
-      return 'success';
-    case 'error':
-      return 'error';
-    default:
-      return 'pending';
-  }
-}
-
-export function ExecBlock({ tool, name, args }: ToolCallViewProps) {
+export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   const effectiveArgs = asRecord(tool?.args ?? args);
-  const status = tool?.status ?? 'running';
+  const status: ToolStatus = tool?.status ?? 'running';
   const summary = summarize(name, effectiveArgs);
   const result = tool?.resultText ?? '';
   const isError = tool?.isError ?? false;
@@ -122,10 +75,30 @@ export function ExecBlock({ tool, name, args }: ToolCallViewProps) {
   const defaultExpanded = status !== 'done' || isError;
   const expanded = expandedOverride ?? defaultExpanded;
 
-  const Icon = TOOL_ICONS[name] ?? LuWrench;
-  const label = TOOL_LABELS[name] ?? name;
+  // A subagent card is identified by the `details` payload the tool reports, not by
+  // its name, so a renamed or third-party subagent tool still renders correctly.
+  const subagent = resolveSubagentCard(name, tool?.details, effectiveArgs);
+  const nested = childCalls(tool, tools);
+  const report = subagent
+    ? (subagent.report ??
+      (status === 'running' ? undefined : cleanReport(result) || undefined))
+    : undefined;
+  const view: NestedView = {
+    subagent,
+    nested,
+    tools: tools ?? {},
+    report,
+    nestedComplete: tool?.nestedComplete,
+  };
+
+  const Icon = subagent ? LuBot : (TOOL_ICONS[name] ?? LuWrench);
+  const label = subagent ? SUBAGENT_TITLE : (TOOL_LABELS[name] ?? name);
   const displaySummary =
-    FILE_TOOLS.has(name) && summary ? basename(summary) : summary;
+    !subagent && FILE_TOOLS.has(name) && summary ? basename(summary) : summary;
+  // While running, the elapsed time comes from the tool's own progress heartbeat.
+  const duration = subagent
+    ? formatDuration(tool?.durationMs ?? subagent.elapsedMs)
+    : '';
 
   return (
     <div
@@ -134,13 +107,23 @@ export function ExecBlock({ tool, name, args }: ToolCallViewProps) {
       <button
         className="exec-header"
         onClick={() => setExpandedOverride(!expanded)}
-        title={summary || undefined}
+        // A subagent card shows the full task in a styled tooltip instead.
+        title={subagent ? undefined : summary || undefined}
         type="button">
         <Icon className="exec-type-icon" aria-hidden />
         <span className="exec-name">{label}</span>
-        {displaySummary && (
-          <span className="exec-summary-text">{displaySummary}</span>
-        )}
+        {displaySummary &&
+          (subagent ? (
+            <Tooltip
+              content={summary || displaySummary}
+              side="bottom"
+              align="start">
+              <span className="exec-summary-text">{displaySummary}</span>
+            </Tooltip>
+          ) : (
+            <span className="exec-summary-text">{displaySummary}</span>
+          ))}
+        {duration && <span className="tool-duration">{duration}</span>}
         <span className="exec-chevron" aria-hidden>
           <LuChevronRight />
         </span>
@@ -150,7 +133,7 @@ export function ExecBlock({ tool, name, args }: ToolCallViewProps) {
       <div className="exec-content-wrap" aria-hidden={!expanded}>
         <div className="exec-content">
           <div className="exec-scroll">
-            {renderBody(name, effectiveArgs, result, status, isError)}
+            {renderBody(name, effectiveArgs, result, status, isError, view)}
           </div>
         </div>
       </div>
@@ -162,9 +145,23 @@ function renderBody(
   name: string,
   args: Record<string, unknown>,
   result: string,
-  status: string,
+  status: ToolStatus,
   isError: boolean,
+  view: NestedView,
 ) {
+  // Any tool that ran other tools gets the same nested list, subagent or not.
+  if (view.subagent || view.nested.length > 0) {
+    return (
+      <SubagentCalls
+        calls={view.nested}
+        tools={view.tools}
+        details={view.subagent ?? {}}
+        report={view.report}
+        status={status}
+        complete={view.nestedComplete}
+      />
+    );
+  }
   if (name === 'bash') {
     return (
       <>

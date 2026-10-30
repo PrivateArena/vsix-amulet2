@@ -185,26 +185,77 @@ export interface SessionState {
   pendingMessageCount: number;
 }
 
+/**
+ * One tool call made by another tool through `ctx.executeTool()` — the commands
+ * a subagent runs, for example. Mirrors `NestedToolCallRecord` in
+ * `@earendil-works/pi-ai`; pi attaches the list to the *parent's* tool-result
+ * message as `nestedCalls` once the parent settles.
+ */
+export interface NestedToolCallRecord {
+  id: string;
+  name: string;
+  /** Omitted when pi dropped it to stay under the record's byte budget. */
+  arguments?: unknown;
+  argumentsBytes?: number;
+  status: 'ok' | 'error' | 'unfinished';
+  durationMs?: number;
+  error?: string;
+}
+
+/** Bounded record of a tool's nested calls; `complete` is false when truncated. */
+export interface NestedToolCalls {
+  calls: NestedToolCallRecord[];
+  complete: boolean;
+}
+
+/**
+ * Persisted `role: "toolResult"` message. Never rendered directly (it is not a
+ * displayable role), but it carries tool results, `details` and `nestedCalls`, so
+ * history reload reconstructs the tool state from it.
+ */
+export interface ToolResultMessage {
+  role: 'toolResult';
+  toolCallId: string;
+  toolName?: string;
+  content: ContentBlock[] | string;
+  isError?: boolean;
+  durationMs?: number;
+  usage?: Usage;
+  nestedCalls?: NestedToolCalls;
+  details?: unknown;
+}
+
 /** Tool execution lifecycle events (keyed by toolCallId). */
 export interface ToolExecutionStart {
   type: 'tool_execution_start';
   toolCallId: string;
   toolName: string;
   args?: unknown;
+  /**
+   * Present when this call was made by another tool (`ctx.executeTool()`): the id
+   * of the calling tool call. pi names nested calls `<parentToolCallId>/<n>`, so
+   * they can never collide with model-issued ids.
+   */
+  parentToolCallId?: string;
 }
 export interface ToolExecutionUpdate {
   type: 'tool_execution_update';
   toolCallId: string;
   toolName: string;
   args?: unknown;
-  partialResult?: { content: ContentBlock[] };
+  /** `details` is the tool's own progress payload (e.g. subagent status + report). */
+  partialResult?: { content?: ContentBlock[] | string; details?: unknown };
+  parentToolCallId?: string;
 }
 export interface ToolExecutionEnd {
   type: 'tool_execution_end';
   toolCallId: string;
   toolName: string;
-  result?: { content: ContentBlock[] };
+  result?: { content?: ContentBlock[] | string; details?: unknown };
   isError?: boolean;
+  /** On the wire since pi 1.x; not declared in older runtime typings. */
+  durationMs?: number;
+  parentToolCallId?: string;
 }
 
 /**

@@ -76,7 +76,12 @@ function buildItems(
           kind: 'tool',
           status: tool?.status ?? 'running',
           node: (
-            <ExecBlock tool={tool} name={call.name} args={call.arguments} />
+            <ExecBlock
+              tool={tool}
+              name={call.name}
+              args={call.arguments}
+              tools={tools}
+            />
           ),
         });
         return;

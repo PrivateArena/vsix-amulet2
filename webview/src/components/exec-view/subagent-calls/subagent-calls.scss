@@ -1,0 +1,172 @@
+/* Subagent card body: the child's tool calls, then its report. */
+.subagent-calls {
+  padding: 4px 0 10px;
+  font-size: 0.9em;
+}
+
+/* The live command list scrolls on its own so the report stays reachable
+   inside the card's own scroll area. */
+.sub-call-list {
+  display: block;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.sub-call-nested {
+  max-height: none;
+  overflow: visible;
+  margin: 2px 0 2px 12px;
+  padding-left: 10px;
+  border-left: 1px solid var(--pintra-block-divider);
+}
+
+.sub-call {
+  list-style: none;
+}
+
+.sub-call-row {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 3px 12px;
+  border: none;
+  background: transparent;
+  color: var(--pintra-fg-muted);
+  font: inherit;
+  text-align: left;
+}
+
+.sub-call-row-openable {
+  cursor: pointer;
+  border-radius: var(--pintra-radius-sm);
+}
+
+.sub-call-row-openable:hover {
+  background: var(--pintra-surface-hover);
+}
+
+.sub-call-row-openable:focus-visible {
+  outline: 1px solid var(--pintra-accent);
+  outline-offset: -1px;
+}
+
+.sub-call-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+}
+
+.sub-call-state svg {
+  width: 12px;
+  height: 12px;
+}
+
+.sub-call-done .sub-call-state {
+  color: var(--pintra-success);
+}
+
+.sub-call-error .sub-call-state {
+  color: var(--pintra-error);
+}
+
+.sub-call-running .sub-call-state {
+  color: var(--pintra-fg-faint);
+}
+
+.sub-call-name {
+  font-weight: 600;
+  color: var(--pintra-fg-muted);
+  white-space: nowrap;
+}
+
+/* Ellipsized by CSS only — the full command lives in the hover tooltip. */
+.sub-call-cmd {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pintra-fg);
+}
+
+.exec-content .sub-call-cmd {
+  font-family: var(--pintra-monospace);
+}
+
+.sub-call-running .sub-call-cmd {
+  color: var(--pintra-fg-muted);
+}
+
+.sub-call-duration {
+  color: var(--pintra-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sub-call-output {
+  box-sizing: border-box;
+  margin: 0 12px 6px 41px;
+  padding: 6px 9px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--pintra-block-divider);
+  border-radius: var(--pintra-radius-sm);
+  background: var(--pintra-tool-content-surface);
+  color: var(--pintra-fg);
+  font-size: 0.92em;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sub-call-output-error {
+  color: var(--pintra-error);
+  border-color: var(--pintra-error-border);
+}
+
+.sub-call-waiting {
+  padding: 4px 12px;
+  color: var(--pintra-fg-faint);
+  font-style: italic;
+}
+
+.sub-call-note {
+  padding: 2px 12px;
+  color: var(--pintra-warning);
+}
+
+.sub-agent-report {
+  margin: 6px 12px 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--pintra-block-divider);
+}
+
+.sub-agent-report-label {
+  margin-bottom: 4px;
+  color: var(--pintra-fg-faint);
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: var(--pintra-tracking-wide);
+  text-transform: uppercase;
+}
+
+.sub-agent-report .entry-content-md {
+  font-size: 0.95em;
+}
+
+.sub-agent-meta {
+  margin: 8px 12px 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--pintra-block-divider);
+  color: var(--pintra-fg-faint);
+  font-size: 0.82em;
+  overflow-wrap: anywhere;
+}
