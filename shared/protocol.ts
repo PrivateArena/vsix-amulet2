@@ -21,6 +21,8 @@ export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 export interface TextBlock {
   type: 'text';
   text: string;
+  /** Provider signature needed to replay the block (Anthropic/Google thinking-style blocks). */
+  textSignature?: string;
 }
 export interface ThinkingBlock {
   type: 'thinking';
@@ -76,7 +78,13 @@ export interface Attachment {
 
 export interface AppMessage {
   role: 'user' | 'assistant' | 'system';
-  content: ContentBlock[];
+  /**
+   * pi sends user and system messages with a bare string body (and an assistant
+   * message with a block array), so both shapes are legal on the wire. Read
+   * messages through `normalizeContent` (shared/blocks.ts) instead of assuming
+   * an array — assigning a string straight into UI state crashes the timeline.
+   */
+  content: ContentBlock[] | string;
   timestamp?: number;
   api?: string;
   provider?: string;
@@ -209,9 +217,41 @@ export interface MessageStartEvent {
   type: 'message_start';
   message?: AppMessage;
 }
+/**
+ * Streaming delta inside a `message_update` wire event.
+ *
+ * pi strips the cumulative `partial` snapshot from these events (see
+ * `pi-coding-agent/dist/modes/json-event.d.ts`): the client is expected to build
+ * the assistant message out of the deltas itself, while `contentIndex` addresses
+ * the slot in the message's content array.
+ */
+export type AssistantStreamEvent =
+  | { type: 'text_start'; contentIndex: number }
+  | { type: 'text_delta'; contentIndex: number; delta: string }
+  | { type: 'text_end'; contentIndex: number; content?: string }
+  | { type: 'thinking_start'; contentIndex: number }
+  | { type: 'thinking_delta'; contentIndex: number; delta: string }
+  | { type: 'thinking_end'; contentIndex: number; content?: string }
+  | {
+      type: 'toolcall_start';
+      contentIndex: number;
+      id?: string;
+      toolName?: string;
+    }
+  | { type: 'toolcall_delta'; contentIndex: number; delta: string }
+  | { type: 'toolcall_end'; contentIndex: number; toolCall?: ToolCallBlock }
+  | { type: 'start' | 'done' | 'error'; [k: string]: unknown }
+  | { type: string; [k: string]: unknown };
+
 export interface MessageUpdateEvent {
   type: 'message_update';
-  assistantMessageEvent?: unknown;
+  /** Cumulative usage for the turn, reported alongside each delta. */
+  usage?: Usage;
+  assistantMessageEvent?: AssistantStreamEvent;
+  /**
+   * Only present on older pi runtimes; 1.x replaced it with
+   * `assistantMessageEvent` deltas plus the authoritative `message_end`.
+   */
   message?: AppMessage;
 }
 export interface MessageEndEvent {

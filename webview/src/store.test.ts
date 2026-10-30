@@ -272,3 +272,123 @@ describe('reducer — local UI actions', () => {
     expect(cleared.pendingAttachments).toHaveLength(0);
   });
 });
+
+describe('reducer — pi 1.4.0 wire shapes', () => {
+  // Recorded from `pi --mode rpc` on a real run (tmp/rpc-probe.mjs). The shapes
+  // that a block-array-only reducer used to reject: the system message carries a
+  // string body, streaming arrives as deltas, and `message_update` has no
+  // `message` snapshot at all.
+  const event = (e: unknown) => host({ type: 'rpcEvent', event: e as never });
+
+  it('ignores the leading system message and keeps its content out of the timeline', () => {
+    // A string body used to land straight in UiMessage.content, and the timeline
+    // then threw `content.forEach is not a function` and blanked the chat view.
+    const s = reducer(
+      initialState,
+      event({
+        type: 'message_start',
+        message: { role: 'system', content: '', sections: { preamble: 'You are pi.' } },
+      }),
+    );
+    expect(s.messages).toHaveLength(0);
+
+    const afterEnd = reducer(s, event({ type: 'agent_start' }));
+    expect(afterEnd.streaming).toBe(true);
+  });
+
+  it('normalizes a string-bodied user message through start and end', () => {
+    let s = reducer(
+      initialState,
+      event({ type: 'message_start', message: { role: 'user', content: 'hi' } }),
+    );
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
+
+    s = reducer(
+      s,
+      event({ type: 'message_end', message: { role: 'user', content: 'hi' } }),
+    );
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
+    expect(Array.isArray(s.messages[0].content)).toBe(true);
+  });
+
+  it('renders streamed text from assistantMessageEvent deltas', () => {
+    let s = reducer(
+      initialState,
+      event({ type: 'message_start', message: { role: 'assistant', content: [] } }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'message_update',
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {} },
+        assistantMessageEvent: { type: 'text_start', contentIndex: 0 },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Hel' },
+      }),
+    );
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'Hel' }]);
+    expect(s.messages[0].streaming).toBe(true);
+
+    s = reducer(
+      s,
+      event({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'lo' },
+      }),
+    );
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'Hello' }]);
+
+    s = reducer(
+      s,
+      event({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello' }],
+          model: 'm',
+        },
+      }),
+    );
+    expect(s.messages[0].streaming).toBe(false);
+    expect(s.messages[0].model).toBe('m');
+  });
+
+  it('drops system messages with no displayable content from history', () => {
+    const s = reducer(
+      initialState,
+      host({
+        type: 'history',
+        messages: [
+          { role: 'system', content: '' },
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: [{ type: 'text', text: 'yo' }] },
+        ] as never,
+      }),
+    );
+    expect(s.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
+  });
+
+  it('normalizes a tool result whose content is a plain string', () => {
+    let s = reducer(initialState, event({ type: 'agent_start' }));
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: 't1',
+        toolName: 'bash',
+        result: { content: 'output text' },
+        isError: false,
+      }),
+    );
+    expect(s.tools.t1.resultBlocks).toEqual([
+      { type: 'text', text: 'output text' },
+    ]);
+    expect(s.tools.t1.resultText).toBe('output text');
+  });
+});

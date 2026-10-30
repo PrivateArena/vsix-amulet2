@@ -9,3 +9,6 @@ tsconfig.json
 **/*.ts
 **/*.tsx
 .gitignore
+tmp/**
+scripts/**
+docs/**

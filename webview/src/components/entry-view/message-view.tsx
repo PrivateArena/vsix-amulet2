@@ -5,6 +5,7 @@ import {
   asText,
   asThinking,
   asToolCall,
+  normalizeContent,
   textOfContent,
 } from '../../../../shared/blocks';
 import { actions } from '../../apis/actions';
@@ -116,7 +117,7 @@ function UserBubble({
     const observer = new ResizeObserver(check);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [expanded, message.content]);
+  }, [expanded, message]);
 
   return (
     <div className="entry-bubble">
@@ -126,7 +127,9 @@ function UserBubble({
         {attachments && attachments.length > 0 && (
           <AttachmentGallery attachments={attachments} />
         )}
-        {message.content.map((block, i) => renderBlock(block, i, tools))}
+        {normalizeContent(message.content).map((block, i) =>
+          renderBlock(block, i, tools),
+        )}
       </div>
       {overflowing && (
         <button
@@ -145,7 +148,8 @@ export const EntryView = memo(function EntryView({
   message,
   tools,
 }: MessageViewProps) {
-  const { role, content, streaming } = message;
+  const { role, streaming } = message;
+  const content = normalizeContent(message.content);
   const { userAttachments } = useChatState();
   const isAssistant = role === 'assistant';
   const isUser = role === 'user';

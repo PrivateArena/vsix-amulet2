@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import type { ReactNode } from 'react';
-import { asText, asThinking, asToolCall } from '../../../../shared/blocks';
+import { asText, asThinking, asToolCall, normalizeContent } from '../../../../shared/blocks';
 import type { ToolExec, ToolStatus, UiMessage } from '../../store';
 import { MdRender } from '../md-render';
 import { ReasoningBlock } from '../reasoning-block';
@@ -36,9 +36,12 @@ function buildItems(
 
   for (const m of messages) {
     const isSystem = m.role === 'system';
-    const lastIdx = m.content.length - 1;
+    // Defensive: a message that somehow carries a non-array body (a runtime we
+    // do not normalize yet) must not blank the whole chat view.
+    const blocks = normalizeContent(m.content);
+    const lastIdx = blocks.length - 1;
 
-    m.content.forEach((block, i) => {
+    blocks.forEach((block, i) => {
       const active = m.streaming && i === lastIdx;
 
       const text = asText(block);
@@ -82,7 +85,7 @@ function buildItems(
 
     // Streaming reply that hasn't emitted any content yet — a blinking caret
     // keeps the rail alive until the first block arrives.
-    if (m.streaming && m.content.length === 0) {
+    if (m.streaming && blocks.length === 0) {
       items.push({
         key: `${m.uid}:caret`,
         kind: 'caret',

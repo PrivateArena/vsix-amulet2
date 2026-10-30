@@ -19,7 +19,12 @@ import type {
   ToolExecutionStart,
   ToolExecutionUpdate,
 } from '../../shared/protocol';
-import { asToolCall, textOfContent } from '../../shared/blocks';
+import {
+  applyAssistantEvent,
+  asToolCall,
+  normalizeContent,
+  textOfContent,
+} from '../../shared/blocks';
 
 export type ToolStatus = 'running' | 'done' | 'error';
 
@@ -100,7 +105,7 @@ function toUiMessage(m: AppMessage): UiMessage {
   return {
     uid: nextUid(),
     role: m.role,
-    content: Array.isArray(m.content) ? m.content : [],
+    content: normalizeContent(m.content),
     streaming: false,
     usage: m.usage,
     model: m.model,
@@ -114,7 +119,7 @@ function seedToolsFromHistory(
 ): Record<string, ToolExec> {
   const tools: Record<string, ToolExec> = {};
   for (const m of messages) {
-    for (const block of m.content ?? []) {
+    for (const block of normalizeContent(m.content)) {
       const call = asToolCall(block);
       if (call)
         tools[call.id] = {
@@ -134,7 +139,7 @@ function seedToolsFromHistory(
         args: tools[id]?.args,
         status: m.isError ? 'error' : 'done',
         isError: !!m.isError,
-        resultBlocks: m.content,
+        resultBlocks: normalizeContent(m.content),
         resultText: textOfContent(m.content),
       };
     }
@@ -187,7 +192,10 @@ export function reducer(state: ChatState, action: Action): ChatState {
     case 'history': {
       const newMessages = message.messages
         .filter((m) => isDisplayableRole(m.role))
-        .map(toUiMessage);
+        .map(toUiMessage)
+        // Same rule as `message_start`: pi persists the leading system message
+        // with its body in `sections`, so it carries no displayable blocks.
+        .filter((m) => !(m.role === 'system' && m.content.length === 0));
 
       // Rebuild the uid->attachments map from this history: uids are freshly
       // minted on every load, so any prior mapping is stale. Only messages that
@@ -247,6 +255,11 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       ui.streaming = msg.role === 'assistant';
       if (ui.timestamp == null) ui.timestamp = Date.now();
 
+      // pi emits a `message_start`/`message_end` pair for the leading system
+      // message on every run; its body lives in `sections`, so it normalizes to
+      // zero blocks. Rendering it would only add an empty turn to the timeline.
+      if (ui.role === 'system' && ui.content.length === 0) return state;
+
       // For user messages, attach any pending attachments
       if (msg.role === 'user' && state.pendingAttachments.length > 0) {
         const newMap = new Map(state.userAttachments);
@@ -267,21 +280,26 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       };
     }
     case 'message_update': {
-      const msg = (event as MessageUpdateEvent).message;
-      // Nothing to merge without a payload — leave the turn streaming so the
-      // `message_end` that follows still finalizes it.
-      if (!msg || !state.currentUid) return state;
+      // pi 1.x removed the cumulative `message` snapshot from this event: deltas
+      // arrive as `assistantMessageEvent` and the client builds the blocks. Older
+      // runtimes sent the whole partial message instead, which still works here.
+      const e = event as MessageUpdateEvent;
+      const snapshot = e.message;
+      if (!state.currentUid) return state;
+      if (!snapshot && !e.assistantMessageEvent) return state;
       return {
         ...state,
-        messages: state.messages.map((m) =>
-          m.uid === state.currentUid
-            ? {
-                ...m,
-                content: msg.content ?? m.content,
-                usage: msg.usage ?? m.usage,
-              }
-            : m,
-        ),
+        messages: state.messages.map((m) => {
+          if (m.uid !== state.currentUid) return m;
+          const content = snapshot
+            ? normalizeContent(snapshot.content)
+            : applyAssistantEvent(m.content, e.assistantMessageEvent);
+          return {
+            ...m,
+            content,
+            usage: snapshot?.usage ?? e.usage ?? m.usage,
+          };
+        }),
       };
     }
     case 'message_end': {
@@ -295,7 +313,7 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
           m.uid === state.currentUid
             ? {
                 ...m,
-                content: msg?.content ?? m.content,
+                content: msg ? normalizeContent(msg.content) : m.content,
                 usage: msg?.usage ?? m.usage,
                 model: msg?.model ?? m.model,
                 streaming: false,
@@ -332,7 +350,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
             toolName: e.toolName,
             args: e.args ?? existing?.args,
             status: 'running',
-            resultBlocks: e.partialResult?.content ?? existing?.resultBlocks,
+            resultBlocks: e.partialResult
+              ? normalizeContent(e.partialResult.content)
+              : existing?.resultBlocks,
             resultText:
               textOfContent(e.partialResult?.content) || existing?.resultText,
           },
@@ -352,7 +372,10 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
             args: existing?.args,
             status: e.isError ? 'error' : 'done',
             isError: e.isError,
-            resultBlocks: e.result?.content ?? existing?.resultBlocks,
+            resultBlocks:
+              e.result && e.result.content !== undefined
+                ? normalizeContent(e.result.content)
+                : existing?.resultBlocks,
             resultText: textOfContent(e.result?.content),
           },
         },

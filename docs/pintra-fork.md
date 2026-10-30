@@ -59,6 +59,39 @@ Checked the client's RPC surface against the authoritative types shipped by the 
   `src/runtime/bootstrap.ts:120`. Those workarounds must be re-tested against 1.4.0 and deleted if
   they are no longer needed — they are the only places the fork still "thinks" it is on 0.80.x.
 
+## Verified protocol drift vs pi 1.4.0 (2026-10-30, live capture)
+
+Capture method: `node scripts/rpc-probe.mjs "<prompt>"` from a scratch workspace — it spawns
+`pi --mode rpc` exactly like the host does and appends every wire event to `tmp/rpc-events.jsonl`.
+Three real runs (plain reply, bash tool call, command sweep). Findings, all of them upstream
+assumptions about pi 0.80.x:
+
+1. **`message_start`/`message_end` fire for `role: "system"` and its `content` is a *string***
+   (`""` — the prompt text moved to `content.sections`). `system` is a displayable role, so the
+   reducer put that string into `UiMessage.content` (`content: msg?.content ?? m.content`) and
+   `agent-timeline.tsx` died on `m.content.forEach` — the whole chat view fell into the error
+   boundary on every submit. Fixed by `normalizeContent()` in `shared/blocks.ts`, applied at every
+   store write, plus defensive normalization at the two render sites. Same shape in `get_messages`
+   history (`[system:string, user:[text], assistant:[…], toolResult:[text], …]`).
+2. **`message_update` no longer carries `message`.** The runtime strips the cumulative snapshot
+   (`pi-coding-agent/dist/modes/json-event.d.ts`) and sends `{ usage, assistantMessageEvent }`
+   deltas (`text_*`, `thinking_*`, `toolcall_*`, keyed by `contentIndex`; `toolcall_start` adds
+   `id`/`toolName`, `toolcall_end` adds the finished `toolCall`). The old reducer bailed on the
+   missing `message`, so nothing rendered while streaming. `applyAssistantEvent()` now folds the
+   deltas into blocks (streamed tool args accumulate in `ToolCallBlock.partialArgs`); `message_end`
+   still wins as the authoritative payload, and the legacy snapshot path is kept for older runtimes.
+3. **`switch_session` responds normally on 1.4.0** (`data.cancelled`) — the "0.80.x handler hangs"
+   comment in `src/runtime/pi-runtime.ts:273` and `src/runtime/bootstrap.ts:120` is stale, and the
+   stop/restart workaround it justifies can now be deleted. Still to do.
+
+Other wire shapes observed and confirmed compatible: `tool_execution_end.result` =
+`{ content: blocks[], structuredContent }`; new unhandled events `turn_start`, `turn_end`,
+`agent_settled`, and `extension_ui_request` `setStatus` (emitted in a loop by the `pi-gate`
+extension; `src/webview/extension-ui.ts` already ignores it correctly).
+
+Version bump: `1.0.5` → `1.0.6` so the running build is identifiable in the welcome screen and in
+the installed-extension folder name.
+
 ## Known gaps for the next session
 
 1. **Display issues in the editor-tab frontend** — the reported bug class. Start at the layout map:

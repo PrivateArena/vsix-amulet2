@@ -60,7 +60,20 @@ pnpm run format       # prettier --write
 
 ### Verifying changes
 
-There is no test suite. After any change, at minimum run `pnpm run typecheck`. For behavioral changes, launch the Extension Development Host (F5) and exercise the affected flow — most logic spans the host↔webview boundary and only surfaces at runtime.
+There is a unit test suite (`pnpm run test`, vitest) for the pure logic in `shared/` and the webview
+reducer. After any change, at minimum run `pnpm run typecheck`. For behavioral changes, launch the
+Extension Development Host (F5) and exercise the affected flow — most logic spans the host↔webview
+boundary and only surfaces at runtime.
+
+### Debugging the pi wire protocol
+
+Runtime-side bugs (streaming, tool state, history) can be reproduced **without VS Code**:
+`node scripts/rpc-probe.mjs "<prompt>"` spawns `pi --mode rpc` the same way `RpcProcess` does and
+appends every raw JSON-lines event to `tmp/rpc-events.jsonl` (plus a one-line summary per event to
+stdout). `PROBE_COMMANDS='{"type":"get_messages"};...'` fires extra RPC commands after the prompt to
+check command handlers. When a UI/renderer assumption is in doubt, replay the captured event
+sequence into `reducer()` in a test — `webview/src/store.test.ts` has a `pi 1.4.0 wire shapes`
+suite built from such a capture.
 
 ## Conventions
 
