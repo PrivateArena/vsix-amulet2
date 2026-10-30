@@ -97,6 +97,34 @@ body.spacing-compact .exec-block.exec-joined-prev {
   align-self: center;
 }
 
+/*
+ * The disclosure control: everything left of the trailing cluster. It is a real
+ * button so that the row can carry its own buttons (copy, stop) without nesting
+ * interactive elements inside a `role="button"` ancestor, and it grows so clicking
+ * the empty middle of a row still toggles the card.
+ */
+.exec-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.exec-summary:focus-visible {
+  outline: none;
+  border-radius: var(--pintra-radius-sm);
+  box-shadow: 0 0 0 3px var(--pintra-focus-halo);
+}
+
 .exec-header .exec-name,
 .exec-header .file-ref,
 .exec-header .exec-write-line,
@@ -207,17 +235,91 @@ body.spacing-compact .exec-block.exec-joined-prev {
   font-variation-settings: 'MONO' 1;
 }
 
-/* Right-aligned elapsed time in a summary bar (subagent cards, long-running tools). */
-.exec-header .tool-duration {
+/* Right-aligned elapsed time, plus the hover actions, in one trailing cluster. */
+.exec-header .exec-actions {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.exec-header .tool-duration {
   color: var(--pintra-fg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* The duration already absorbs the free space, so the chevron tucks in behind it. */
-.exec-header .tool-duration + .exec-chevron {
-  margin-left: 0;
+/*
+ * Header actions (copy arguments, stop a running call). They are invisible until
+ * the row is hovered or keyboard-focused, so a dense transcript stays quiet; while
+ * hidden they take no clicks either.
+ */
+.exec-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--pintra-radius-sm);
+  background: transparent;
+  color: var(--pintra-fg-faint);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--pintra-transition-fast) var(--pintra-ease-out),
+    color var(--pintra-transition-fast) var(--pintra-ease-out),
+    background-color var(--pintra-transition-fast) var(--pintra-ease-out);
+}
+
+.exec-header:hover .exec-action,
+.exec-header:focus-within .exec-action,
+.exec-header:focus-visible .exec-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.animations-disabled .exec-action {
+  transition: none;
+}
+
+.exec-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+.exec-action:hover {
+  color: var(--pintra-fg);
+  background: var(--pintra-surface-hover);
+}
+
+.exec-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--pintra-focus-halo);
+}
+
+/* Copied stays lit after the pointer leaves, so the confirmation is readable. */
+.exec-header .exec-action.is-copied {
+  color: var(--pintra-success);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Stop is `aria-disabled`, not `disabled`, so its tooltip can still report back. */
+.exec-header .exec-action.is-stopped {
+  opacity: 0.55;
+}
+
+.exec-action-stop {
+  color: var(--pintra-error);
+}
+
+.exec-action-stop:hover {
+  color: var(--pintra-error);
+  background: color-mix(in srgb, var(--pintra-error) 16%, transparent);
 }
 
 /* Disclosure chevron */
@@ -225,7 +327,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
+  /* The summary absorbs the free space, so the cluster and chevron sit at the edge. */
+  margin-left: 0;
   flex-shrink: 0;
   color: var(--pintra-fg-faint);
   transition: color var(--pintra-transition-fast);
@@ -346,7 +449,13 @@ body.animations-disabled .exec-chevron svg {
     .exec-write-stream
   ),
 .exec-content
-  :is(.exec-output, .exec-read, .patch-container, .patch-line, .exec-write-stream)
+  :is(
+    .exec-output,
+    .exec-read,
+    .patch-container,
+    .patch-line,
+    .exec-write-stream
+  )
   * {
   font-family: var(--pintra-monospace);
 }

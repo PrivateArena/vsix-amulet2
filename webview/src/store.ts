@@ -44,6 +44,11 @@ export interface ToolExec {
   parentToolCallId?: string;
   /** Wall-clock duration, from `tool_execution_end`. */
   durationMs?: number;
+  /**
+   * Epoch ms of `tool_execution_start`, so a running card can count up live. A
+   * reloaded history has `durationMs` and no start time, hence both exist.
+   */
+  startedAt?: number;
   /** The tool's own `details` payload (subagent progress card, report, …). */
   details?: unknown;
   /**
@@ -432,6 +437,7 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         toolName: e.toolName,
         args: e.args,
         status: 'running',
+        startedAt: Date.now(),
         parentToolCallId: e.parentToolCallId,
       };
       return {
@@ -447,6 +453,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         toolName: e.toolName,
         args: e.args ?? existing?.args,
         status: 'running',
+        // A card that missed `tool_execution_start` (a panel reloaded mid-run, a host
+        // re-attach) starts counting from the first event it did see.
+        startedAt: existing?.startedAt ?? Date.now(),
         parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
         details: e.partialResult?.details ?? existing?.details,
         // A progress heartbeat rebuilds the entry, so the list of calls this tool
@@ -474,7 +483,14 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         args: existing?.args,
         status: e.isError ? 'error' : 'done',
         isError: e.isError,
-        durationMs: e.durationMs ?? existing?.durationMs,
+        // pi omits `durationMs` for a call it never ran, and an aborted call has not
+        // always reported one; the measured span of the live counter is the fallback.
+        durationMs:
+          e.durationMs ??
+          existing?.durationMs ??
+          (existing?.startedAt == null
+            ? undefined
+            : Math.max(0, Date.now() - existing.startedAt)),
         parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
         details: e.result?.details ?? existing?.details,
         // The live list is already complete for the UI; keep it across the end event.

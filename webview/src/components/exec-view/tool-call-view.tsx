@@ -1,5 +1,15 @@
-import { useState } from 'react';
-import { LuBot, LuChevronRight, LuWrench } from 'react-icons/lu';
+import { useEffect, useState } from 'react';
+import {
+  LuBot,
+  LuCheck,
+  LuChevronRight,
+  LuCopy,
+  LuSquare,
+  LuWrench,
+} from 'react-icons/lu';
+import { actions } from '../../apis/actions';
+import { useCopyFeedback } from '../../hooks/use-copy-feedback';
+import { useTickingClock } from '../../hooks/use-ticking-clock';
 import type { ToolExec, ToolStatus } from '../../store';
 import { PatchView } from '../patch-view';
 import { CodeBlock } from '../code-block';
@@ -11,9 +21,10 @@ import {
   asRecord,
   basename,
   childCalls,
-  formatDuration,
   statusClass,
   summarize,
+  toolDuration,
+  toolFullText,
 } from './tool-display';
 import {
   SUBAGENT_TITLE,
@@ -65,15 +76,10 @@ interface NestedView {
 export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   const effectiveArgs = asRecord(tool?.args ?? args);
   const status: ToolStatus = tool?.status ?? 'running';
+  const running = status === 'running';
   const summary = summarize(name, effectiveArgs);
   const result = tool?.resultText ?? '';
   const isError = tool?.isError ?? false;
-
-  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(
-    null,
-  );
-  const defaultExpanded = status !== 'done' || isError;
-  const expanded = expandedOverride ?? defaultExpanded;
 
   // A subagent card is identified by the `details` payload the tool reports, not by
   // its name, so a renamed or third-party subagent tool still renders correctly.
@@ -81,7 +87,7 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   const nested = childCalls(tool, tools);
   const report = subagent
     ? (subagent.report ??
-      (status === 'running' ? undefined : cleanReport(result) || undefined))
+      (running ? undefined : cleanReport(result) || undefined))
     : undefined;
   const view: NestedView = {
     subagent,
@@ -91,43 +97,124 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
     nestedComplete: tool?.nestedComplete,
   };
 
+  // Whether pi is really executing this call right now. A card built from a tool call
+  // the runtime never reported on — one a sequential batch skipped, an `unfinished`
+  // record reloaded from history — has no clock, and giving it a Stop button would
+  // abort whatever the agent happens to be running instead.
+  const live =
+    running && (tool?.startedAt != null || subagent?.elapsedMs != null);
+
+  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(
+    null,
+  );
+  const defaultExpanded = status !== 'done' || isError;
+  const expanded = expandedOverride ?? defaultExpanded;
+  const now = useTickingClock(live);
+  const { copied, copy } = useCopyFeedback();
+  const [stopRequested, setStopRequested] = useState(false);
+
+  // pi settles the call itself (an aborted tool comes back as an error result), so
+  // the flag only has to keep the button from looking pressable in the meantime.
+  useEffect(() => {
+    if (!running) setStopRequested(false);
+  }, [running]);
+
   const Icon = subagent ? LuBot : (TOOL_ICONS[name] ?? LuWrench);
   const label = subagent ? SUBAGENT_TITLE : (TOOL_LABELS[name] ?? name);
   const displaySummary =
     !subagent && FILE_TOOLS.has(name) && summary ? basename(summary) : summary;
-  // While running, the elapsed time comes from the tool's own progress heartbeat.
-  const duration = subagent
-    ? formatDuration(tool?.durationMs ?? subagent.elapsedMs)
-    : '';
+  // Elapsed time on every card, counting live while the call runs (from its own
+  // `startedAt`, or from the subagent's `elapsedMs` progress field when it has one).
+  const duration = toolDuration(tool, now, subagent?.elapsedMs);
+  // The untruncated command or path: the header ellipsizes it, so this is the only
+  // way to hand a long command to a shell elsewhere.
+  const copyText = subagent ? '' : toolFullText(name, effectiveArgs);
+  const copyHint = FILE_TOOLS.has(name)
+    ? 'path'
+    : name === 'bash'
+      ? 'command'
+      : 'arguments';
+  const toggle = () => setExpandedOverride(!expanded);
+
+  // pi has no per-tool cancel: `abort` cancels the run's signal, which the running
+  // tool observes (or ignores until it settles) — the composer's Stop button, placed
+  // on the call you are actually watching.
+  const stop = () => {
+    if (stopRequested) return;
+    setStopRequested(true);
+    actions.abort();
+  };
 
   return (
     <div
       className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}`}
       {...(expanded ? ({ open: true } as Record<string, unknown>) : {})}>
-      <button
-        className="exec-header"
-        onClick={() => setExpandedOverride(!expanded)}
-        // A subagent card shows the full task in a styled tooltip instead.
-        title={subagent ? undefined : summary || undefined}
-        type="button">
-        <Icon className="exec-type-icon" aria-hidden />
-        <span className="exec-name">{label}</span>
-        {displaySummary &&
-          (subagent ? (
-            <Tooltip
-              content={summary || displaySummary}
-              side="bottom"
-              align="start">
+      <div className="exec-header">
+        {/* The disclosure is the summary, not the whole row: the row also carries the
+            action buttons, and nesting them in a `role="button"` row would hide them
+            from assistive tech. */}
+        <button
+          type="button"
+          className="exec-summary"
+          aria-expanded={expanded}
+          onClick={toggle}
+          // A subagent card shows the full task in a styled tooltip instead.
+          title={subagent ? undefined : summary || undefined}>
+          <Icon className="exec-type-icon" aria-hidden />
+          <span className="exec-name">{label}</span>
+          {displaySummary &&
+            (subagent ? (
+              <Tooltip
+                content={summary || displaySummary}
+                side="bottom"
+                align="start">
+                <span className="exec-summary-text">{displaySummary}</span>
+              </Tooltip>
+            ) : (
               <span className="exec-summary-text">{displaySummary}</span>
-            </Tooltip>
-          ) : (
-            <span className="exec-summary-text">{displaySummary}</span>
-          ))}
-        {duration && <span className="tool-duration">{duration}</span>}
+            ))}
+        </button>
+        {(duration || copyText || live) && (
+          <span className="exec-actions">
+            {duration && <span className="tool-duration">{duration}</span>}
+            {copyText && (
+              <Tooltip
+                content={copied ? 'Copied' : `Copy ${copyHint}`}
+                side="bottom"
+                align="end">
+                <button
+                  type="button"
+                  className={`exec-action${copied ? ' is-copied' : ''}`}
+                  aria-label={copied ? 'Copied' : `Copy the ${copyHint}`}
+                  onClick={() => copy(copyText)}>
+                  {copied ? <LuCheck aria-hidden /> : <LuCopy aria-hidden />}
+                </button>
+              </Tooltip>
+            )}
+            {live && (
+              <Tooltip
+                content={stopRequested ? 'Stopping…' : 'Stop'}
+                side="bottom"
+                align="end">
+                {/* `aria-disabled` rather than `disabled`: Chromium stops dispatching
+                    mouse events to a disabled control, which would strand its own
+                    open tooltip and hide the "Stopping…" confirmation. */}
+                <button
+                  type="button"
+                  className={`exec-action exec-action-stop${stopRequested ? ' is-stopped' : ''}`}
+                  aria-label="Stop this tool call"
+                  aria-disabled={stopRequested || undefined}
+                  onClick={stop}>
+                  <LuSquare aria-hidden />
+                </button>
+              </Tooltip>
+            )}
+          </span>
+        )}
         <span className="exec-chevron" aria-hidden>
           <LuChevronRight />
         </span>
-      </button>
+      </div>
       {/* Always mounted so collapsing can animate; the grid wrapper drives
           the height transition, the scroll layer keeps output scrollable. */}
       <div className="exec-content-wrap" aria-hidden={!expanded}>

@@ -3,6 +3,7 @@ import type { ToolExec } from '../../store';
 import {
   childCalls,
   formatDuration,
+  toolDuration,
   toolFullText,
   toolPreview,
   toolRowPreview,
@@ -17,6 +18,63 @@ describe('formatDuration', () => {
     expect(formatDuration(13000)).toBe('13s');
     expect(formatDuration(59_600)).toBe('60s');
     expect(formatDuration(75_000)).toBe('1m 15s');
+  });
+});
+
+describe('toolDuration', () => {
+  const running = {
+    toolCallId: 't1',
+    toolName: 'bash',
+    status: 'running',
+    startedAt: 10_000,
+  } satisfies ToolExec;
+
+  it('counts up from the start event once the call passes a second', () => {
+    // Nothing under a second, live or settled: a badge that flashes up for a fast
+    // read and vanishes on completion is worse than none at all.
+    expect(toolDuration(running, 10_600)).toBe('');
+    expect(toolDuration(running, 23_000)).toBe('13s');
+    expect(toolDuration(running, 75_000)).toBe('1m 5s');
+    // Never negative, whatever the clock does between the event and the tick.
+    expect(toolDuration(running, 9_000)).toBe('');
+  });
+
+  it("prefers the tool's own progress estimate, which a subagent reports", () => {
+    expect(toolDuration(running, 10_600, 74_000)).toBe('1m 14s');
+  });
+
+  it("reports the runtime's measurement once the call settles", () => {
+    expect(
+      toolDuration({ ...running, status: 'done', durationMs: 75_000 }, 0),
+    ).toBe('1m 15s');
+    // A reloaded history has the duration and never had a start time.
+    expect(
+      toolDuration(
+        {
+          toolCallId: 't2',
+          toolName: 'read',
+          status: 'done',
+          durationMs: 4200,
+        },
+        0,
+      ),
+    ).toBe('4.2s');
+  });
+
+  it('stays silent for a call that finished inside a second', () => {
+    expect(toolDuration({ ...running, status: 'done', durationMs: 6 }, 0)).toBe(
+      '',
+    );
+  });
+
+  it('shows nothing for a call the runtime never reported on', () => {
+    expect(toolDuration(undefined, Date.now())).toBe('');
+    expect(
+      toolDuration(
+        { toolCallId: 't3', toolName: 'bash', status: 'running' },
+        0,
+      ),
+    ).toBe('');
   });
 });
 

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { LuCheck, LuX } from 'react-icons/lu';
 import type { ToolExec } from '../../../store';
+import { useTickingClock } from '../../../hooks/use-ticking-clock';
 import { MdRender } from '../../md-render';
 import { LoadingPulse } from '../../ui/ld';
 import { Tooltip } from '../../ui/tooltip';
 import {
   TOOL_LABELS,
   childCalls,
-  formatDuration,
+  toolDuration,
   toolFullText,
   toolRowPreview,
 } from '../tool-display';
@@ -94,10 +95,15 @@ function NestedCallRow({
   tools: Record<string, ToolExec>;
 }) {
   const [open, setOpen] = useState(false);
+  // Same rule as the card header: only a call pi reported on counts, so a row left
+  // `unfinished` in a reloaded history does not hold a timer that shows nothing.
+  const now = useTickingClock(
+    tool.status === 'running' && tool.startedAt != null,
+  );
   const children = childCalls(tool, tools);
   const preview = toolRowPreview(tool);
   const fullText = toolFullText(tool.toolName, tool.args);
-  const duration = formatDuration(tool.durationMs);
+  const duration = toolDuration(tool, now);
   const label = TOOL_LABELS[tool.toolName] ?? tool.toolName;
   const expandable = !!tool.resultText || children.length > 0;
 

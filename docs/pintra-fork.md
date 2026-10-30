@@ -116,8 +116,10 @@ Three facts that are easy to get wrong:
 3. pi's own TUI deliberately does not draw nested calls (`interactive-mode.js` skips
    events with `parentToolCallId`), so the renderer is ours. `details` carries
    `{ status, exit, report, pendant: { title, subtitle }, tokens, turns, toolCalls,
-   activity, elapsedMs, childSessionFile, childSessionId }` — the running card's live
-   elapsed time comes from the extension's 2 s `elapsedMs` heartbeat, not a timer.
+   activity, elapsedMs, childSessionFile, childSessionId }` — `elapsedMs` is the
+   preferred source for a running card's elapsed time; without it a card counts from
+   its own `tool_execution_start` (`ToolExec.startedAt`), which is all any other tool
+   has.
 
 Rendered in `webview/src/components/exec-view/subagent-calls/` (call list + report)
 inside the existing `ExecBlock` card; state lives in `ToolExec.childIds` /
@@ -125,6 +127,14 @@ inside the existing `ExecBlock` card; state lives in `ToolExec.childIds` /
 message blocks, so they cannot leak into the timeline as top-level rows. Display
 mapping (labels, one-line previews, durations) moved to `exec-view/tool-display.ts` so
 the child rows and the parent header render identically.
+
+Every card header ends in the same cluster: elapsed time, then hover-only Copy (the
+tool's full command or path, which the ellipsized preview cannot give back) and, while
+the call is live, Stop. Stop posts the existing `abort` host message — pi has no
+per-tool cancel, only the run-level signal handed to `execute()`, which a tool may
+ignore until it settles — so an aborted call comes back as an error result, and a card
+the runtime never reported on shows no cluster at all: aborting *it* would only hit
+whatever else is running.
 
 ## Known gaps for the next session
 

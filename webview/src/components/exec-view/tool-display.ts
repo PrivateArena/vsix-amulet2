@@ -103,6 +103,44 @@ export function formatDuration(ms?: number): string {
   return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
+/** Under this a call is too fast to be worth a duration badge, live or settled. */
+const MIN_BADGED_DURATION_MS = 1000;
+
+/**
+ * Duration badge for any tool row — not only the subagent card that introduced it.
+ *
+ * While the call runs it counts up from `startedAt` (or from the tool's own progress
+ * estimate, `elapsedMs`, which is why a caller may pass `preferredMs`); once it
+ * settles it is the runtime's measured `durationMs`. Nothing shows under a second,
+ * live or settled: nearly every read and edit lands there, and a badge that flashes
+ * up and then disappears is worse than none.
+ */
+export function toolDuration(
+  tool: ToolExec | undefined,
+  now: number,
+  preferredMs?: number,
+): string {
+  const ms = toolElapsed(tool, now, preferredMs);
+  if (ms == null || ms < MIN_BADGED_DURATION_MS) return '';
+  return formatDuration(ms);
+}
+
+/** How long a call has taken (or took), or undefined when nothing reported it. */
+function toolElapsed(
+  tool: ToolExec | undefined,
+  now: number,
+  preferredMs?: number,
+): number | undefined {
+  if (!tool) return undefined;
+  if (tool.status === 'running') {
+    if (preferredMs != null) return preferredMs;
+    return tool.startedAt == null
+      ? undefined
+      : Math.max(0, now - tool.startedAt);
+  }
+  return tool.durationMs ?? preferredMs;
+}
+
 /** Single-line preview for a row: newlines and indent collapse, CSS does the ellipsis. */
 export function toolPreview(name: string, args: unknown): string {
   return summarize(name, asRecord(args))

@@ -225,6 +225,23 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
       }),
     );
     expect(s.tools['t1'].status).toBe('running');
+    // The live elapsed badge needs the start time, and has to survive the events
+    // that rebuild the entry while the call runs.
+    const startedAt = s.tools['t1'].startedAt!;
+    expect(startedAt).toBeTypeOf('number');
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_update',
+          toolCallId: 't1',
+          toolName: 'bash',
+          partialResult: { content: [{ type: 'text', text: 'a' }] },
+        },
+      }),
+    );
+    expect(s.tools['t1'].startedAt).toBe(startedAt);
     s = reducer(
       s,
       host({
@@ -240,6 +257,38 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
     );
     expect(s.tools['t1'].status).toBe('done');
     expect(s.tools['t1'].resultText).toBe('done');
+    // pi omits `durationMs` for a call it did not run, so the measured span of the
+    // live counter is the fallback — the badge must not vanish on completion.
+    expect(s.tools['t1'].durationMs).toBeTypeOf('number');
+  });
+
+  it('keeps the duration pi reported', () => {
+    let s = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_start',
+          toolCallId: 't2',
+          toolName: 'bash',
+          args: { command: 'pnpm run build' },
+        },
+      }),
+    );
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_end',
+          toolCallId: 't2',
+          toolName: 'bash',
+          result: { content: [{ type: 'text', text: 'built' }] },
+          durationMs: 9400,
+        },
+      }),
+    );
+    expect(s.tools['t2'].durationMs).toBe(9400);
   });
 });
 

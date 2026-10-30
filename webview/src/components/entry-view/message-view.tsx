@@ -11,6 +11,7 @@ import {
 import { actions } from '../../apis/actions';
 import { useChatState } from '../../contexts/chat-context';
 import type { ToolExec, UiMessage } from '../../store';
+import { useCopyFeedback } from '../../hooks/use-copy-feedback';
 import { formatByteSize } from '../../utils/format';
 import { clockTime } from '../../utils/time';
 import { ContextMenuItem, useCtxMenu } from '../ui/ctx-menu';
@@ -26,23 +27,15 @@ interface MessageViewProps {
 
 /** Copy/branch actions for a user turn, anchored on right-click. */
 function useUserMessageMenu(message: UiMessage) {
-  const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<number | undefined>(undefined);
   const text = useMemo(() => textOfContent(message.content).trim(), [message]);
-
-  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
+  const { copied, copy } = useCopyFeedback();
 
   const items = useMemo<ContextMenuItem[]>(
     () => [
       {
         label: 'Copy message',
         icon: LuCopy,
-        onSelect: () => {
-          actions.copyText(text);
-          setCopied(true);
-          window.clearTimeout(copyTimer.current);
-          copyTimer.current = window.setTimeout(() => setCopied(false), 1400);
-        },
+        onSelect: () => copy(text),
       },
       {
         label: 'Branch from here',
@@ -51,7 +44,7 @@ function useUserMessageMenu(message: UiMessage) {
         onSelect: () => actions.forkFromMessage(text),
       },
     ],
-    [text],
+    [text, copy],
   );
 
   const ctx = useCtxMenu(items, { minWidth: 180 });
