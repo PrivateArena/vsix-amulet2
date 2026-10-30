@@ -459,6 +459,8 @@ export type WebviewMessage =
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }
   | { type: 'openPiFolder' }
+  /** Run `pi update --all --force` against the configured pi binary. */
+  | { type: 'updatePi' }
   | { type: 'showSessionInfo' }
   | { type: 'openSettings' }
   | { type: 'pickFiles' }

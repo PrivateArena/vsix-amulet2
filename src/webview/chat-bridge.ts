@@ -16,12 +16,16 @@ import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import { readConfig } from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
-import { resolveBinaryPath } from '../runtime/bootstrap';
+import { resolveBinaryPath, getAgentVersion } from '../runtime/bootstrap';
+import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
 import { listSessions, sessionsDirForCwd } from '../session/session-store';
 import { handleExtensionUiRequest } from './extension-ui';
 
 const MODAL_UI_METHODS = new Set(['confirm', 'select', 'input', 'editor']);
+
+/** Ceiling for the post-update runtime reload, so its result toast always shows. */
+const PI_RELOAD_TIMEOUT_MS = 30_000;
 
 export interface ChatBridgeOptions {
   /** Whether the bound webview is currently visible (drives in-webview vs native dialogs). */
@@ -47,6 +51,8 @@ export class ChatBridge implements vscode.Disposable {
   private disposed = false;
   /** Guards {@link ChatBridgeOptions.openFresh} so only the first connect starts fresh. */
   private consumedOpenFresh = false;
+  /** True while a `pi update` child process is running (the menu is re-entrant). */
+  private piUpdateInFlight = false;
   /** extension_ui_request ids we've handed to the webview and are awaiting a reply for. */
   private readonly forwardedUi = new Set<string>();
 
@@ -283,6 +289,9 @@ export class ChatBridge implements vscode.Disposable {
         case 'restart':
           await runtime?.restart();
           await this.connect();
+          return;
+        case 'updatePi':
+          await this.forceUpdatePi();
           return;
         case 'showLog':
           this.log.show();
@@ -635,6 +644,131 @@ export class ChatBridge implements vscode.Disposable {
     if (open === 'Open') void vscode.env.openExternal(uri);
     else if (open === 'Reveal')
       void vscode.commands.executeCommand('revealFileInOS', uri);
+  }
+
+  // --- pi self-update -------------------------------------------------------
+
+  /**
+   * Force-update the pi install (and its packages) via `pi update --all --force`,
+   * then respawn the runtimes so the new code is actually loaded — a running
+   * `pi --mode rpc` child keeps executing the bytes it was spawned with.
+   */
+  private async forceUpdatePi(): Promise<void> {
+    if (this.piUpdateInFlight) return;
+    const config = readConfig();
+    const resolved = resolveBinaryPath(config.binaryPath || 'pi');
+    if (!resolved.resolved) {
+      void vscode.window.showErrorMessage(
+        `Pintra: could not find the pi runtime at "${config.binaryPath}". Set "pintra.binaryPath" to an absolute path to update it.`,
+      );
+      return;
+    }
+
+    const before = getAgentVersion(resolved.command);
+    this.piUpdateInFlight = true;
+    this.log.info(
+      `Updating pi: ${resolved.command} ${PI_UPDATE_ARGS.join(' ')}`,
+    );
+    try {
+      const result = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: 'Updating pi…',
+          cancellable: true,
+        },
+        async (progress, token) => {
+          const controller = new AbortController();
+          const cancellation = token.onCancellationRequested(() =>
+            controller.abort(),
+          );
+          const update = await updatePi({
+            config,
+            cwd: this.runtime?.cwd ?? this.sessions.activeCwd(),
+            signal: controller.signal,
+            onOutput: (line) => {
+              this.log.info(`pi update: ${line}`);
+              if (line.trim()) progress.report({ message: line.slice(-60) });
+            },
+          });
+          cancellation.dispose();
+          return update;
+        },
+      );
+
+      if (result.cancelled) {
+        this.log.warn('pi update cancelled.');
+        void vscode.window.showWarningMessage('Pintra: pi update cancelled.');
+        return;
+      }
+      if (!result.ok) {
+        this.log.error(
+          `pi update failed (exit ${result.exitCode ?? 'spawn error'}):\n${result.output}`,
+        );
+        const pick = await vscode.window.showErrorMessage(
+          `Pintra: pi update failed${result.exitCode === null ? ' — could not run pi' : ` (exit ${result.exitCode})`}.`,
+          'Show Log',
+        );
+        if (pick === 'Show Log') this.log.show();
+        return;
+      }
+
+      const reload = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: 'Reloading pi runtime…',
+        },
+        () => this.reloadPiRuntimes(),
+      );
+      const after = this.runtime?.getStatus().agentVersion || before;
+      const version =
+        after && before && after !== before ? `${before} → ${after}` : after;
+      const current = version && version === before ? 'up to date' : 'updated';
+      const tail =
+        reload === 'reloaded'
+          ? 'pi runtime reloaded.'
+          : reload === 'stale'
+            ? 'but the pi runtime did not reload — use "Reload Pi config".'
+            : 'but reloading the pi runtime timed out — check the log.';
+      const text =
+        reload === 'reloaded'
+          ? `pi is ${current} (${version}) — ${tail}`
+          : `pi update finished (${version}) — ${tail}`;
+      this.log.info(`pi update: ${text}`);
+      const pick = await vscode.window.showInformationMessage(
+        `Pintra: ${text}`,
+        ...(reload === 'reloaded'
+          ? ['Show Log']
+          : ['Retry Reload', 'Show Log']),
+      );
+      if (pick === 'Retry Reload') {
+        await this.runtime?.restart();
+        await this.connect();
+      } else if (pick === 'Show Log') {
+        this.log.show();
+      }
+    } finally {
+      this.piUpdateInFlight = false;
+    }
+  }
+
+  /**
+   * Respawn every runtime on the updated binary, bounded by
+   * {@link PI_RELOAD_TIMEOUT_MS} so a wedged startup can never swallow the
+   * update-result notification.
+   */
+  private async reloadPiRuntimes(): Promise<'reloaded' | 'stale' | 'timeout'> {
+    const reloaded = (async () => {
+      this.sessions.invalidateAgentVersions();
+      await this.sessions.restartAll();
+      await this.connect();
+    })().then(
+      () => 'reloaded' as const,
+      () => 'stale' as const,
+    );
+    const timeout = new Promise<'timeout'>((resolve) =>
+      setTimeout(() => resolve('timeout'), PI_RELOAD_TIMEOUT_MS),
+    );
+    return Promise.race([reloaded, timeout]);
   }
 
   // --- Provider login (auth.json) ------------------------------------------

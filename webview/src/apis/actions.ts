@@ -56,6 +56,7 @@ export const actions = {
   restart: () => postMessage({ type: 'restart' }),
   showSessionInfo: () => postMessage({ type: 'showSessionInfo' }),
   openPiFolder: () => postMessage({ type: 'openPiFolder' }),
+  updatePi: () => postMessage({ type: 'updatePi' }),
   openSettings: () => postMessage({ type: 'openSettings' }),
   openExternal: (url: string) => postMessage({ type: 'openExternal', url }),
   copyText: (text: string) => postMessage({ type: 'copyText', text }),

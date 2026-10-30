@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  LuCircleArrowUp,
   LuDownload,
   LuEye,
   LuFileText,
@@ -44,6 +45,11 @@ export function SettingsMenu() {
       label: 'Open Pi folder',
       icon: LuFolderOpen,
       onSelect: () => actions.openPiFolder(),
+    },
+    {
+      label: 'Force update Pi',
+      icon: LuCircleArrowUp,
+      onSelect: () => actions.updatePi(),
     },
     {
       label: 'Reload Pi config',

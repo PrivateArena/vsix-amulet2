@@ -44,6 +44,11 @@ export class SessionManager implements vscode.Disposable {
     );
   }
 
+  /** Forget every cached `pi --version` (after an in-place pi update). */
+  invalidateAgentVersions(): void {
+    for (const r of this.runtimes.values()) r.invalidateAgentVersion();
+  }
+
   async dispose(): Promise<void> {
     await Promise.all(
       [...this.runtimes.values()].map((r) =>

@@ -54,6 +54,15 @@ export class PiRuntime {
     return this.status;
   }
 
+  /**
+   * Drop the cached `pi --version` so the next start() re-probes. Needed after an
+   * in-place `pi update`, which changes the version behind an unchanged path.
+   */
+  invalidateAgentVersion(): void {
+    this.agentVersionFor = '';
+    this.agentVersion = '';
+  }
+
   get isReady(): boolean {
     return this.status.phase === 'ready' && !!this.client?.running;
   }
