@@ -19,10 +19,9 @@
     padding-bottom 0.26s var(--pintra-ease-out);
 }
 
-/* One turn = a user message + the reply that follows it. It's the containing
-   block for that user bubble's sticky pin, which confines the pin to this turn:
-   as the next turn scrolls up it pushes the previous pinned bubble out of view
-   and takes its place, rather than the bubbles piling up at the top. */
+/* One turn = a user message + the reply that follows it. It scrolls as one block,
+   and its `data-turn` attribute (the user message's uid) is what the topbar
+   prompt navigator jumps to. */
 .turn {
   display: block;
 }

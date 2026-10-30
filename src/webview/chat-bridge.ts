@@ -221,6 +221,9 @@ export class ChatBridge implements vscode.Disposable {
         case 'openForkPicker':
           await this.openForkPicker();
           return;
+        case 'forkFromMessage':
+          await this.forkFromMessage(message.text);
+          return;
         case 'editAndFork':
           await this.editAndFork(message.entryId, message.text);
           return;
@@ -566,7 +569,7 @@ export class ChatBridge implements vscode.Disposable {
     }
     const items = messages
       .map((m) => ({
-        label: m.text.replace(/\s+/g, ' ').slice(0, 80),
+        label: normalizeEntryText(m.text).slice(0, 80),
         entryId: m.entryId,
         text: m.text,
       }))
@@ -582,6 +585,30 @@ export class ChatBridge implements vscode.Disposable {
         text: picked.text,
       });
     }
+  }
+
+  /**
+   * Branch from one specific user turn. The webview never sees pi's entry ids,
+   * so resolve the right-clicked text against the session's forkable entries —
+   * newest match wins, since a prompt can appear twice after an earlier fork.
+   * Falls back to the quick-pick when nothing matches (e.g. the stored text
+   * drifted from what the transcript renders).
+   */
+  private async forkFromMessage(text: string): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime?.isReady) return;
+    const needle = normalizeEntryText(text);
+    const messages = await runtime.getForkMessages();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (normalizeEntryText(messages[i].text) !== needle) continue;
+      this.post({
+        type: 'enterForkMode',
+        entryId: messages[i].entryId,
+        text: messages[i].text,
+      });
+      return;
+    }
+    await this.openForkPicker();
   }
 
   private async editAndFork(entryId: string, text: string): Promise<void> {
@@ -862,4 +889,9 @@ function getMimeType(ext: string, isImage: boolean): string {
     csv: 'text/csv',
   };
   return textMap[ext] ?? 'text/plain';
+}
+
+/** Whitespace-insensitive comparison key for a session entry's text. */
+function normalizeEntryText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }

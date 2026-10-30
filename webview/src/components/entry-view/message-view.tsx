@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { LuCheck, LuCopy, LuGitBranch } from 'react-icons/lu';
 import type { Attachment, ContentBlock } from '../../../../shared/protocol';
 import {
@@ -13,7 +13,7 @@ import { useChatState } from '../../contexts/chat-context';
 import type { ToolExec, UiMessage } from '../../store';
 import { formatByteSize } from '../../utils/format';
 import { clockTime } from '../../utils/time';
-import { IconButton } from '../ui/button';
+import { ContextMenuItem, useCtxMenu } from '../ui/ctx-menu';
 import { MdRender } from '../md-render';
 import { ReasoningBlock } from '../reasoning-block';
 import { ExecBlock } from '../exec-view';
@@ -24,39 +24,38 @@ interface MessageViewProps {
   tools: Record<string, ToolExec>;
 }
 
-function UserMessageActions({ message }: { message: UiMessage }) {
+/** Copy/branch actions for a user turn, anchored on right-click. */
+function useUserMessageMenu(message: UiMessage) {
   const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | undefined>(undefined);
+  const text = useMemo(() => textOfContent(message.content).trim(), [message]);
 
-  const onCopy = () => {
-    actions.copyText(textOfContent(message.content).trim());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
-  };
+  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
-  return (
-    <div className="entry-actions">
-      {message.timestamp != null && (
-        <span className="entry-time">{clockTime(message.timestamp)}</span>
-      )}
-      <IconButton
-        variant="ghost"
-        size="sm"
-        icon={copied ? LuCheck : LuCopy}
-        label={copied ? 'Copied' : 'Copy message'}
-        className={`entry-action${copied ? ' is-copied' : ''}`}
-        onClick={onCopy}
-      />
-      <IconButton
-        variant="ghost"
-        size="sm"
-        icon={LuGitBranch}
-        label="Branch from here"
-        tooltip="Branch conversation from an earlier message"
-        className="entry-action"
-        onClick={() => actions.openForkPicker()}
-      />
-    </div>
+  const items = useMemo<ContextMenuItem[]>(
+    () => [
+      {
+        label: 'Copy message',
+        icon: LuCopy,
+        onSelect: () => {
+          actions.copyText(text);
+          setCopied(true);
+          window.clearTimeout(copyTimer.current);
+          copyTimer.current = window.setTimeout(() => setCopied(false), 1400);
+        },
+      },
+      {
+        label: 'Branch from here',
+        hint: 'edit & resend',
+        icon: LuGitBranch,
+        onSelect: () => actions.forkFromMessage(text),
+      },
+    ],
+    [text],
   );
+
+  const ctx = useCtxMenu(items, { minWidth: 180 });
+  return { ctx, copied };
 }
 
 function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
@@ -92,9 +91,12 @@ function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
 }
 
 /**
- * A user turn. The bubble is sticky (it pins to the top while the reply streams
- * below), so a long question would otherwise cover the whole panel and leave no
- * room for the answer. Clamp it and offer an expand toggle instead.
+ * A user turn. A long question is still clamped with an expand toggle so it can't
+ * dominate the panel while the answer streams below it.
+ *
+ * Copy / branch are a right-click menu rather than a hover toolbar: the transcript
+ * is dense, and a floating pill over the bubble costs a line of it for actions
+ * used once in a while. The timestamp moved into the tooltip.
  */
 function UserBubble({
   message,
@@ -104,6 +106,7 @@ function UserBubble({
   const clampRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
+  const { ctx, copied } = useUserMessageMenu(message);
 
   // Measure only while collapsed: expanding drops the max-height, so the
   // element stops overflowing and the toggle would remove itself.
@@ -120,27 +123,42 @@ function UserBubble({
   }, [expanded, message]);
 
   return (
-    <div className="entry-bubble">
+    <>
       <div
-        ref={clampRef}
-        className={`bubble-clamp${expanded ? ' is-expanded' : ''}`}>
-        {attachments && attachments.length > 0 && (
-          <AttachmentGallery attachments={attachments} />
+        className={`entry-bubble${ctx.isOpen ? ' is-ctx-open' : ''}`}
+        title={
+          message.timestamp != null
+            ? `${clockTime(message.timestamp)} · right-click to copy or branch`
+            : 'Right-click to copy or branch'
+        }
+        onContextMenu={ctx.open}>
+        <div
+          ref={clampRef}
+          className={`bubble-clamp${expanded ? ' is-expanded' : ''}`}>
+          {attachments && attachments.length > 0 && (
+            <AttachmentGallery attachments={attachments} />
+          )}
+          {normalizeContent(message.content).map((block, i) =>
+            renderBlock(block, i, tools),
+          )}
+        </div>
+        {overflowing && (
+          <button
+            type="button"
+            className="bubble-toggle"
+            onClick={() => setExpanded((v) => !v)}>
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
         )}
-        {normalizeContent(message.content).map((block, i) =>
-          renderBlock(block, i, tools),
+        {copied && (
+          <span className="entry-copied" role="status">
+            <LuCheck size={11} />
+            Copied
+          </span>
         )}
       </div>
-      {overflowing && (
-        <button
-          type="button"
-          className="bubble-toggle"
-          onClick={() => setExpanded((v) => !v)}>
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
-      <UserMessageActions message={message} />
-    </div>
+      {ctx.menu}
+    </>
   );
 }
 

@@ -452,6 +452,8 @@ export type WebviewMessage =
   | { type: 'requestStats' }
   | { type: 'requestCommands' }
   | { type: 'openForkPicker' }
+  /** Branch from one specific user turn (resolved to an entry id host-side). */
+  | { type: 'forkFromMessage'; text: string }
   | { type: 'editAndFork'; entryId: string; text: string }
   | { type: 'exportChat' }
   | { type: 'openInEditor' }

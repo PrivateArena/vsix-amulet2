@@ -1,4 +1,4 @@
-/* Header left region */
+/* Header left region — session identity + prompt navigator. */
 .topbar .topbar-left {
   display: flex;
   align-items: center;
@@ -18,14 +18,134 @@
   justify-content: center;
 }
 
-/* Session name */
-#title-text {
-  font-size: 0.9em;
-  color: var(--pintra-fg);
-  font-weight: 500;
+/* Turn steppers — hidden until there is more than one prompt to move between. */
+.turn-steppers {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.turn-count {
+  margin-left: 3px;
+  font-size: 0.7em;
+  font-weight: 650;
+  color: var(--pintra-fg-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--pintra-tracking-wide);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.turn-count-total {
+  color: var(--pintra-fg-faint);
+  font-weight: 500;
+}
+
+/* The active prompt, doubling as the jump-list trigger. */
+.turn-nav-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 1 auto;
   min-width: 0;
+  padding: 2px 6px 2px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--pintra-radius-sm);
+  background: none;
+  color: var(--pintra-fg);
+  font: inherit;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--pintra-transition-fast) var(--pintra-ease-out),
+    border-color var(--pintra-transition-fast) var(--pintra-ease-out);
+
+  &:hover,
+  &.is-open {
+    background: var(--pintra-surface-hover);
+    border-color: var(--pintra-border-subtle);
+  }
+}
+
+.turn-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-nav-caret {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--pintra-fg-faint);
+}
+
+/* Jump list */
+.turn-nav-popover {
+  padding: 4px;
+
+  .turn-nav-list {
+    max-height: 46vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .turn-nav-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--pintra-radius-sm);
+    background: none;
+    color: var(--pintra-fg-muted);
+    font: inherit;
+    font-size: 0.88em;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--pintra-surface-hover);
+      color: var(--pintra-fg);
+    }
+
+    &.is-active {
+      color: var(--pintra-fg);
+      background: var(--pintra-surface-raise);
+    }
+  }
+
+  .turn-nav-index {
+    flex-shrink: 0;
+    min-width: 1.5em;
+    color: var(--pintra-accent);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .turn-nav-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .turn-nav-time {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    color: var(--pintra-fg-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .turn-nav-empty {
+    padding: 8px;
+    color: var(--pintra-fg-faint);
+    font-size: 0.85em;
+  }
 }

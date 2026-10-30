@@ -47,6 +47,8 @@ export const actions = {
   requestSessions: () => postMessage({ type: 'requestSessions' }),
   requestCommands: () => postMessage({ type: 'requestCommands' }),
   openForkPicker: () => postMessage({ type: 'openForkPicker' }),
+  forkFromMessage: (text: string) =>
+    postMessage({ type: 'forkFromMessage', text }),
   openInEditor: () => postMessage({ type: 'openInEditor' }),
 
   // info menu

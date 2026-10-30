@@ -55,38 +55,9 @@
   max-width: 100%;
 }
 
-/* The current user turn pins to the top of the transcript while its reply
-   streams in below; the next user turn pushes it out of view (native sticky
-   stacking — no JS). z-index lifts it above the answer scrolling underneath. */
-.entry.user-entry {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-/* Full-width backdrop so the answer dissolves as it scrolls beneath the pinned
-   bubble instead of bleeding past it (through the actions row above it or the
-   gap beside it). It rides with the sticky entry; the negative offsets reach
-   over #chat-log's padding, and the masked lower edge softens the seam.
-   Invisible in normal flow — it matches the bg. */
-.entry.user-entry::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  top: calc(-8px * var(--pintra-spacing-mult));
-  left: -16px;
-  right: -16px;
-  /* Extend past the bubble so the whole bubble row stays fully opaque and the
-     dissolve happens in the gap below it — otherwise the fade lands beside a
-     short bubble and the answer ghosts through next to it. */
-  bottom: -24px;
-  background: var(--pintra-bg);
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom,
-      #000 calc(100% - 18px),
-      transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
-}
+/* User turns scroll with the transcript — the prompt stays where it was typed.
+   (An earlier design pinned it to the top while the answer streamed; it cost a
+   fifth of the panel, so the topbar prompt navigator took over that job.) */
 
 .entry-bubble {
   position: relative;
@@ -101,11 +72,10 @@
   box-shadow: var(--pintra-shadow-sm);
 }
 
-/* A long question would fill the whole panel — and because the bubble is
-   sticky, it would stay there and leave the streaming answer with nowhere to
-   show. Cap it to roughly four lines and fade the cut edge; the toggle below
-   lifts the cap. `em` keeps that line count stable across font sizes, and the
-   vh term shrinks it further in a short panel. */
+/* A long question still shouldn't eat the panel while you read the answer, so cap
+   it to roughly four lines and fade the cut edge; the toggle below lifts the cap.
+   `em` keeps that line count stable across font sizes, and the vh term shrinks it
+   further in a short panel. */
 .bubble-clamp {
   max-height: min(7em, 20vh);
   overflow: hidden;
@@ -148,68 +118,33 @@
   margin-bottom: 0;
 }
 
-/* Hover toolbar — timestamp + copy + branch. Floats in the bubble's
-   bottom-right, revealed only on bubble hover. Absolute, so it never reserves
-   space or shifts the layout; its bubble-matched background masks any message
-   text it happens to overlap. */
-.entry-actions {
+/* Transient "Copied" confirmation for the right-click menu. Absolute in the
+   bubble's corner and mounted only while it shows, so it reserves no space. */
+.entry-copied {
   position: absolute;
   right: 8px;
   bottom: 6px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   padding: 2px 8px;
   border-radius: var(--pintra-radius-pill);
   background: var(--vscode-input-background, var(--pintra-surface-subtle));
   box-shadow:
-    0 0 0 1px var(--pintra-border-subtle),
+    0 0 0 1px var(--pintra-accent-glow-soft),
     var(--pintra-shadow-sm);
-  opacity: 0;
-  transform: translateY(2px);
-  pointer-events: none;
-  transition:
-    opacity var(--pintra-transition-fast) var(--pintra-ease-out),
-    transform var(--pintra-transition-fast) var(--pintra-ease-out);
-}
-
-.entry-bubble:hover .entry-actions,
-.entry-bubble:focus-within .entry-actions,
-.entry-actions:has(.is-copied) {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.entry-time {
-  margin-right: 4px;
+  color: var(--pintra-accent);
   font-size: 0.72em;
   font-weight: 600;
-  color: var(--pintra-fg-faint);
-  font-variant-numeric: tabular-nums;
   letter-spacing: var(--pintra-tracking-wide);
-  white-space: nowrap;
+  pointer-events: none;
   user-select: none;
+  animation: bubble-in 0.16s ease-out both;
 }
 
-/* Denser than the default sm icon button; quiet until hovered. */
-.btn.entry-action.btn-icon-only {
-  width: 22px;
-  height: 22px;
-  color: var(--pintra-fg-faint);
-}
-
-.btn.entry-action .btn-icon {
-  width: 13px;
-  height: 13px;
-}
-
-.btn.entry-action:hover {
-  color: var(--pintra-fg);
-}
-
-.btn.entry-action.is-copied {
-  color: var(--pintra-accent);
+/* The right-click menu is open on this bubble. */
+.entry-bubble.is-ctx-open {
+  border-color: var(--pintra-accent-line);
 }
 
 .entry-role {
