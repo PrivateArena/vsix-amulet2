@@ -14,7 +14,12 @@ import type {
 } from '../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
-import { readConfig } from '../config';
+import {
+  EXPAND_THINKING_KEY,
+  readConfig,
+  setExpandThinking,
+  webviewConfig,
+} from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
 import { resolveBinaryPath, getAgentVersion } from '../runtime/bootstrap';
 import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
@@ -80,10 +85,16 @@ export class ChatBridge implements vscode.Disposable {
       runtime.onExtensionUiRequest((req) => void this.onUiRequest(req)),
     );
 
-    this.post({
-      type: 'config',
-      config: { thinkingLevel: readConfig().thinkingLevel },
+    // Mirror setting changes made here (or in the Settings editor, or in another
+    // panel) into every connected webview.
+    const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration(EXPAND_THINKING_KEY)) {
+        this.post({ type: 'config', config: webviewConfig() });
+      }
     });
+    this.subscriptions.push(() => configSub.dispose());
+
+    this.post({ type: 'config', config: webviewConfig() });
     this.post({ type: 'runtimeStatus', status: runtime.getStatus() });
 
     try {
@@ -242,6 +253,12 @@ export class ChatBridge implements vscode.Disposable {
         case 'setAutoCompaction':
           await runtime?.setAutoCompaction(message.enabled);
           await this.pushState();
+          return;
+        case 'setExpandThinking':
+          // Purely a webview rendering preference; `config` is echoed back so the
+          // UI reflects the write even if the change event is suppressed.
+          await setExpandThinking(message.enabled);
+          this.post({ type: 'config', config: webviewConfig() });
           return;
         case 'openPiFolder': {
           const dir = path.join(os.homedir(), '.pi');

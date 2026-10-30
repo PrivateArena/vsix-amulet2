@@ -2,7 +2,7 @@
 	"name": "pi-vsc",
 	"displayName": "Pintra — Pi Agent for VS Code",
 	"description": "AI coding agent for VS Code, powered by the pi runtime.",
-	"version": "1.0.11",
+	"version": "1.0.12",
 	"publisher": "bilalbentoumi",
 	"private": true,
 	"icon": "media/icon.png",
@@ -195,13 +195,19 @@
 					"order": 5,
 					"markdownDescription": "Automatically retry on transient provider errors (rate limits, timeouts)."
 				},
+				"pintra.expandThinking": {
+					"type": "boolean",
+					"default": false,
+					"order": 6,
+					"markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
+				},
 				"pintra.extraArgs": {
 					"type": "array",
 					"items": {
 						"type": "string"
 					},
 					"default": [],
-					"order": 6,
+					"order": 7,
 					"scope": "machine",
 					"markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
 				}

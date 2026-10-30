@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
 import {
   LuCircleArrowUp,
+  LuChevronsUpDown,
   LuDownload,
-  LuEye,
   LuFileText,
   LuFolderOpen,
   LuInfo,
@@ -21,12 +20,7 @@ import { Menu, MenuItem } from '../../ui/menu-item';
 const REPO_URL = 'https://github.com/bilalbentoumi/pi-vsc';
 
 export function SettingsMenu() {
-  const { session } = useChatState();
-  const [showThinking, setShowThinking] = useState(false);
-
-  useEffect(() => {
-    document.body.classList.toggle('show-reasoning', showThinking);
-  }, [showThinking]);
+  const { session, expandThinking } = useChatState();
 
   const autoCompactionEnabled = session?.autoCompactionEnabled ?? true;
 
@@ -62,11 +56,11 @@ export function SettingsMenu() {
       onSelect: () => actions.showSessionInfo(),
     },
     {
-      label: 'Show thinking',
-      icon: LuEye,
-      onSelect: () => setShowThinking((v) => !v),
+      label: 'Uncollapse thinking',
+      icon: LuChevronsUpDown,
+      onSelect: () => actions.setExpandThinking(!expandThinking),
       kind: 'toggle',
-      checked: showThinking,
+      checked: expandThinking,
     },
     {
       label: 'Auto compact',

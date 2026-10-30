@@ -13,6 +13,7 @@ const config = (binaryPath: string): PiConfig => ({
   thinkingLevel: 'medium',
   autoCompact: true,
   autoRetry: true,
+  expandThinking: false,
   extraArgs: [],
 });
 

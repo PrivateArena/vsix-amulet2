@@ -509,6 +509,8 @@ export type WebviewMessage =
   | { type: 'exportChat' }
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }
+  /** Persist the "Uncollapse thinking" preference (`pintra.expandThinking`). */
+  | { type: 'setExpandThinking'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
@@ -544,5 +546,7 @@ export type HostMessage =
 
 export interface WebviewConfig {
   thinkingLevel: ThinkingLevel;
+  /** Render reasoning blocks expanded unless the user overrode one locally. */
+  expandThinking: boolean;
   autoExpandEditLineThreshold?: number;
 }

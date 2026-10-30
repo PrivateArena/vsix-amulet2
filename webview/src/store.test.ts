@@ -37,9 +37,22 @@ describe('reducer — host state messages', () => {
     expect(
       reducer(
         initialState,
-        host({ type: 'config', config: { thinkingLevel: 'high' } }),
-      ).thinkingLevel,
-    ).toBe('high');
+        host({
+          type: 'config',
+          config: { thinkingLevel: 'high', expandThinking: true },
+        }),
+      ),
+    ).toMatchObject({ thinkingLevel: 'high', expandThinking: true });
+    // A config push on an open panel re-applies the thinking default live.
+    expect(
+      reducer(
+        { ...initialState, expandThinking: true },
+        host({
+          type: 'config',
+          config: { thinkingLevel: 'high', expandThinking: false },
+        }),
+      ).expandThinking,
+    ).toBe(false);
   });
 
   it('derives streaming/compacting/thinkingLevel from session state', () => {

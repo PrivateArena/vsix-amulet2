@@ -82,6 +82,8 @@ export interface ChatState {
   streaming: boolean;
   compacting: boolean;
   thinkingLevel: ThinkingLevel;
+  /** Host preference: render reasoning blocks expanded by default. */
+  expandThinking: boolean;
   pendingUi: ExtensionUiRequest[];
   sessions: SessionInfo[];
   hasLoadedHistory: boolean;
@@ -104,6 +106,7 @@ export const initialState: ChatState = {
   streaming: false,
   compacting: false,
   thinkingLevel: 'medium',
+  expandThinking: false,
   pendingUi: [],
   sessions: [],
   hasLoadedHistory: false,
@@ -267,7 +270,11 @@ export function reducer(state: ChatState, action: Action): ChatState {
     case 'models':
       return { ...state, models: message.models };
     case 'config':
-      return { ...state, thinkingLevel: message.config.thinkingLevel };
+      return {
+        ...state,
+        thinkingLevel: message.config.thinkingLevel,
+        expandThinking: message.config.expandThinking,
+      };
     case 'state':
       return {
         ...state,

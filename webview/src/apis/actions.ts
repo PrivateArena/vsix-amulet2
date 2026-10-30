@@ -34,6 +34,8 @@ export const actions = {
     postMessage({ type: 'setThinkingLevel', level }),
   setAutoCompaction: (enabled: boolean) =>
     postMessage({ type: 'setAutoCompaction', enabled }),
+  setExpandThinking: (enabled: boolean) =>
+    postMessage({ type: 'setExpandThinking', enabled }),
 
   // sessions
   newChat: () => postMessage({ type: 'newChat' }),

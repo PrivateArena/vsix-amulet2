@@ -53,8 +53,7 @@
   width: 13px;
 }
 
-.reasoning-block.is-expanded .reasoning-chevron,
-body.show-thinking .reasoning-block:not(.is-active) .reasoning-chevron {
+.reasoning-block.is-expanded .reasoning-chevron {
   transform: rotate(90deg);
 }
 
@@ -125,9 +124,16 @@ body.show-thinking .reasoning-block:not(.is-active) .reasoning-chevron {
   word-break: break-word;
 }
 
-.reasoning-block.is-expanded .reasoning-body,
-body.show-thinking .reasoning-body {
+.reasoning-block.is-expanded .reasoning-body {
   display: block;
+}
+
+/* While the thought is still streaming the panel grows with the text instead of
+   scrolling inside a fixed window: the chat log already hugs the bottom, so the
+   newest line stays on screen and following along needs no manual scrolling. */
+.reasoning-block.is-active.is-expanded .reasoning-body {
+  max-height: none;
+  overflow-y: visible;
 }
 
 @keyframes reason-fade {

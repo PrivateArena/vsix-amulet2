@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ThinkingLevel } from '../shared/protocol';
+import type { ThinkingLevel, WebviewConfig } from '../shared/protocol';
 
 export interface PiConfig {
   binaryPath: string;
@@ -8,6 +8,8 @@ export interface PiConfig {
   thinkingLevel: ThinkingLevel;
   autoCompact: boolean;
   autoRetry: boolean;
+  /** Webview-only: render new reasoning blocks expanded. */
+  expandThinking: boolean;
   extraArgs: string[];
 }
 
@@ -22,8 +24,25 @@ export function readConfig(): PiConfig {
     thinkingLevel: cfg.get<ThinkingLevel>('thinkingLevel', 'medium'),
     autoCompact: cfg.get<boolean>('autoCompact', true),
     autoRetry: cfg.get<boolean>('autoRetry', true),
+    expandThinking: cfg.get<boolean>('expandThinking', false),
     extraArgs: cfg.get<string[]>('extraArgs', []),
   };
+}
+
+/** The subset of settings the webview renders. */
+export function webviewConfig(): WebviewConfig {
+  const { thinkingLevel, expandThinking } = readConfig();
+  return { thinkingLevel, expandThinking };
+}
+
+/** Config key behind the webview's "Uncollapse thinking" toggle. */
+export const EXPAND_THINKING_KEY = `${SECTION}.expandThinking`;
+
+/** Persist {@link PiConfig.expandThinking} so the preference survives reloads. */
+export async function setExpandThinking(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('expandThinking', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /** Config keys whose change should trigger a runtime restart. */
