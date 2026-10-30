@@ -2,7 +2,7 @@
 	"name": "pi-vsc",
 	"displayName": "Pintra — Pi Agent for VS Code",
 	"description": "AI coding agent for VS Code, powered by the pi runtime.",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"publisher": "bilalbentoumi",
 	"private": true,
 	"icon": "media/icon.png",
@@ -210,11 +210,11 @@
 	},
 	"scripts": {
 		"build": "node esbuild.mjs",
+		"package": "bash scripts/build-vsix.sh",
 		"watch": "node esbuild.mjs --watch",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"package": "npm run typecheck && node esbuild.mjs --production && npx vsce package --no-dependencies",
 		"vscode:prepublish": "node esbuild.mjs --production",
 		"vscode:install": "code --install-extension \"$(ls -t pi-vsc-*.vsix | head -1)\"",
 		"format": "npx prettier --write"

@@ -50,9 +50,14 @@ pnpm install
 pnpm run build        # bundle host + webview once (node esbuild.mjs)
 pnpm run watch        # rebuild on change (background)
 pnpm run typecheck    # tsc --noEmit  — the only type-check gate
-pnpm run package      # typecheck + production bundle + vsce package (.vsix)
+pnpm run package      # scripts/build-vsix.sh: typecheck + tests + prod bundle + vsce package (.vsix)
 pnpm run format       # prettier --write
 ```
+
+`scripts/build-vsix.sh` is the one-shot VSIX builder and needs no pnpm on PATH (it uses
+`node_modules/.bin` for `tsc`/`vitest` and falls back to `npx @vscode/vsce`). Run it directly with
+`./scripts/build-vsix.sh --fast` to skip the gates, or `--install` to load the artifact into the
+local VS Code.
 
 - **Run/debug:** press **F5** ("Run Pintra Extension") to launch an Extension Development Host; the `pnpm: watch` task starts automatically. Open the **Pintra** view in the activity bar.
 - **Bundling is esbuild only** ([`esbuild.mjs`](esbuild.mjs)). `tsc` is configured with `noEmit` and is used _purely_ for type-checking — do not expect it to produce output.

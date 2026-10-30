@@ -12,3 +12,12 @@ tsconfig.json
 tmp/**
 scripts/**
 docs/**
+# Fork notes + local tooling caches — never ship them inside the extension
+PROJECT_OVERVIEW.md
+DRAFT.md
+AGENTS.md
+.zenmcp/**
+.github/**
+pnpm-lock.yaml
+pnpm-workspace.yaml
+*.vsix
