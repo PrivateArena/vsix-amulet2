@@ -4,9 +4,10 @@
 # bundle -> vsce package. Packaging tools come from node_modules and vsce is
 # fetched on demand, so pnpm does not have to be on PATH.
 #
-# Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-h|--help]
+# Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-b|--bump] [-h|--help]
 #   -f, --fast     skip typecheck + tests (bundle and package only)
 #   -i, --install  install the result into the local VS Code after packaging
+#   -b, --bump     increment package.json's patch version first (off by default)
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -21,6 +22,8 @@ Build the extension VSIX in one shot:
 Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-h|--help]
   -f, --fast     skip typecheck + tests (bundle and package only)
   -i, --install  install the result into the local VS Code after packaging
+  -b, --bump     increment the patch version in package.json before packaging
+                 (the version is left untouched without this flag)
 
 Works without pnpm: it uses node_modules/.bin for tsc/vitest and falls back to
 `npx @vscode/vsce` when vsce is not installed.
@@ -29,10 +32,12 @@ EOF
 
 FAST=0
 INSTALL=0
+BUMP=0
 for arg in "$@"; do
   case "$arg" in
     -f | --fast) FAST=1 ;;
     -i | --install) INSTALL=1 ;;
+    -b | --bump) BUMP=1 ;;
     -h | --help)
       usage
       exit 0
@@ -51,6 +56,30 @@ die() {
   exit 1
 }
 
+# Rewrite only the "version" line so the rest of package.json (tabs, key order,
+# comments-adjacent formatting) stays byte-for-byte identical.
+bump_version() {
+  "$NODE" -e '
+    const fs = require("node:fs");
+    const file = "package.json";
+    const source = fs.readFileSync(file, "utf8");
+    const current = JSON.parse(source).version;
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(current);
+    if (!match) {
+      console.error(`build-vsix: cannot bump non-semver version "${current}"`);
+      process.exit(1);
+    }
+    const next = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+    const token = `"version": ${JSON.stringify(current)}`;
+    if (!source.includes(token)) {
+      console.error(`build-vsix: could not locate ${token} in ${file}`);
+      process.exit(1);
+    }
+    fs.writeFileSync(file, source.replace(token, `"version": ${JSON.stringify(next)}`));
+    process.stdout.write(next);
+  '
+}
+
 command -v node >/dev/null 2>&1 || die "node is not on PATH"
 [[ -d $ROOT/node_modules ]] ||
   die "node_modules is missing — install dependencies first (pnpm install)"
@@ -58,6 +87,14 @@ command -v node >/dev/null 2>&1 || die "node is not on PATH"
 NODE=${NODE:-node}
 VERSION=$("$NODE" -p "require('./package.json').version")
 NAME=$("$NODE" -p "require('./package.json').name")
+
+if ((BUMP)); then
+  step "bump patch version"
+  BUMPED=$(bump_version) || die "version bump failed"
+  printf 'package.json: %s -> %s\n' "$VERSION" "$BUMPED"
+  VERSION=$BUMPED
+fi
+
 ARTIFACT="$ROOT/$NAME-$VERSION.vsix"
 
 [[ -x $BIN/tsc ]] ||
