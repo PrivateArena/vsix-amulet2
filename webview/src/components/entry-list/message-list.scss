@@ -8,7 +8,10 @@
   max-width: 900px;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: calc(8px * var(--pintra-spacing-mult)) 16px 160px;
+  /* `--chat-composer-h` is published by the composer (it floats over the log),
+     so the reserved gap tracks the textarea as it grows instead of a fixed 160px. */
+  padding: calc(8px * var(--pintra-spacing-mult)) 16px
+    calc(var(--chat-composer-h, 96px) + 24px);
   position: relative;
   transition:
     opacity 0.18s ease,

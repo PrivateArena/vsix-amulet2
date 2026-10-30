@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { LuArrowUp, LuPaperclip, LuSquare, LuX } from 'react-icons/lu';
 import type { Attachment } from '../../../../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../../../../shared/constants';
@@ -38,6 +45,53 @@ function imageToAttachment(file: File): Promise<Attachment> {
   });
 }
 
+/**
+ * Grow the textarea with its content, one line at a time, up to the `max-height`
+ * the stylesheet imposes; past that it scrolls internally. Writing `height:auto`
+ * first lets the element shrink back down when lines are deleted.
+ */
+function useAutoGrow(
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  value: string,
+) {
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const content = textarea.scrollHeight;
+    textarea.style.height = `${content}px`;
+    // `clientHeight` honours the CSS cap, so this is "did we hit the ceiling?".
+    textarea.style.overflowY =
+      content > textarea.clientHeight ? 'auto' : 'hidden';
+  }, [textareaRef, value]);
+}
+
+/**
+ * Publish the composer's outer height as `--chat-composer-h` so the message list
+ * can reserve exactly that much scroll padding — the composer floats over the
+ * log, and a fixed gap would either clip the last reply or waste screen space
+ * while the composer is a single line.
+ */
+function usePublishComposerHeight(
+  rootRef: React.RefObject<HTMLElement | null>,
+) {
+  useEffect(() => {
+    const el = rootRef.current?.closest('.chat-input-wrap') ?? rootRef.current;
+    if (!el) return;
+    const publish = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--chat-composer-h', `${h}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--chat-composer-h');
+    };
+  }, [rootRef]);
+}
+
 export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
   function InputBar(_props, ref) {
     const { streaming, status, commands, pendingAttachments } = useChatState();
@@ -46,6 +100,10 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
 
     const [input, setInput] = useState('');
     const localRef = useRef<HTMLTextAreaElement | null>(null);
+    const rootRef = useRef<HTMLDivElement | null>(null);
+
+    useAutoGrow(localRef, input);
+    usePublishComposerHeight(rootRef);
 
     const setRefs = (el: HTMLTextAreaElement | null) => {
       localRef.current = el;
@@ -181,9 +239,11 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
       [pendingAttachments, dispatch],
     );
 
+    const hasAttachments = pendingAttachments.length > 0;
+
     return (
-      <div className="input-bar">
-        {pendingAttachments.length > 0 && (
+      <div className="input-bar" ref={rootRef}>
+        {hasAttachments && (
           <div className="input-attachments">
             {pendingAttachments.map((att) => (
               <div key={att.id} className="attach-chip">
@@ -216,7 +276,8 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             ))}
           </div>
         )}
-        <div className="input-wrap">
+        <div
+          className={`input-wrap${hasAttachments ? ' has-attachments' : ''}`}>
           <textarea
             ref={setRefs}
             className="input-field"
@@ -227,7 +288,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                   ? 'Steer the agent (Esc to stop)…'
                   : 'Ask anything, @ to add files, / for commands'
             }
-            rows={2}
+            rows={1}
             disabled={!ready}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -245,10 +306,10 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             />
           )}
         </div>
-        <hr className="input-divider" />
         <div className="input-toolbar">
           <div className="input-toolbar-group">
             <IconButton
+              size="sm"
               variant="ghost"
               icon={LuPaperclip}
               label="Attach files"
@@ -266,6 +327,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             <ContextMeter />
             {streaming ? (
               <IconButton
+                size="sm"
                 variant="error"
                 icon={LuSquare}
                 label="Stop"
@@ -274,12 +336,11 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               />
             ) : (
               <IconButton
+                size="sm"
                 variant="contained"
                 icon={LuArrowUp}
                 label="Send (Enter)"
-                disabled={
-                  !ready || (!input.trim() && pendingAttachments.length === 0)
-                }
+                disabled={!ready || (!input.trim() && !hasAttachments)}
                 onClick={() => submit()}
               />
             )}
