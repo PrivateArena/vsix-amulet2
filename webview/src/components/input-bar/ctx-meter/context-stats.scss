@@ -69,36 +69,19 @@
   white-space: nowrap;
 }
 
-.ctx-popup-compact {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
+/* Action row — a standard menu list, sized like every other menu in the app
+   (`.ctx-popup-body` shrinks the em base, so opt back in to the app scale). */
+.ctx-popup-actions {
   margin-top: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius-sm);
-  background: var(--pintra-surface);
-  color: var(--pintra-fg);
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition:
-    background var(--pintra-transition-fast) var(--pintra-ease-out),
-    border-color var(--pintra-transition-fast) var(--pintra-ease-out);
+  padding-top: 6px;
+  border-top: 1px solid var(--pintra-hairline);
+  font-size: calc(var(--pintra-font-size) * 0.8);
 }
 
-.ctx-popup-compact:hover:not(:disabled) {
-  border-color: var(--pintra-accent-line);
-}
-
-.ctx-popup-compact:hover:not(:disabled) {
-  background: var(--pintra-surface-hover);
-}
-
-.ctx-popup-compact:disabled {
-  opacity: 0.4;
-  cursor: default;
+.ctx-popup-actions .menu-item {
+  font-size: inherit;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 4px 6px;
 }
 
 @keyframes context-popup-in {

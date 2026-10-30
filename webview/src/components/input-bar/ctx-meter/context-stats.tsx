@@ -4,7 +4,9 @@ import { useChatState } from '../../../contexts/chat-context';
 import { useConfirm } from '../../../stores/confirm-store';
 import { formatTokens } from '../../../utils/format';
 import { Button } from '../../ui/button';
-import { Tooltip } from '../../ui/tooltip';
+import { Flyout } from '../../ui/flyout';
+// Reused so the action row here looks exactly like every other menu in the app.
+import '../../ui/menu-item/menu.scss';
 import './context-stats.scss';
 
 const R = 5.5;
@@ -40,14 +42,49 @@ export function ContextMeter() {
   const offset = CIRCUMFERENCE * (1 - pct / 100);
   const input = stats.tokens.input ?? 0;
   const output = stats.tokens.output ?? 0;
+  const compactDisabled = streaming || compacting;
 
   return (
     <div className="ctx-meter-wrap">
-      <Tooltip
+      <Flyout
         side="top"
         align="center"
-        minWidth={200}
-        content={({ close }) => (
+        minWidth={220}
+        popoverProps={{ role: 'dialog', 'aria-label': 'Context usage' }}
+        trigger={({ ref, triggerProps }) => (
+          <Button
+            ref={ref}
+            variant="ghost"
+            icon={() => (
+              <svg
+                className="ctx-meter"
+                viewBox="0 0 16 16"
+                width="18"
+                height="18"
+                aria-hidden="true"
+                style={
+                  {
+                    '--ctx-color': `var(--pintra-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
+                  } as React.CSSProperties
+                }>
+                <circle className="ctx-meter-track" cx="8" cy="8" r={R} />
+                <circle
+                  className="ctx-meter-fill"
+                  cx="8"
+                  cy="8"
+                  r={R}
+                  strokeDasharray={CIRCUMFERENCE}
+                  strokeDashoffset={offset}
+                />
+              </svg>
+            )}
+            aria-label={`Context usage: ${pct}%`}
+            title={`Context usage: ${pct}%`}
+            aria-haspopup="dialog"
+            {...triggerProps}
+          />
+        )}>
+        {({ close }) => (
           <div className="ctx-popup-body">
             <div className="ctx-popup-title">Context usage</div>
             <div className="ctx-popup-grid">
@@ -88,48 +125,25 @@ export function ContextMeter() {
                 </strong>
               </div>
             </div>
-            <button
-              type="button"
-              className="ctx-popup-compact"
-              disabled={streaming || compacting}
-              onClick={() => {
-                close();
-                void handleCompact();
-              }}>
-              <LuMinimize2 size={13} />
-              Compact context
-            </button>
+            <div className="ctx-popup-actions" role="menu">
+              <Button
+                type="button"
+                role="menuitem"
+                className={`menu-item${compactDisabled ? ' disabled' : ''}`}
+                disabled={compactDisabled}
+                onClick={() => {
+                  close();
+                  void handleCompact();
+                }}>
+                <span className="menu-icon">
+                  <LuMinimize2 size={14} />
+                </span>
+                <span className="menu-label">Compact conversation</span>
+              </Button>
+            </div>
           </div>
-        )}>
-        <Button
-          variant="ghost"
-          icon={() => (
-            <svg
-              className="ctx-meter"
-              viewBox="0 0 16 16"
-              width="18"
-              height="18"
-              aria-hidden="true"
-              style={
-                {
-                  '--ctx-color': `var(--pintra-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
-                } as React.CSSProperties
-              }>
-              <circle className="ctx-meter-track" cx="8" cy="8" r={R} />
-              <circle
-                className="ctx-meter-fill"
-                cx="8"
-                cy="8"
-                r={R}
-                strokeDasharray={CIRCUMFERENCE}
-                strokeDashoffset={offset}
-              />
-            </svg>
-          )}
-          aria-label={`Context usage: ${pct}%`}
-          aria-haspopup="menu"
-        />
-      </Tooltip>
+        )}
+      </Flyout>
     </div>
   );
 }
