@@ -27,7 +27,8 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo): void {
     this.setState({ stack: info.componentStack ?? '' });
     log('error', `Webview crashed: ${error.stack ?? error.message}`);
-    if (info.componentStack) log('error', `Component stack:${info.componentStack}`);
+    if (info.componentStack)
+      log('error', `Component stack:${info.componentStack}`);
   }
 
   render(): ReactNode {

@@ -50,9 +50,9 @@ describe('buildUiResponse — pi RPC reply shapes', () => {
 
   it('answers input and editor with the typed text, empty string included', () => {
     for (const method of ['input', 'editor']) {
-      expect(buildUiResponse(req(method), { kind: 'value', value: '' })).toEqual(
-        { type: 'extension_ui_response', id: 'r1', value: '' },
-      );
+      expect(
+        buildUiResponse(req(method), { kind: 'value', value: '' }),
+      ).toEqual({ type: 'extension_ui_response', id: 'r1', value: '' });
     }
   });
 

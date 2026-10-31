@@ -34,13 +34,17 @@ rl.on('line', (line) => {
   let detail = '';
   if (msg) {
     detail = ` role=${msg.role} contentType=${Array.isArray(msg.content) ? 'array' : typeof msg.content}`;
-    if (typeof msg.content === 'string') detail += ` value=${JSON.stringify(msg.content.slice(0, 60))}`;
-    if (Array.isArray(msg.content)) detail += ' blocks=' + msg.content.map((b) => b?.type).join(',');
+    if (typeof msg.content === 'string')
+      detail += ` value=${JSON.stringify(msg.content.slice(0, 60))}`;
+    if (Array.isArray(msg.content))
+      detail += ' blocks=' + msg.content.map((b) => b?.type).join(',');
   }
   if (obj.error) detail += ` error=${JSON.stringify(obj.error).slice(0, 120)}`;
   console.log(`[${lines.length}] ${kind}${detail}`);
 });
-child.stderr.on('data', (d) => console.log('[stderr]', String(d).trim().slice(0, 300)));
+child.stderr.on('data', (d) =>
+  console.log('[stderr]', String(d).trim().slice(0, 300)),
+);
 
 const send = (o) => child.stdin.write(JSON.stringify(o) + '\n');
 

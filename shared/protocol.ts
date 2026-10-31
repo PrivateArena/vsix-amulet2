@@ -22,13 +22,7 @@
  * `thinkingLevelMap` — ask `get_available_thinking_levels`, never assume.
  */
 export type ThinkingLevel =
-  | 'off'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh'
-  | 'max';
+  'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /** Canonical pi ordering (weakest to strongest); used to display harness levels. */
 export const THINKING_LEVEL_ORDER: ThinkingLevel[] = [

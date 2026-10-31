@@ -87,9 +87,7 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
           )}
         </div>
         <div className="pp-foot">
-          <span className="pp-hint">
-            Esc to deny{queueNote}
-          </span>
+          <span className="pp-hint">Esc to deny{queueNote}</span>
           {request.method === 'select' && (
             <Button variant="ghost" size="sm" onClick={cancel}>
               Deny
@@ -117,7 +115,11 @@ function SelectBody({
     },
     [options, onAnswer],
   );
-  const { focused, setFocused, onKeyDown: navKeyDown } = useListNavigation({
+  const {
+    focused,
+    setFocused,
+    onKeyDown: navKeyDown,
+  } = useListNavigation({
     count: options.length,
     onSelect: pick,
   });
@@ -144,7 +146,8 @@ function SelectBody({
   if (options.length === 0) {
     return (
       <div className="pp-empty">
-        This dialog offers no options — deny it and answer in the terminal instead.
+        This dialog offers no options — deny it and answer in the terminal
+        instead.
       </div>
     );
   }

@@ -76,7 +76,9 @@ describe('block guards', () => {
 
 describe('normalizeContent', () => {
   it('wraps the bare string bodies pi uses for user and system messages', () => {
-    expect(normalizeContent('hello')).toEqual([{ type: 'text', text: 'hello' }]);
+    expect(normalizeContent('hello')).toEqual([
+      { type: 'text', text: 'hello' },
+    ]);
     // The leading system message: empty body, prompt text in `sections`.
     expect(normalizeContent('')).toEqual([]);
   });
@@ -193,7 +195,9 @@ describe('applyAssistantEvent', () => {
     ]);
 
     const same = normalizeContent([{ type: 'text', text: 'a' }]);
-    expect(applyAssistantEvent(same, { type: 'done', reason: 'stop' })).toBe(same);
+    expect(applyAssistantEvent(same, { type: 'done', reason: 'stop' })).toBe(
+      same,
+    );
     expect(applyAssistantEvent(same, undefined)).toBe(same);
     expect(applyAssistantEvent(same, { contentIndex: 0 } as never)).toBe(same);
   });

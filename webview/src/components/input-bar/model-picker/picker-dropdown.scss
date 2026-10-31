@@ -117,9 +117,11 @@
       letter-spacing: var(--amulet-tracking-caps);
       -webkit-user-select: none;
       user-select: none;
-      background: linear-gradient(to bottom,
-          var(--amulet-menu-bg) 62%,
-          color-mix(in srgb, var(--amulet-menu-bg) 0%, transparent));
+      background: linear-gradient(
+        to bottom,
+        var(--amulet-menu-bg) 62%,
+        color-mix(in srgb, var(--amulet-menu-bg) 0%, transparent)
+      );
 
       .picker-group-tick {
         width: 8px;
@@ -300,9 +302,11 @@
       /* Active *and* keyboard-focused — firmer accent frame */
       &.active.focused {
         background: color-mix(in srgb, var(--amulet-accent) 15%, transparent);
-        border-color: color-mix(in srgb,
-            var(--amulet-accent) 55%,
-            var(--amulet-border));
+        border-color: color-mix(
+          in srgb,
+          var(--amulet-accent) 55%,
+          var(--amulet-border)
+        );
       }
 
       &:focus-visible {
@@ -396,7 +400,8 @@
   color: var(--amulet-accent-strong);
   font-weight: 700;
   background: var(--amulet-accent-faint);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amulet-accent) 16%, transparent);
+  box-shadow: 0 0 0 1px
+    color-mix(in srgb, var(--amulet-accent) 16%, transparent);
 }
 
 .picker-item.active .picker-item-name .fuzzy-hl {

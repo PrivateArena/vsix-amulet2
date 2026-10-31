@@ -74,11 +74,11 @@
 
 /* The rail owns vertical rhythm — drop the blocks' own outer margins and keep
    their first line snug against the dot. */
-.tl-body> :first-child {
+.tl-body > :first-child {
   margin-top: 0;
 }
 
-.tl-body> :last-child {
+.tl-body > :last-child {
   margin-bottom: 0;
 }
 

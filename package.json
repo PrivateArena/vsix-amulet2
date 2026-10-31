@@ -1,268 +1,268 @@
 {
-	"name": "amulet",
-	"displayName": "Amulet — Pi Agent for VS Code",
-	"description": "AI coding agent for VS Code, powered by the pi runtime.",
-	"version": "1.0.18",
-	"publisher": "gunir",
-	"private": true,
-	"icon": "media/icon.png",
-	"galleryBanner": {
-		"color": "#101010",
-		"theme": "dark"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/gunir/vsix-amulet2.git"
-	},
-	"license": "MIT",
-	"engines": {
-		"vscode": "^1.90.0"
-	},
-	"categories": [
-		"AI",
-		"Chat",
-		"Machine Learning",
-		"Other"
-	],
-	"keywords": [
-		"ai",
-		"ai-agent",
-		"coding-agent",
-		"assistant",
-		"chat",
-		"pi",
-		"pi-agent"
-	],
-	"main": "./dist/extension.js",
-	"activationEvents": [
-		"onView:amulet.chatView"
-	],
-	"contributes": {
-		"viewsContainers": {
-			"activitybar": [
-				{
-					"id": "amulet-container",
-					"title": "Amulet",
-					"icon": "media/activity-bar-icon.svg"
-				}
-			]
-		},
-		"views": {
-			"amulet-container": [
-				{
-					"type": "webview",
-					"id": "amulet.chatView",
-					"name": "Amulet"
-				}
-			]
-		},
-		"commands": [
-			{
-				"command": "amulet.newChat",
-				"title": "New Chat",
-				"category": "Amulet",
-				"icon": "$(add)"
-			},
-			{
-				"command": "amulet.switchModel",
-				"title": "Switch Model",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.cycleModel",
-				"title": "Cycle Model",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.cycleThinkingLevel",
-				"title": "Cycle Thinking Level",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.compact",
-				"title": "Compact Context",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.abort",
-				"title": "Stop Agent",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.focusInput",
-				"title": "Focus Chat Input",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.addFileToChat",
-				"title": "Add File to Amulet Chat",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.restartRuntime",
-				"title": "Restart Runtime",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.showLog",
-				"title": "Show Log",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.openChatInEditor",
-				"title": "Open Chat in Editor Tab",
-				"category": "Amulet",
-				"icon": "$(comment-discussion)"
-			},
-			{
-				"command": "amulet.editMessage",
-				"title": "Edit a Previous Message",
-				"category": "Amulet"
-			},
-			{
-				"command": "amulet.exportChat",
-				"title": "Export Chat to HTML...",
-				"category": "Amulet"
-			}
-		],
-		"menus": {
-			"explorer/context": [
-				{
-					"command": "amulet.addFileToChat",
-					"when": "resourceScheme == file",
-					"group": "navigation@100"
-				}
-			],
-			"editor/title": [
-				{
-					"command": "amulet.openChatInEditor",
-					"when": "activeWebviewPanelId != amulet.chatEditor",
-					"group": "navigation@1"
-				}
-			]
-		},
-		"keybindings": [
-			{
-				"command": "amulet.focusInput",
-				"key": "ctrl+shift+i",
-				"mac": "cmd+shift+i"
-			},
-			{
-				"command": "amulet.newChat",
-				"key": "ctrl+shift+alt+n",
-				"mac": "cmd+shift+alt+n"
-			}
-		],
-		"configuration": {
-			"title": "Amulet",
-			"properties": {
-				"amulet.binaryPath": {
-					"type": "string",
-					"default": "pi",
-					"order": 0,
-					"scope": "machine",
-					"markdownDescription": "Command name or absolute path of the external pi-compatible agent executable (for example `pi` or `omp`). Runs in RPC mode. **Changing this restarts the runtime.** Scoped to machine so a workspace's `.vscode/settings.json` cannot override it (security: this value is used to spawn a child process)."
-				},
-				"amulet.agentDir": {
-					"type": "string",
-					"default": "",
-					"order": 1,
-					"scope": "machine",
-					"markdownDescription": "Directory where the pi runtime stores auth, models, and sessions. Defaults to the runtime's own default (`~/.pi/agent`). Passed as `PI_CODING_AGENT_DIR`. Scoped to machine so a workspace cannot redirect it."
-				},
-				"amulet.defaultModel": {
-					"type": "string",
-					"default": "",
-					"order": 2,
-					"markdownDescription": "Optional default model pattern passed to the runtime at startup (for example `anthropic/claude-sonnet-5` or `provider/id:thinking`). Leave empty to use the runtime's configured default."
-				},
-				"amulet.thinkingLevel": {
-					"type": "string",
-					"enum": [
-						"disabled",
-						"off",
-						"minimal",
-						"low",
-						"medium",
-						"high",
-						"xhigh",
-						"max"
-					],
-					"enumDescriptions": [
-						"Do not send any thinking level - pi, the model config, and the provider defaults decide.",
-						"Explicitly disable thinking for every model that supports it.",
-						"Minimal reasoning effort.",
-						"Low reasoning effort.",
-						"Medium reasoning effort.",
-						"High reasoning effort.",
-						"Extra high reasoning effort (only where the model maps it).",
-						"Maximum reasoning effort (only where the model maps it)."
-					],
-					"default": "disabled",
-					"order": 3,
-					"markdownDescription": "Thinking level the extension applies to the runtime. Leave on `disabled` to send nothing: the level then comes from pi's own settings, the resumed session, and the model default, and you can still pick one per session in the chat box. Any other value is sent as `set_thinking_level` at every runtime start (and live when you change it), overriding those defaults; pi clamps it to what the selected model supports. Switching back to `disabled` takes effect on the next runtime start."
-				},
-				"amulet.autoCompact": {
-					"type": "boolean",
-					"default": true,
-					"order": 4,
-					"markdownDescription": "Automatically compact context when the conversation grows large."
-				},
-				"amulet.autoRetry": {
-					"type": "boolean",
-					"default": true,
-					"order": 5,
-					"markdownDescription": "Automatically retry on transient provider errors (rate limits, timeouts)."
-				},
-				"amulet.expandThinking": {
-					"type": "boolean",
-					"default": false,
-					"order": 6,
-					"markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
-				},
-				"amulet.extraArgs": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					},
-					"default": [],
-					"order": 7,
-					"scope": "machine",
-					"markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
-				}
-			}
-		}
-	},
-	"scripts": {
-		"build": "node esbuild.mjs",
-		"package": "bash scripts/build-vsix.sh",
-		"watch": "node esbuild.mjs --watch",
-		"typecheck": "tsc --noEmit",
-		"test": "vitest run",
-		"test:watch": "vitest",
-		"vscode:prepublish": "node esbuild.mjs --production",
-		"vscode:install": "code --install-extension \"$(ls -t amulet-*.vsix | head -1)\"",
-		"format": "npx prettier --write"
-	},
-	"devDependencies": {
-		"@types/node": "^22.10.0",
-		"@types/react": "^18.3.12",
-		"@types/react-dom": "^18.3.1",
-		"@types/vscode": "^1.90.0",
-		"esbuild": "^0.24.0",
-		"sass": "^1.101.0",
-		"typescript": "^5.7.2",
-		"vitest": "^4.1.10"
-	},
-	"dependencies": {
-		"@lobehub/icons-static-svg": "^1.91.0",
-		"highlight.js": "^11.10.0",
-		"react": "^18.3.1",
-		"react-dom": "^18.3.1",
-		"react-icons": "^5.7.0",
-		"react-markdown": "^9.0.1",
-		"rehype-highlight": "^7.0.1",
-		"remark-gfm": "^4.0.0",
-		"zustand": "^5.0.14"
-	}
+  "name": "amulet",
+  "displayName": "Amulet — Pi Agent for VS Code",
+  "description": "AI coding agent for VS Code, powered by the pi runtime.",
+  "version": "1.0.18",
+  "publisher": "gunir",
+  "private": true,
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#101010",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gunir/vsix-amulet2.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "ai-agent",
+    "coding-agent",
+    "assistant",
+    "chat",
+    "pi",
+    "pi-agent"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:amulet.chatView"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "amulet-container",
+          "title": "Amulet",
+          "icon": "media/activity-bar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "amulet-container": [
+        {
+          "type": "webview",
+          "id": "amulet.chatView",
+          "name": "Amulet"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "amulet.newChat",
+        "title": "New Chat",
+        "category": "Amulet",
+        "icon": "$(add)"
+      },
+      {
+        "command": "amulet.switchModel",
+        "title": "Switch Model",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.cycleModel",
+        "title": "Cycle Model",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.cycleThinkingLevel",
+        "title": "Cycle Thinking Level",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.compact",
+        "title": "Compact Context",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.abort",
+        "title": "Stop Agent",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.focusInput",
+        "title": "Focus Chat Input",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.addFileToChat",
+        "title": "Add File to Amulet Chat",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.restartRuntime",
+        "title": "Restart Runtime",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.showLog",
+        "title": "Show Log",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.openChatInEditor",
+        "title": "Open Chat in Editor Tab",
+        "category": "Amulet",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "amulet.editMessage",
+        "title": "Edit a Previous Message",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.exportChat",
+        "title": "Export Chat to HTML...",
+        "category": "Amulet"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "amulet.addFileToChat",
+          "when": "resourceScheme == file",
+          "group": "navigation@100"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "amulet.openChatInEditor",
+          "when": "activeWebviewPanelId != amulet.chatEditor",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "amulet.focusInput",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
+      },
+      {
+        "command": "amulet.newChat",
+        "key": "ctrl+shift+alt+n",
+        "mac": "cmd+shift+alt+n"
+      }
+    ],
+    "configuration": {
+      "title": "Amulet",
+      "properties": {
+        "amulet.binaryPath": {
+          "type": "string",
+          "default": "pi",
+          "order": 0,
+          "scope": "machine",
+          "markdownDescription": "Command name or absolute path of the external pi-compatible agent executable (for example `pi` or `omp`). Runs in RPC mode. **Changing this restarts the runtime.** Scoped to machine so a workspace's `.vscode/settings.json` cannot override it (security: this value is used to spawn a child process)."
+        },
+        "amulet.agentDir": {
+          "type": "string",
+          "default": "",
+          "order": 1,
+          "scope": "machine",
+          "markdownDescription": "Directory where the pi runtime stores auth, models, and sessions. Defaults to the runtime's own default (`~/.pi/agent`). Passed as `PI_CODING_AGENT_DIR`. Scoped to machine so a workspace cannot redirect it."
+        },
+        "amulet.defaultModel": {
+          "type": "string",
+          "default": "",
+          "order": 2,
+          "markdownDescription": "Optional default model pattern passed to the runtime at startup (for example `anthropic/claude-sonnet-5` or `provider/id:thinking`). Leave empty to use the runtime's configured default."
+        },
+        "amulet.thinkingLevel": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "enumDescriptions": [
+            "Do not send any thinking level - pi, the model config, and the provider defaults decide.",
+            "Explicitly disable thinking for every model that supports it.",
+            "Minimal reasoning effort.",
+            "Low reasoning effort.",
+            "Medium reasoning effort.",
+            "High reasoning effort.",
+            "Extra high reasoning effort (only where the model maps it).",
+            "Maximum reasoning effort (only where the model maps it)."
+          ],
+          "default": "disabled",
+          "order": 3,
+          "markdownDescription": "Thinking level the extension applies to the runtime. Leave on `disabled` to send nothing: the level then comes from pi's own settings, the resumed session, and the model default, and you can still pick one per session in the chat box. Any other value is sent as `set_thinking_level` at every runtime start (and live when you change it), overriding those defaults; pi clamps it to what the selected model supports. Switching back to `disabled` takes effect on the next runtime start."
+        },
+        "amulet.autoCompact": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "markdownDescription": "Automatically compact context when the conversation grows large."
+        },
+        "amulet.autoRetry": {
+          "type": "boolean",
+          "default": true,
+          "order": 5,
+          "markdownDescription": "Automatically retry on transient provider errors (rate limits, timeouts)."
+        },
+        "amulet.expandThinking": {
+          "type": "boolean",
+          "default": false,
+          "order": 6,
+          "markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
+        },
+        "amulet.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "order": 7,
+          "scope": "machine",
+          "markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "package": "bash scripts/build-vsix.sh",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "vscode:install": "code --install-extension \"$(ls -t amulet-*.vsix | head -1)\"",
+    "format": "npx prettier --write"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0",
+    "sass": "^1.101.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@lobehub/icons-static-svg": "^1.91.0",
+    "highlight.js": "^11.10.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.7.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "zustand": "^5.0.14"
+  }
 }

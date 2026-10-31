@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { AppMessage, Attachment, HostMessage } from '../../shared/protocol';
+import type {
+  AppMessage,
+  Attachment,
+  HostMessage,
+} from '../../shared/protocol';
 import { initialState, reducer } from './store';
 
 const host = (message: HostMessage) => ({ type: 'host' as const, message });
@@ -31,9 +35,9 @@ describe('reducer — host state messages', () => {
 
   it('applies models and config', () => {
     const models = [{ id: 'm', name: 'M', provider: 'p' }];
-    expect(reducer(initialState, host({ type: 'models', models })).models).toEqual(
-      models,
-    );
+    expect(
+      reducer(initialState, host({ type: 'models', models })).models,
+    ).toEqual(models);
     expect(
       reducer(
         { ...initialState, expandThinking: true },
@@ -114,12 +118,18 @@ describe('reducer — host state messages', () => {
     // The cached session is kept in step, so nothing renders a stale level.
     expect(next.session?.thinkingLevel).toBe('xhigh');
     expect(
-      reducer(state, host({ type: 'rpcEvent', event: { type: 'queue_update' } })),
+      reducer(
+        state,
+        host({ type: 'rpcEvent', event: { type: 'queue_update' } }),
+      ),
     ).toBe(state);
   });
 
   it('marks history loaded on sessions', () => {
-    const next = reducer(initialState, host({ type: 'sessions', sessions: [] }));
+    const next = reducer(
+      initialState,
+      host({ type: 'sessions', sessions: [] }),
+    );
     expect(next.hasLoadedHistory).toBe(true);
   });
 });
@@ -130,9 +140,21 @@ describe('reducer — history', () => {
       { role: 'user', content: [{ type: 'text', text: 'hi' }] },
       {
         role: 'assistant',
-        content: [{ type: 'toolCall', id: 't1', name: 'bash', arguments: { command: 'ls' } }],
+        content: [
+          {
+            type: 'toolCall',
+            id: 't1',
+            name: 'bash',
+            arguments: { command: 'ls' },
+          },
+        ],
       },
-      { role: 'toolResult', toolCallId: 't1', toolName: 'bash', content: [{ type: 'text', text: 'out' }] },
+      {
+        role: 'toolResult',
+        toolCallId: 't1',
+        toolName: 'bash',
+        content: [{ type: 'text', text: 'out' }],
+      },
       { role: 'tool', content: [] },
     ] as unknown as AppMessage[];
 
@@ -165,7 +187,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
       initialState,
       host({
         type: 'rpcEvent',
-        event: { type: 'message_start', message: { role: 'assistant', content: [] } },
+        event: {
+          type: 'message_start',
+          message: { role: 'assistant', content: [] },
+        },
       }),
     );
     expect(s.messages).toHaveLength(1);
@@ -178,7 +203,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
         type: 'rpcEvent',
         event: {
           type: 'message_update',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'hello' }],
+          },
         },
       }),
     );
@@ -190,7 +218,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
         type: 'rpcEvent',
         event: {
           type: 'message_end',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'hello' }],
+          },
         },
       }),
     );
@@ -206,13 +237,19 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
       initialState,
       host({
         type: 'rpcEvent',
-        event: { type: 'message_start', message: { role: 'assistant', content: [] } },
+        event: {
+          type: 'message_start',
+          message: { role: 'assistant', content: [] },
+        },
       }),
     );
     const uid = s.currentUid;
 
     expect(() => {
-      s = reducer(s, host({ type: 'rpcEvent', event: { type: 'message_update' } }));
+      s = reducer(
+        s,
+        host({ type: 'rpcEvent', event: { type: 'message_update' } }),
+      );
     }).not.toThrow();
     // A payload-less update changes nothing and leaves the turn streaming.
     expect(s.currentUid).toBe(uid);
@@ -224,7 +261,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
         type: 'rpcEvent',
         event: {
           type: 'message_update',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'hi' }],
+          },
         },
       }),
     );
@@ -232,7 +272,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
 
     // A payload-less end still has to finalize, keeping the content it had.
     expect(() => {
-      s = reducer(s, host({ type: 'rpcEvent', event: { type: 'message_end' } }));
+      s = reducer(
+        s,
+        host({ type: 'rpcEvent', event: { type: 'message_end' } }),
+      );
     }).not.toThrow();
     expect(s.messages[0].streaming).toBe(false);
     expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
@@ -257,7 +300,10 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
       s,
       host({
         type: 'rpcEvent',
-        event: { type: 'message_start', message: { role: 'user', content: [] } },
+        event: {
+          type: 'message_start',
+          message: { role: 'user', content: [] },
+        },
       }),
     );
     expect(s.pendingAttachments).toHaveLength(0);
@@ -442,7 +488,11 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
       initialState,
       event({
         type: 'message_start',
-        message: { role: 'system', content: '', sections: { preamble: 'You are pi.' } },
+        message: {
+          role: 'system',
+          content: '',
+          sections: { preamble: 'You are pi.' },
+        },
       }),
     );
     expect(s.messages).toHaveLength(0);
@@ -454,7 +504,10 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
   it('normalizes a string-bodied user message through start and end', () => {
     let s = reducer(
       initialState,
-      event({ type: 'message_start', message: { role: 'user', content: 'hi' } }),
+      event({
+        type: 'message_start',
+        message: { role: 'user', content: 'hi' },
+      }),
     );
     expect(s.messages[0].content).toEqual([{ type: 'text', text: 'hi' }]);
 
@@ -469,13 +522,23 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
   it('renders streamed text from assistantMessageEvent deltas', () => {
     let s = reducer(
       initialState,
-      event({ type: 'message_start', message: { role: 'assistant', content: [] } }),
+      event({
+        type: 'message_start',
+        message: { role: 'assistant', content: [] },
+      }),
     );
     s = reducer(
       s,
       event({
         type: 'message_update',
-        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {} },
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: {},
+        },
         assistantMessageEvent: { type: 'text_start', contentIndex: 0 },
       }),
     );
@@ -483,7 +546,11 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
       s,
       event({
         type: 'message_update',
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Hel' },
+        assistantMessageEvent: {
+          type: 'text_delta',
+          contentIndex: 0,
+          delta: 'Hel',
+        },
       }),
     );
     expect(s.messages[0].content).toEqual([{ type: 'text', text: 'Hel' }]);
@@ -493,7 +560,11 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
       s,
       event({
         type: 'message_update',
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'lo' },
+        assistantMessageEvent: {
+          type: 'text_delta',
+          contentIndex: 0,
+          delta: 'lo',
+        },
       }),
     );
     expect(s.messages[0].content).toEqual([{ type: 'text', text: 'Hello' }]);

@@ -6,14 +6,14 @@
 
 ## Provenance
 
-| Item | Value |
-| --- | --- |
-| Upstream | `https://github.com/bilalbentoumi/pi-vsc` (remote name: `upstream`) |
-| Base commit | `3a2b61d` — "bump version to 1.0.5 in package.json", 2026-08-09 |
-| History kept | full, 15 commits, tags `v1.0.1`–`v1.0.5`, branch `main` |
-| Our remote | **not created yet** — `gh` is authenticated as `gunir`; a GitHub-side fork is still pending (see Open decisions) |
-| Layout | fork lives **at the repo root** of `vsix-amulet2` (no subdirectory); our own notes (`DRAFT.md`, `PROJECT_OVERVIEW.md`, `docs/`) are the only non-upstream paths |
-| Licence | `MIT` per `package.json:17` and `README.md:51`, but upstream **shipped no LICENSE file**. Added `LICENSE` (upstream copyright preserved) in the first fork commit; `vsce` no longer warns |
+| Item         | Value                                                                                                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upstream     | `https://github.com/bilalbentoumi/pi-vsc` (remote name: `upstream`)                                                                                                                       |
+| Base commit  | `3a2b61d` — "bump version to 1.0.5 in package.json", 2026-08-09                                                                                                                           |
+| History kept | full, 15 commits, tags `v1.0.1`–`v1.0.5`, branch `main`                                                                                                                                   |
+| Our remote   | **not created yet** — `gh` is authenticated as `gunir`; a GitHub-side fork is still pending (see Open decisions)                                                                          |
+| Layout       | fork lives **at the repo root** of `vsix-amulet2` (no subdirectory); our own notes (`DRAFT.md`, `PROJECT_OVERVIEW.md`, `docs/`) are the only non-upstream paths                           |
+| Licence      | `MIT` per `package.json:17` and `README.md:51`, but upstream **shipped no LICENSE file**. Added `LICENSE` (upstream copyright preserved) in the first fork commit; `vsce` no longer warns |
 
 Upstream is 15 commits over ~3 weeks and quiet since 2026-08-09 (~2.7 months). All upstream
 history is retained so upstream fixes can still be merged: `git fetch upstream && git merge upstream/main`.
@@ -35,13 +35,13 @@ Structurally it is also the cheapest fork of the five:
 
 ## Verified baseline (2026-10-30, this machine)
 
-| Gate | Command | Result |
-| --- | --- | --- |
-| Install | `npx pnpm@10 install` | OK, 7s |
-| Types | `pnpm typecheck` (`tsc --noEmit`) | clean |
-| Dev build | `pnpm build` | `dist/extension.js` 67kb, `dist/webview.js` 2.4mb |
-| Tests | `pnpm test` (vitest) | 2 files, 22 tests passed |
-| Package | `pnpm package` | `pi-vsc-1.0.5.vsix`, 24 files, 1.53MB |
+| Gate      | Command                           | Result                                            |
+| --------- | --------------------------------- | ------------------------------------------------- |
+| Install   | `npx pnpm@10 install`             | OK, 7s                                            |
+| Types     | `pnpm typecheck` (`tsc --noEmit`) | clean                                             |
+| Dev build | `pnpm build`                      | `dist/extension.js` 67kb, `dist/webview.js` 2.4mb |
+| Tests     | `pnpm test` (vitest)              | 2 files, 22 tests passed                          |
+| Package   | `pnpm package`                    | `pi-vsc-1.0.5.vsix`, 24 files, 1.53MB             |
 
 Gotcha: `pnpm-workspace.yaml` uses `allowBuilds`, a **pnpm 10** key; pnpm 9 aborts with
 "packages field missing or empty". Use pnpm 10 (`npx pnpm@10 …`). Consider pinning `packageManager`
@@ -71,7 +71,7 @@ Capture method: `node scripts/rpc-probe.mjs "<prompt>"` from a scratch workspace
 Three real runs (plain reply, bash tool call, command sweep). Findings, all of them upstream
 assumptions about pi 0.80.x:
 
-1. **`message_start`/`message_end` fire for `role: "system"` and its `content` is a *string***
+1. **`message_start`/`message_end` fire for `role: "system"` and its `content` is a _string_**
    (`""` — the prompt text moved to `content.sections`). `system` is a displayable role, so the
    reducer put that string into `UiMessage.content` (`content: msg?.content ?? m.content`) and
    `agent-timeline.tsx` died on `m.content.forEach` — the whole chat view fell into the error
@@ -121,7 +121,7 @@ Three facts that are easy to get wrong:
 3. pi's own TUI deliberately does not draw nested calls (`interactive-mode.js` skips
    events with `parentToolCallId`), so the renderer is ours. `details` carries
    `{ status, exit, report, pendant: { title, subtitle }, tokens, turns, toolCalls,
-   activity, elapsedMs, childSessionFile, childSessionId }` — `elapsedMs` is the
+activity, elapsedMs, childSessionFile, childSessionId }` — `elapsedMs` is the
    preferred source for a running card's elapsed time; without it a card counts from
    its own `tool_execution_start` (`ToolExec.startedAt`), which is all any other tool
    has.
@@ -138,7 +138,7 @@ tool's full command or path, which the ellipsized preview cannot give back) and,
 the call is live, Stop. Stop posts the existing `abort` host message — pi has no
 per-tool cancel, only the run-level signal handed to `execute()`, which a tool may
 ignore until it settles — so an aborted call comes back as an error result, and a card
-the runtime never reported on shows no cluster at all: aborting *it* would only hit
+the runtime never reported on shows no cluster at all: aborting _it_ would only hit
 whatever else is running.
 
 ## Known gaps for the next session
@@ -175,7 +175,7 @@ whatever else is running.
      80..349, exactly like the original export).
    - `.github/FUNDING.yml` now points at `gunir` instead of upstream's sponsor list.
    - **Legacy settings fallback:** `readConfig()` reads `pintra.<key>` whenever `amulet.<key>` was never
-     set by the user (detected with `inspect()`, so the *declared default* does not shadow the old
+     set by the user (detected with `inspect()`, so the _declared default_ does not shadow the old
      value — important for the boolean keys). The old namespace is never written to. `affectsSetting()` /
      `keyWithLegacy()` make `affectsRestart` and the thinking-level + expand-thinking listeners react to
      edits in either namespace.
@@ -184,7 +184,7 @@ whatever else is running.
      but declared nowhere upstream, so those `background:` declarations silently resolved to nothing.
      Now declared in `variables.scss` as aliases of `-surface-subtle`, `-surface-hover` and
      `-accent-faint` (the idiom every other accent badge already uses).
-   **Still to do:** `media/screenshot.png` pixels still show the old wordmark.
+     **Still to do:** `media/screenshot.png` pixels still show the old wordmark.
 4. **Test story**: two vitest files only — `shared/blocks.test.ts` (block reconstruction) and
    `webview/src/store.test.ts`; AGENTS.md says "there is no test suite" for behaviour. Host↔webview changes need a manual F5 pass.
 5. **Lineage hygiene** (carried over from `vsix-amulet`): `../vsix-amulet/extension/` is EULA'd —
@@ -237,7 +237,7 @@ will need. Two rules keep it honest and live:
   is the important one: a run is many turns (one LLM call + its tool results), so refreshing per turn
   is what moves the meter during a long run. **Do not poll it per delta** — `getSessionStats()` walks
   a copy of every session entry inside pi (and one bridge per open panel means one walk per bridge).
-- **The webview fills the gap inside a turn.** pi only counts *persisted* messages, so the last
+- **The webview fills the gap inside a turn.** pi only counts _persisted_ messages, so the last
   `get_session_stats` answer is already stale while the model is writing. `contextUsage.tokens` is just
   `totalTokens || input + output + cacheRead + cacheWrite`, and that same `usage` rides on `message_end`
   — and on the last few `message_update` deltas, per the `tmp/rpc-events-tool.jsonl` capture; every

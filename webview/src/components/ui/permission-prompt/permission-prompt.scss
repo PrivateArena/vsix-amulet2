@@ -177,7 +177,8 @@
   justify-content: space-between;
   gap: 8px;
   padding-top: 2px;
-  border-top: 1px solid color-mix(in srgb, var(--amulet-border) 60%, transparent);
+  border-top: 1px solid
+    color-mix(in srgb, var(--amulet-border) 60%, transparent);
 }
 
 @keyframes pp-fade-in {

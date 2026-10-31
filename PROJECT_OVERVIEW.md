@@ -3,7 +3,7 @@
 Stage: **rebranded to Amulet** (2026-10-31, v1.0.15) — extension id `gunir.amulet`, `amulet.*` settings
 namespace, `--amulet-*` design tokens, new `A` mark. The tree is still a full clone of **Pintra**
 (`bilalbentoumi/pi-vsc` v1.0.5) at the repo root; see `docs/pintra-fork.md` for the rename inventory and
-what was deliberately *not* renamed (upstream provenance, the `pi` runtime contract).
+what was deliberately _not_ renamed (upstream provenance, the `pi` runtime contract).
 
 ## Decision (2026-10-31, rebrand)
 

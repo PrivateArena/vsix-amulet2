@@ -26,21 +26,21 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 
 ### Key files
 
-| Concern                                         | Location                                                                                     |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Shared protocol types (RPC + Host↔Webview)      | [`shared/protocol.ts`](shared/protocol.ts)                                                   |
-| Extension entry / activation                    | [`src/extension.ts`](src/extension.ts)                                                       |
-| RPC framing + typed client                      | [`src/rpc/`](src/rpc/) (`jsonl.ts`, `rpc-client.ts`, `rpc-process.ts`)                       |
-| Runtime bootstrap (binary resolution, env/PATH) | [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts)                                       |
-| Runtime lifecycle + crash recovery              | [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)                                     |
-| Session/runtime pool                            | [`src/session/session-manager.ts`](src/session/session-manager.ts)                           |
-| Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                         |
-| Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                 |
-| Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                   |
+| Concern                                         | Location                                                                                                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Shared protocol types (RPC + Host↔Webview)      | [`shared/protocol.ts`](shared/protocol.ts)                                                                                                                               |
+| Extension entry / activation                    | [`src/extension.ts`](src/extension.ts)                                                                                                                                   |
+| RPC framing + typed client                      | [`src/rpc/`](src/rpc/) (`jsonl.ts`, `rpc-client.ts`, `rpc-process.ts`)                                                                                                   |
+| Runtime bootstrap (binary resolution, env/PATH) | [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts)                                                                                                                   |
+| Runtime lifecycle + crash recovery              | [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)                                                                                                                 |
+| Session/runtime pool                            | [`src/session/session-manager.ts`](src/session/session-manager.ts)                                                                                                       |
+| Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                                                                                                     |
+| Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                             |
+| Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                               |
 | pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
-| Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                       |
-| React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts) |
-| React components                                | [`webview/src/components/`](webview/src/components/)                                         |
+| Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                   |
+| React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                             |
+| React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                     |
 
 ## Build & dev commands
 

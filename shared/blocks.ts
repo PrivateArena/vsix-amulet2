@@ -85,7 +85,9 @@ export function normalizeContent(content: unknown): ContentBlock[] {
 
 function isBlock(block: unknown): block is ContentBlock {
   return (
-    !!block && typeof block === 'object' && typeof (block as ContentBlock).type === 'string'
+    !!block &&
+    typeof block === 'object' &&
+    typeof (block as ContentBlock).type === 'string'
   );
 }
 
@@ -117,7 +119,10 @@ export function applyAssistantEvent(
     toolName?: string;
     toolCall?: ToolCallBlock;
   };
-  const index = typeof ev.contentIndex === 'number' && ev.contentIndex >= 0 ? ev.contentIndex : 0;
+  const index =
+    typeof ev.contentIndex === 'number' && ev.contentIndex >= 0
+      ? ev.contentIndex
+      : 0;
 
   const next = blocks.slice();
   while (next.length <= index) next.push(emptyText());
@@ -136,8 +141,11 @@ export function applyAssistantEvent(
       const existing = asText(current);
       next[index] = {
         type: 'text',
-        ...(existing?.textSignature ? { textSignature: existing.textSignature } : {}),
-        text: typeof ev.content === 'string' ? ev.content : (existing?.text ?? ''),
+        ...(existing?.textSignature
+          ? { textSignature: existing.textSignature }
+          : {}),
+        text:
+          typeof ev.content === 'string' ? ev.content : (existing?.text ?? ''),
       };
       return next;
     }
@@ -161,7 +169,9 @@ export function applyAssistantEvent(
           ? { thinkingSignature: existing.thinkingSignature }
           : {}),
         thinking:
-          typeof ev.content === 'string' ? ev.content : (existing?.thinking ?? ''),
+          typeof ev.content === 'string'
+            ? ev.content
+            : (existing?.thinking ?? ''),
       };
       return next;
     }

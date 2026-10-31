@@ -63,7 +63,11 @@
   --amulet-border-subtle: #{blend(var(--amulet-border), 70%)};
   --amulet-hairline: #{blend(var(--amulet-border), 52%)};
   --amulet-border-strong: var(--vscode-widget-border, var(--amulet-border));
-  --amulet-block-border: #{blend(var(--amulet-border-strong), 78%, var(--amulet-fg) 10%)};
+  --amulet-block-border: #{blend(
+      var(--amulet-border-strong),
+      78%,
+      var(--amulet-fg) 10%
+    )};
   --amulet-block-divider: #{blend(var(--amulet-block-border), 82%)};
 
   --amulet-input-bg: var(--vscode-input-background);
@@ -71,9 +75,17 @@
 
   --amulet-accent: #10a37f;
   --amulet-accent-strong: #{blend(var(--amulet-accent), 82%, var(--amulet-fg))};
-  --amulet-accent-soft: #{blend(var(--amulet-accent), 15%, var(--amulet-surface))};
+  --amulet-accent-soft: #{blend(
+      var(--amulet-accent),
+      15%,
+      var(--amulet-surface)
+    )};
   --amulet-accent-faint: #{blend(var(--amulet-accent), 12%)};
-  --amulet-accent-line: #{blend(var(--amulet-accent), 42%, var(--amulet-border))};
+  --amulet-accent-line: #{blend(
+      var(--amulet-accent),
+      42%,
+      var(--amulet-border)
+    )};
   --amulet-accent-contrast: #04140f;
   --amulet-accent-glow: #{blend(var(--amulet-accent), 34%)};
   --amulet-accent-glow-soft: #{blend(var(--amulet-accent), 16%)};
@@ -118,7 +130,11 @@
   --amulet-warning: var(--vscode-editorWarning-foreground, #cca700);
   --amulet-error: var(--vscode-errorForeground, #f14c4c);
   --amulet-error-bg: #{blend(var(--amulet-error), 12%, var(--amulet-surface))};
-  --amulet-error-border: #{blend(var(--amulet-error), 44%, var(--amulet-border))};
+  --amulet-error-border: #{blend(
+      var(--amulet-error),
+      44%,
+      var(--amulet-border)
+    )};
   --amulet-success: var(--amulet-accent);
 
   --amulet-tool-surface: var(
@@ -210,7 +226,11 @@
     var(--amulet-fg)
   );
   --amulet-menu-bg: var(--amulet-surface-elevated);
-  --amulet-menu-border: #{blend(var(--amulet-border-strong), 90%, var(--amulet-fg) 6%)};
+  --amulet-menu-border: #{blend(
+      var(--amulet-border-strong),
+      90%,
+      var(--amulet-fg) 6%
+    )};
   --amulet-menu-shadow: var(--amulet-shadow-lg);
   --amulet-list-hover-bg: var(--amulet-surface-hover);
   --amulet-list-selected-border: #{blend(
@@ -233,7 +253,11 @@ body[data-vscode-theme-kind='vscode-high-contrast-light'] {
       92%,
       #000000
     )};
-  --amulet-block-border: #{blend(var(--amulet-border-strong), 86%, var(--amulet-fg) 10%)};
+  --amulet-block-border: #{blend(
+      var(--amulet-border-strong),
+      86%,
+      var(--amulet-fg) 10%
+    )};
   --amulet-block-divider: #{blend(var(--amulet-block-border), 88%)};
   --amulet-tool-surface: var(
     --vscode-textCodeBlock-background,
@@ -272,9 +296,17 @@ body[data-vscode-theme-kind='vscode-high-contrast'] {
   --amulet-accent-glow: #{blend(var(--amulet-accent), 40%)};
   --amulet-monochrome-active-bg: #f0f0f2;
   --amulet-monochrome-active-fg: #17171a;
-  --amulet-block-border: #{blend(var(--amulet-border-strong), 80%, var(--amulet-fg) 14%)};
+  --amulet-block-border: #{blend(
+      var(--amulet-border-strong),
+      80%,
+      var(--amulet-fg) 14%
+    )};
   --amulet-block-divider: #{blend(var(--amulet-block-border), 84%)};
-  --amulet-tool-content-surface: #{blend(var(--amulet-tool-surface), 60%, #000000)};
+  --amulet-tool-content-surface: #{blend(
+      var(--amulet-tool-surface),
+      60%,
+      #000000
+    )};
   --amulet-input-emboss-ring: #{blend(var(--amulet-fg), 3%)};
   --amulet-highlight: #{blend(var(--amulet-fg), 7%)};
   --amulet-hljs-fg: #c9d1d9;

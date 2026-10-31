@@ -5,6 +5,7 @@ What we want is a good foundation to build upon, then we expand and adjust to ma
 In this session, we try to study about these forks and decide which one to use as a base for our redesign.
 
 The critical requirements are:
+
 - Up to date, we want to fork active development project
 - Codebase is clean, easy to understand, high quality, well-structured
 - Good documentation

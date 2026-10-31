@@ -193,11 +193,16 @@ export class ChatBridge implements vscode.Disposable {
           // text-file attachments (inlined into the prompt so the AI can see
           // them). Non-image entries in `images` are ignored by the pi runtime.
           let promptText = message.text;
-          const rpcImages: { type: 'image'; data: string; mimeType: string }[] = [];
+          const rpcImages: { type: 'image'; data: string; mimeType: string }[] =
+            [];
           if (message.attachments) {
             for (const a of message.attachments) {
               if (a.mimeType.startsWith('image/')) {
-                rpcImages.push({ type: 'image', data: a.data, mimeType: a.mimeType });
+                rpcImages.push({
+                  type: 'image',
+                  data: a.data,
+                  mimeType: a.mimeType,
+                });
               } else {
                 // Inline text files into the prompt with a clear header.
                 const decoded = Buffer.from(a.data, 'base64').toString('utf8');
@@ -206,7 +211,10 @@ export class ChatBridge implements vscode.Disposable {
               }
             }
           }
-          await runtime?.prompt(promptText, rpcImages.length > 0 ? rpcImages : undefined);
+          await runtime?.prompt(
+            promptText,
+            rpcImages.length > 0 ? rpcImages : undefined,
+          );
           return;
         }
         case 'steer':

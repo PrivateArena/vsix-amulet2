@@ -35,7 +35,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref,
   ) {
     return (
-      <Tooltip content={tooltip ?? label} side={tooltipSide} align={tooltipAlign}>
+      <Tooltip
+        content={tooltip ?? label}
+        side={tooltipSide}
+        align={tooltipAlign}>
         <Button ref={ref} icon={icon} aria-label={label} {...rest} />
       </Tooltip>
     );

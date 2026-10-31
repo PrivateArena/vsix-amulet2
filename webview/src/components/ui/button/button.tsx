@@ -3,12 +3,7 @@ import { IconBaseProps } from 'react-icons';
 import './button.scss';
 
 export type ButtonVariant =
-  | 'ghost'
-  | 'primary'
-  | 'secondary'
-  | 'contained'
-  | 'error'
-  | 'trigger';
+  'ghost' | 'primary' | 'secondary' | 'contained' | 'error' | 'trigger';
 export type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

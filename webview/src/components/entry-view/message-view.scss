@@ -45,7 +45,7 @@
 }
 
 /* System turns — a quiet left rule anchors them in the transcript. */
-.entry:not(.agent-entry):not(.user-entry)>.entry-body {
+.entry:not(.agent-entry):not(.user-entry) > .entry-body {
   padding-left: 12px;
   border-left: 2px solid var(--amulet-border-subtle);
 }
@@ -79,9 +79,11 @@
 .bubble-clamp {
   max-height: min(7em, 20vh);
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom,
-      #000 calc(100% - 20px),
-      transparent);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 20px),
+    transparent
+  );
   mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
 }
 
@@ -110,11 +112,11 @@
 }
 
 /* Keep prose snug against the bubble edges. */
-.entry-bubble .entry-content-md>*:first-child {
+.entry-bubble .entry-content-md > *:first-child {
   margin-top: 0;
 }
 
-.entry-bubble .entry-content-md>*:last-child {
+.entry-bubble .entry-content-md > *:last-child {
   margin-bottom: 0;
 }
 
@@ -176,7 +178,6 @@
 }
 
 @keyframes caret-blink {
-
   from,
   46% {
     opacity: 0.9;

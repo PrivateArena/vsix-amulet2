@@ -1,6 +1,11 @@
 import { memo } from 'react';
 import type { ReactNode } from 'react';
-import { asText, asThinking, asToolCall, normalizeContent } from '../../../../shared/blocks';
+import {
+  asText,
+  asThinking,
+  asToolCall,
+  normalizeContent,
+} from '../../../../shared/blocks';
 import type { ToolExec, ToolStatus, UiMessage } from '../../store';
 import { MdRender } from '../md-render';
 import { ReasoningBlock } from '../reasoning-block';
