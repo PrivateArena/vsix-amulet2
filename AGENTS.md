@@ -58,7 +58,8 @@ pnpm run format       # prettier --write
 `scripts/build-vsix.sh` is the one-shot VSIX builder and needs no pnpm on PATH (it uses
 `node_modules/.bin` for `tsc`/`vitest` and falls back to `npx @vscode/vsce`). Run it directly with
 `./scripts/build-vsix.sh --fast` to skip the gates, or `--install` to load the artifact into the
-local VS Code.
+local VS Code. The artifact is written to `/tmp/amulet/<name>-<version>.vsix` by default; `--notmp`
+writes it to `<repo>/vsix/` instead (both are git-ignored by the `*.vsix` rule).
 
 - **Run/debug:** press **F5** ("Run Amulet Extension") to launch an Extension Development Host; the `pnpm: watch` task starts automatically. Open the **Amulet** view in the activity bar.
 - **Bundling is esbuild only** ([`esbuild.mjs`](esbuild.mjs)). `tsc` is configured with `noEmit` and is used _purely_ for type-checking — do not expect it to produce output.

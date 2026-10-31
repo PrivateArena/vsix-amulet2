@@ -4,10 +4,14 @@
 # bundle -> vsce package. Packaging tools come from node_modules and vsce is
 # fetched on demand, so pnpm does not have to be on PATH.
 #
-# Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-b|--bump] [-h|--help]
+# The artifact goes to /tmp/amulet/ by default so the repo root stays clean;
+# --notmp writes it into <repo>/vsix/ instead.
+#
+# Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-b|--bump] [--notmp] [-h|--help]
 #   -f, --fast     skip typecheck + tests (bundle and package only)
 #   -i, --install  install the result into the local VS Code after packaging
 #   -b, --bump     increment package.json's patch version first (off by default)
+#       --notmp    package into <repo>/vsix/ instead of /tmp/amulet/
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -19,11 +23,12 @@ usage() {
 Build the extension VSIX in one shot:
   typecheck -> unit tests -> production bundle -> vsce package
 
-Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-h|--help]
+Usage: scripts/build-vsix.sh [-f|--fast] [-i|--install] [-b|--bump] [--notmp] [-h|--help]
   -f, --fast     skip typecheck + tests (bundle and package only)
   -i, --install  install the result into the local VS Code after packaging
   -b, --bump     increment the patch version in package.json before packaging
                  (the version is left untouched without this flag)
+      --notmp    write the .vsix to <repo>/vsix/ instead of /tmp/amulet/
 
 Works without pnpm: it uses node_modules/.bin for tsc/vitest and falls back to
 `npx @vscode/vsce` when vsce is not installed.
@@ -33,11 +38,13 @@ EOF
 FAST=0
 INSTALL=0
 BUMP=0
+USE_TMP=1
 for arg in "$@"; do
   case "$arg" in
     -f | --fast) FAST=1 ;;
     -i | --install) INSTALL=1 ;;
     -b | --bump) BUMP=1 ;;
+    --notmp) USE_TMP=0 ;;
     -h | --help)
       usage
       exit 0
@@ -95,7 +102,13 @@ if ((BUMP)); then
   VERSION=$BUMPED
 fi
 
-ARTIFACT="$ROOT/$NAME-$VERSION.vsix"
+if ((USE_TMP)); then
+  OUT_DIR=/tmp/amulet
+else
+  OUT_DIR=$ROOT/vsix
+fi
+mkdir -p "$OUT_DIR"
+ARTIFACT="$OUT_DIR/$NAME-$VERSION.vsix"
 
 [[ -x $BIN/tsc ]] ||
   die "dev dependencies are missing (no $BIN/tsc) — run pnpm install"
@@ -113,15 +126,15 @@ fi
 step "production bundle"
 "$NODE" esbuild.mjs --production
 
-step "package v$VERSION"
+step "package v$VERSION -> $OUT_DIR"
 # Prefer an installed vsce (local node_modules, then PATH) before paying the
 # npx download; @vscode/vsce is the current package name for vsce.
 if [[ -x $BIN/vsce ]]; then
-  "$BIN/vsce" package --no-dependencies --out "$NAME-$VERSION.vsix"
+  "$BIN/vsce" package --no-dependencies --out "$ARTIFACT"
 elif command -v vsce >/dev/null 2>&1; then
-  vsce package --no-dependencies --out "$NAME-$VERSION.vsix"
+  vsce package --no-dependencies --out "$ARTIFACT"
 else
-  npx --yes @vscode/vsce package --no-dependencies --out "$NAME-$VERSION.vsix"
+  npx --yes @vscode/vsce package --no-dependencies --out "$ARTIFACT"
 fi
 
 [[ -f $ARTIFACT ]] || die "vsce reported success but $ARTIFACT is missing"
