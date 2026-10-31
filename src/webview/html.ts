@@ -44,21 +44,21 @@ export function renderWebviewHtml(
 	<link href="${styleUri}" rel="stylesheet" />
 	<style nonce="${nonce}">
 		@font-face {
-			font-family: 'Pintra Mono';
+			font-family: 'Amulet Mono';
 			font-style: normal;
 			font-weight: 300 1000;
 			font-display: swap;
 			src: url('${recursiveFontUri}') format('woff2-variations');
 		}
 		@font-face {
-			font-family: 'Pintra Pixel';
+			font-family: 'Amulet Pixel';
 			font-style: normal;
 			font-weight: 400;
 			font-display: swap;
 			src: url('${pixelFontUri}') format('truetype');
 		}
 	</style>
-	<title>Pintra</title>
+	<title>Amulet</title>
 </head>
 <body
 	class="${bodyClasses}"

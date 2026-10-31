@@ -1,8 +1,16 @@
 # PROJECT_OVERVIEW — vsix-amulet2
 
-Stage: **fork is in place** — this directory now *is* the fork. It contains a full clone of **Pintra**
-(`bilalbentoumi/pi-vsc` v1.0.5) at the repo root, ready to be developed into **Amulet**, the
-open-source VS Code coding-agent extension.
+Stage: **rebranded to Amulet** (2026-10-31, v1.0.15) — extension id `gunir.amulet`, `amulet.*` settings
+namespace, `--amulet-*` design tokens, new `A` mark. The tree is still a full clone of **Pintra**
+(`bilalbentoumi/pi-vsc` v1.0.5) at the repo root; see `docs/pintra-fork.md` for the rename inventory and
+what was deliberately *not* renamed (upstream provenance, the `pi` runtime contract).
+
+## Decision (2026-10-31, rebrand)
+
+Brand **Amulet**, publisher **`gunir`** (= GitHub username), extension `name` **`amulet`** → extension id
+`gunir.amulet`, artifact `amulet-<version>.vsix`. Version line stays at 1.0.x (no restart at 0.x).
+Repository keeps its working name `vsix-amulet2`. The wordmark and the upstream `P` glyph became a
+symmetric `A` on the same 270-unit pixel grid — see "Rebrand" in `docs/pintra-fork.md`.
 
 ## Decision (2026-10-30, supersedes the 2026-10-30 morning entry)
 
@@ -20,9 +28,9 @@ Fork **Pintra** (`bilalbentoumi/pi-vsc`). Chosen empirically, by running all can
 
 ## Status
 
-Build is green from a clean tree: `pnpm typecheck`, `pnpm build`, `pnpm test` (22 tests),
-`pnpm package` → `pi-vsc-1.0.5.vsix`. Requires **pnpm 10**. Full provenance, drift analysis and the
-next-session task list: **`docs/pintra-fork.md`** — read that first.
+Build is green from a clean tree: `pnpm typecheck`, `pnpm build`, `pnpm test` (22 tests), `pnpm package`
+→ `amulet-1.0.15.vsix`. Requires **pnpm 10**. Full provenance, drift analysis and the next-session task
+list: **`docs/pintra-fork.md`** — read that first.
 
 ## Layout
 
@@ -41,7 +49,8 @@ so `git merge upstream/main` stays clean.
 ## Remotes
 
 `upstream` → `https://github.com/bilalbentoumi/pi-vsc` (fetch/merge fixes from here).
-No `origin` yet — the GitHub-side fork under `gunir` has not been created.
+`origin` → `https://github.com/PrivateArena/vsix-amulet2` (private working repo). A public
+`gunir/vsix-amulet2` — the URL `package.json`/README now advertise — still needs to be created.
 
 ## Hard constraint carried over from vsix-amulet
 

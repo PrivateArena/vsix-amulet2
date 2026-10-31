@@ -97,7 +97,7 @@ export function buildSpawnEnv(
 export function getAgentVersion(binaryPath: string): string {
   try {
     // SECURITY: never interpolate binaryPath into a shell string (command
-    // injection via the workspace-settable pintra.binaryPath setting). Use
+    // injection via the workspace-settable amulet.binaryPath setting). Use
     // spawnSync with an argv array and shell:false, mirroring rpc-process.ts.
     const result = spawnSync(binaryPath, ['--version'], {
       encoding: 'utf-8',

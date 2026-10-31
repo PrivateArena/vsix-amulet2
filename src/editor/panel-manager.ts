@@ -5,7 +5,7 @@ import { createWebviewSurface } from '../webview/webview-surface';
 
 /** Opens and tracks full editor-tab chat panels, each reusing a ChatBridge. */
 export class EditorChatManager implements vscode.Disposable {
-  static readonly viewType = 'pintra.chatEditor';
+  static readonly viewType = 'amulet.chatEditor';
   private readonly panels = new Set<vscode.WebviewPanel>();
 
   constructor(
@@ -18,7 +18,7 @@ export class EditorChatManager implements vscode.Disposable {
   open(): vscode.WebviewPanel {
     const panel = vscode.window.createWebviewPanel(
       EditorChatManager.viewType,
-      'Pintra',
+      'Amulet',
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,

@@ -21,7 +21,7 @@
   overflow: visible;
   margin: 2px 0 2px 12px;
   padding-left: 10px;
-  border-left: 1px solid var(--pintra-block-divider);
+  border-left: 1px solid var(--amulet-block-divider);
 }
 
 .sub-call {
@@ -38,22 +38,22 @@
   padding: 3px 12px;
   border: none;
   background: transparent;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
   font: inherit;
   text-align: left;
 }
 
 .sub-call-row-openable {
   cursor: pointer;
-  border-radius: var(--pintra-radius-sm);
+  border-radius: var(--amulet-radius-sm);
 }
 
 .sub-call-row-openable:hover {
-  background: var(--pintra-surface-hover);
+  background: var(--amulet-surface-hover);
 }
 
 .sub-call-row-openable:focus-visible {
-  outline: 1px solid var(--pintra-accent);
+  outline: 1px solid var(--amulet-accent);
   outline-offset: -1px;
 }
 
@@ -70,20 +70,20 @@
 }
 
 .sub-call-done .sub-call-state {
-  color: var(--pintra-success);
+  color: var(--amulet-success);
 }
 
 .sub-call-error .sub-call-state {
-  color: var(--pintra-error);
+  color: var(--amulet-error);
 }
 
 .sub-call-running .sub-call-state {
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
 }
 
 .sub-call-name {
   font-weight: 600;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
   white-space: nowrap;
 }
 
@@ -94,19 +94,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .exec-content .sub-call-cmd {
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
 }
 
 .sub-call-running .sub-call-cmd {
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
 }
 
 .sub-call-duration {
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -117,10 +117,10 @@
   padding: 6px 9px;
   max-height: 180px;
   overflow: auto;
-  border: 1px solid var(--pintra-block-divider);
-  border-radius: var(--pintra-radius-sm);
-  background: var(--pintra-tool-content-surface);
-  color: var(--pintra-fg);
+  border: 1px solid var(--amulet-block-divider);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-tool-content-surface);
+  color: var(--amulet-fg);
   font-size: 0.92em;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -128,33 +128,33 @@
 }
 
 .sub-call-output-error {
-  color: var(--pintra-error);
-  border-color: var(--pintra-error-border);
+  color: var(--amulet-error);
+  border-color: var(--amulet-error-border);
 }
 
 .sub-call-waiting {
   padding: 4px 12px;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-style: italic;
 }
 
 .sub-call-note {
   padding: 2px 12px;
-  color: var(--pintra-warning);
+  color: var(--amulet-warning);
 }
 
 .sub-agent-report {
   margin: 6px 12px 0;
   padding-top: 9px;
-  border-top: 1px solid var(--pintra-block-divider);
+  border-top: 1px solid var(--amulet-block-divider);
 }
 
 .sub-agent-report-label {
   margin-bottom: 4px;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-size: 0.8em;
   font-weight: 600;
-  letter-spacing: var(--pintra-tracking-wide);
+  letter-spacing: var(--amulet-tracking-wide);
   text-transform: uppercase;
 }
 
@@ -165,8 +165,8 @@
 .sub-agent-meta {
   margin: 8px 12px 0;
   padding-top: 6px;
-  border-top: 1px solid var(--pintra-block-divider);
-  color: var(--pintra-fg-faint);
+  border-top: 1px solid var(--amulet-block-divider);
+  color: var(--amulet-fg-faint);
   font-size: 0.82em;
   overflow-wrap: anywhere;
 }

@@ -14,7 +14,7 @@ export function LogoIcon({
       xmlns="http://www.w3.org/2000/svg">
       <path
         fill="currentColor"
-        d="M0 0 H270 V135 H210 V195 H60 V270 H0 V0 Z M60 60 H210 V135 H60 Z"
+        d="M0 0 H270 V270 H210 V210 H60 V270 H0 V0 Z M60 60 H210 V150 H60 Z"
         fill-rule="evenodd"
       />
     </svg>

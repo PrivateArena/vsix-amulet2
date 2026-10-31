@@ -281,7 +281,7 @@ export class ChatBridge implements vscode.Disposable {
           await this.exportChat();
           return;
         case 'openInEditor':
-          await vscode.commands.executeCommand('pintra.openChatInEditor');
+          await vscode.commands.executeCommand('amulet.openChatInEditor');
           return;
         case 'setAutoCompaction':
           await runtime?.setAutoCompaction(message.enabled);
@@ -302,7 +302,7 @@ export class ChatBridge implements vscode.Disposable {
             );
           } else {
             void vscode.window.showWarningMessage(
-              `Pintra: Pi folder not found at ${dir}`,
+              `Amulet: Pi folder not found at ${dir}`,
             );
           }
           return;
@@ -310,7 +310,7 @@ export class ChatBridge implements vscode.Disposable {
         case 'showSessionInfo': {
           if (!runtime?.isReady) {
             void vscode.window.showInformationMessage(
-              'Pintra: no active session.',
+              'Amulet: no active session.',
             );
             return;
           }
@@ -333,7 +333,7 @@ export class ChatBridge implements vscode.Disposable {
         case 'openSettings':
           await vscode.commands.executeCommand(
             'workbench.action.openSettings',
-            '@ext:bilalbentoumi.pi-vsc',
+            '@ext:gunir.amulet',
           );
           return;
         case 'restart':
@@ -384,7 +384,7 @@ export class ChatBridge implements vscode.Disposable {
             await vscode.window.showTextDocument(vscode.Uri.file(authPath));
           } else {
             void vscode.window.showWarningMessage(
-              `Pintra: auth.json not found at ${authPath}`,
+              `Amulet: auth.json not found at ${authPath}`,
             );
           }
           return;
@@ -403,7 +403,7 @@ export class ChatBridge implements vscode.Disposable {
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
       this.log.error(`Command "${message.type}" failed: ${text}`);
-      void vscode.window.showErrorMessage(`Pintra: ${text}`);
+      void vscode.window.showErrorMessage(`Amulet: ${text}`);
     }
   }
 
@@ -447,7 +447,7 @@ export class ChatBridge implements vscode.Disposable {
   }
 
   /**
-   * Apply a `pintra.thinkingLevel` change to the live runtime. `disabled` cannot be
+   * Apply a `amulet.thinkingLevel` change to the live runtime. `disabled` cannot be
    * undone mid-session (pi has no "unset" command), so it only takes effect on the
    * next runtime start.
    */
@@ -658,7 +658,7 @@ export class ChatBridge implements vscode.Disposable {
 
   private async openSessionInEditor(sessionPath: string): Promise<void> {
     await this.switchSession(sessionPath);
-    await vscode.commands.executeCommand('pintra.openChatInEditor');
+    await vscode.commands.executeCommand('amulet.openChatInEditor');
   }
 
   private async openForkPicker(): Promise<void> {
@@ -756,7 +756,7 @@ export class ChatBridge implements vscode.Disposable {
     const resolved = resolveBinaryPath(config.binaryPath || 'pi');
     if (!resolved.resolved) {
       void vscode.window.showErrorMessage(
-        `Pintra: could not find the pi runtime at "${config.binaryPath}". Set "pintra.binaryPath" to an absolute path to update it.`,
+        `Amulet: could not find the pi runtime at "${config.binaryPath}". Set "amulet.binaryPath" to an absolute path to update it.`,
       );
       return;
     }
@@ -794,7 +794,7 @@ export class ChatBridge implements vscode.Disposable {
 
       if (result.cancelled) {
         this.log.warn('pi update cancelled.');
-        void vscode.window.showWarningMessage('Pintra: pi update cancelled.');
+        void vscode.window.showWarningMessage('Amulet: pi update cancelled.');
         return;
       }
       if (!result.ok) {
@@ -802,7 +802,7 @@ export class ChatBridge implements vscode.Disposable {
           `pi update failed (exit ${result.exitCode ?? 'spawn error'}):\n${result.output}`,
         );
         const pick = await vscode.window.showErrorMessage(
-          `Pintra: pi update failed${result.exitCode === null ? ' — could not run pi' : ` (exit ${result.exitCode})`}.`,
+          `Amulet: pi update failed${result.exitCode === null ? ' — could not run pi' : ` (exit ${result.exitCode})`}.`,
           'Show Log',
         );
         if (pick === 'Show Log') this.log.show();
@@ -832,7 +832,7 @@ export class ChatBridge implements vscode.Disposable {
           : `pi update finished (${version}) — ${tail}`;
       this.log.info(`pi update: ${text}`);
       const pick = await vscode.window.showInformationMessage(
-        `Pintra: ${text}`,
+        `Amulet: ${text}`,
         ...(reload === 'reloaded'
           ? ['Show Log']
           : ['Retry Reload', 'Show Log']),
@@ -930,7 +930,7 @@ export class ChatBridge implements vscode.Disposable {
       this.log.error(`providerLogin failed: ${text}`);
       finish(false, text);
       void vscode.window.showErrorMessage(
-        `Pintra: could not complete provider login — ${text}`,
+        `Amulet: could not complete provider login — ${text}`,
       );
     }
   }
@@ -942,7 +942,7 @@ export class ChatBridge implements vscode.Disposable {
     const resolved = resolveBinaryPath(readConfig().binaryPath || 'pi');
     if (!resolved.resolved) {
       void vscode.window.showErrorMessage(
-        `Pintra: could not find the pi runtime at "${readConfig().binaryPath || 'pi'}". Set "pintra.binaryPath" to an absolute path before signing in.`,
+        `Amulet: could not find the pi runtime at "${readConfig().binaryPath || 'pi'}". Set "amulet.binaryPath" to an absolute path before signing in.`,
       );
       return;
     }
@@ -958,7 +958,7 @@ export class ChatBridge implements vscode.Disposable {
         ? ` (host: ${request.gheHost})`
         : '';
     void vscode.window.showInformationMessage(
-      `Pintra: finish signing in to ${request.providerLabel}${detail} in the terminal, then reload Pi.`,
+      `Amulet: finish signing in to ${request.providerLabel}${detail} in the terminal, then reload Pi.`,
     );
   }
 
@@ -1007,7 +1007,7 @@ export class ChatBridge implements vscode.Disposable {
         // Skip files larger than the shared attachment cap.
         if (stat.size > MAX_ATTACHMENT_BYTES) {
           void vscode.window.showWarningMessage(
-            `Pintra: skipping ${uri.path.split('/').pop()} — file too large (${Math.round(stat.size / 1024 / 1024)} MB).`,
+            `Amulet: skipping ${uri.path.split('/').pop()} — file too large (${Math.round(stat.size / 1024 / 1024)} MB).`,
           );
           continue;
         }

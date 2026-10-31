@@ -11,7 +11,7 @@ import {
 const MAX_QUEUED_POSTS = 32;
 
 export class PiSidebarProvider implements vscode.WebviewViewProvider {
-  static readonly viewType = 'pintra.chatView';
+  static readonly viewType = 'amulet.chatView';
 
   private view: vscode.WebviewView | undefined;
   private surface: WebviewSurface | undefined;
@@ -88,7 +88,7 @@ export class PiSidebarProvider implements vscode.WebviewViewProvider {
   }
 
   async reveal(): Promise<void> {
-    await vscode.commands.executeCommand('pintra.chatView.focus');
+    await vscode.commands.executeCommand('amulet.chatView.focus');
   }
 
   focusInput(): void {

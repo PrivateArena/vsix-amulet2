@@ -270,7 +270,7 @@ export function ModelPicker() {
             <div className="picker-login-card">
               <div className="picker-login-title">Log in to a provider</div>
               <div className="picker-login-sub">
-                Use OAuth or an API key. Pintra saves credentials in auth.json.
+                Use OAuth or an API key. Amulet saves credentials in auth.json.
               </div>
             </div>
           }>

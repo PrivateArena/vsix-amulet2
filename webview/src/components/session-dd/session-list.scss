@@ -4,8 +4,8 @@
   max-height: 420px;
   max-width: min(420px, calc(100vw - 24px));
   overflow-y: auto;
-  background: var(--pintra-surface-elevated);
-  border: 1px solid var(--pintra-border-subtle);
+  background: var(--amulet-surface-elevated);
+  border: 1px solid var(--amulet-border-subtle);
   border-radius: 12px;
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.14),
@@ -16,7 +16,7 @@
   pointer-events: auto;
   opacity: 1;
   transform-origin: top center;
-  animation: dd-unfold 0.18s var(--pintra-ease-out);
+  animation: dd-unfold 0.18s var(--amulet-ease-out);
   will-change: transform, opacity;
 }
 body.animations-disabled .session-dd {
@@ -33,7 +33,7 @@ body.animations-disabled .session-dd {
   }
 }
 .session-dd-empty {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   font-size: 0.82em;
   padding: 18px 14px;
   text-align: center;
@@ -50,7 +50,7 @@ body.animations-disabled .session-dd {
   border: none;
   border-radius: 8px;
   background: #0000;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   font: inherit;
   font-size: 0.86em;
   font-weight: 600;
@@ -59,18 +59,18 @@ body.animations-disabled .session-dd {
   transition: background 0.12s ease;
 }
 .session-dd-start:hover {
-  background: color-mix(in srgb, var(--pintra-fg) 7%, transparent);
+  background: color-mix(in srgb, var(--amulet-fg) 7%, transparent);
 }
 .session-dd-start:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
 }
 .session-dd-start-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 .session-dd-start-icon .pi-icon {
   width: 15px;
@@ -87,7 +87,7 @@ body.animations-disabled .session-dd {
 .session-dd-divider {
   height: 1px;
   margin: 5px 2px 6px;
-  background: color-mix(in srgb, var(--pintra-border-subtle) 80%, transparent);
+  background: color-mix(in srgb, var(--amulet-border-subtle) 80%, transparent);
 }
 
 .session-dd-row {
@@ -102,14 +102,14 @@ body.animations-disabled .session-dd {
   transition: background 0.12s ease;
 }
 .session-dd-row:hover {
-  background: color-mix(in srgb, var(--pintra-fg) 6%, transparent);
+  background: color-mix(in srgb, var(--amulet-fg) 6%, transparent);
 }
 .session-dd-row.is-active {
-  background: color-mix(in srgb, var(--pintra-fg) 9%, transparent);
+  background: color-mix(in srgb, var(--amulet-fg) 9%, transparent);
 }
 .session-dd-row:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
 }
 .session-dd-row-title {
   flex: 1 1 0%;
@@ -118,11 +118,11 @@ body.animations-disabled .session-dd {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.86em;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 .session-dd-row-meta {
   flex-shrink: 0;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   font-size: 0.78em;
   white-space: nowrap;
 }
@@ -138,7 +138,7 @@ body.animations-disabled .session-dd {
   border: none;
   border-radius: 6px;
   background: #0000;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   cursor: pointer;
   opacity: 0;
   transition:
@@ -151,11 +151,11 @@ body.animations-disabled .session-dd {
   opacity: 1;
 }
 .session-dd-row-del:hover {
-  background: color-mix(in srgb, var(--pintra-error) 14%, transparent);
-  color: var(--pintra-error);
+  background: color-mix(in srgb, var(--amulet-error) 14%, transparent);
+  color: var(--amulet-error);
 }
 .session-dd-row-del:focus-visible {
   outline: none;
   opacity: 1;
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
 }

@@ -1,6 +1,6 @@
 /* container spacing */
 .reasoning-block {
-  margin: calc(var(--pintra-space-sm) * var(--pintra-spacing-mult)) 0;
+  margin: calc(var(--amulet-space-sm) * var(--amulet-spacing-mult)) 0;
 }
 
 /* toggle button — "Thinking…" while active, "Thought" once complete */
@@ -8,8 +8,8 @@
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: var(--pintra-radius-sm);
-  color: var(--pintra-muted);
+  border-radius: var(--amulet-radius-sm);
+  color: var(--amulet-muted);
   column-gap: 5px;
   cursor: pointer;
   display: inline-flex;
@@ -18,17 +18,17 @@
   padding: 3px 8px 3px 4px;
   user-select: none;
   transition:
-    color var(--pintra-transition-fast),
-    background var(--pintra-transition-fast);
+    color var(--amulet-transition-fast),
+    background var(--amulet-transition-fast);
 }
 
 .reasoning-summary:hover {
   background: color-mix(
     in srgb,
-    var(--pintra-thinking-surface) 40%,
+    var(--amulet-thinking-surface) 40%,
     transparent
   );
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .reasoning-summary:disabled {
@@ -41,7 +41,7 @@
 
 .reasoning-summary:focus-visible {
   outline: 2px solid
-    color-mix(in srgb, var(--pintra-focus-ring) 46%, transparent);
+    color-mix(in srgb, var(--amulet-focus-ring) 46%, transparent);
   outline-offset: 1px;
 }
 
@@ -49,7 +49,7 @@
 .reasoning-chevron {
   flex-shrink: 0;
   height: 13px;
-  transition: transform var(--pintra-transition-fast);
+  transition: transform var(--amulet-transition-fast);
   width: 13px;
 }
 
@@ -75,9 +75,9 @@
 }
 
 .reasoning-dots > span {
-  animation: dot-bounce 1.2s var(--pintra-ease-out) infinite;
+  animation: dot-bounce 1.2s var(--amulet-ease-out) infinite;
   background: currentColor;
-  border-radius: var(--pintra-radius-pill);
+  border-radius: var(--amulet-radius-pill);
   height: 3px;
   opacity: 0.3;
   width: 3px;
@@ -107,11 +107,11 @@
 
 /* expandable reasoning panel — hidden by default */
 .reasoning-body {
-  animation: reason-fade 0.2s var(--pintra-ease-out) both;
-  border-left: 2px solid var(--pintra-accent-line);
-  color: color-mix(in srgb, var(--pintra-muted) 88%, var(--pintra-fg));
+  animation: reason-fade 0.2s var(--amulet-ease-out) both;
+  border-left: 2px solid var(--amulet-accent-line);
+  color: color-mix(in srgb, var(--amulet-muted) 88%, var(--amulet-fg));
   display: none;
-  font-size: var(--pintra-font-size);
+  font-size: var(--amulet-font-size);
   font-style: italic;
   line-height: 1.5;
   margin: 4px 0 0 5px;

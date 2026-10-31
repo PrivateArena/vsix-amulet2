@@ -21,7 +21,7 @@ export const LEVEL_LABELS: Record<ThinkingLevel, string> = {
 };
 
 /**
- * Shown when the runtime has no thinking level applied, i.e. `pintra.thinkingLevel`
+ * Shown when the runtime has no thinking level applied, i.e. `amulet.thinkingLevel`
  * is `disabled` and nothing has been selected this session: pi, the model config
  * and the provider defaults decide.
  */

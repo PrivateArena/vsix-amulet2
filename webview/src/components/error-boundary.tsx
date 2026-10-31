@@ -36,10 +36,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="crash">
-        <h2 className="crash-title">Pintra hit an error</h2>
+        <h2 className="crash-title">Amulet hit an error</h2>
         <p className="crash-hint">
           The chat view stopped rendering. The details below are also in the
-          Pintra output channel (Pintra: Show Log).
+          Amulet output channel (Amulet: Show Log).
         </p>
         <pre className="crash-detail">{error.stack ?? String(error)}</pre>
         {stack && <pre className="crash-detail crash-stack">{stack}</pre>}

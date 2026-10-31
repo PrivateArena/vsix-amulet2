@@ -17,10 +17,10 @@ function createLogger(channel: vscode.LogOutputChannel): Logger {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const channel = vscode.window.createOutputChannel('Pintra', { log: true });
+  const channel = vscode.window.createOutputChannel('Amulet', { log: true });
   context.subscriptions.push(channel);
   const log = createLogger(channel);
-  log.info('Pintra extension activating.');
+  log.info('Amulet extension activating.');
 
   const appVersion: string = context.extension.packageJSON.version ?? '';
 
@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext): void {
       timer = setTimeout(async () => {
         log.info('[hot-reload] host bundle changed.');
         const choice = await vscode.window.showInformationMessage(
-          'Pintra host bundle changed — reload the window to apply.',
+          'Amulet host bundle changed — reload the window to apply.',
           'Reload Window',
         );
         if (choice === 'Reload Window') {
@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(hostWatcher);
   }
 
-  log.info('Pintra extension activated.');
+  log.info('Amulet extension activated.');
 }
 
 export function deactivate(): Thenable<void> | void {

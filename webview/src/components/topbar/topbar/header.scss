@@ -3,11 +3,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px var(--pintra-space-md);
-  border-bottom: 1px solid var(--pintra-border);
-  background: var(--pintra-bg);
+  padding: 2px var(--amulet-space-md);
+  border-bottom: 1px solid var(--amulet-border);
+  background: var(--amulet-bg);
   flex-shrink: 0;
-  min-height: var(--pintra-header-height);
+  min-height: var(--amulet-header-height);
   user-select: none;
 
   /* Icon actions match `.btn-sm` (26px) so the bar hugs its content instead of

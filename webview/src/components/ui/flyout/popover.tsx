@@ -11,7 +11,7 @@ import { useEscapeKey } from '../../../hooks/use-escape-key';
 import './popover.scss';
 
 // Positioning is computed in JS against the viewport, so these px/ms values
-// are deliberately plain numbers rather than --pintra-* CSS tokens (which the
+// are deliberately plain numbers rather than --amulet-* CSS tokens (which the
 // layout math can't read without a getComputedStyle round-trip).
 /** Min gap kept between the popover and the viewport edge, in px. */
 const VIEWPORT_MARGIN = 8;
@@ -319,8 +319,8 @@ export function Flyout({
           : 'flyout-origin-bottom';
   const enterY =
     resolvedSide === 'bottom'
-      ? ({ '--pintra-popover-enter-y': '-7px' } as React.CSSProperties)
-      : ({ '--pintra-popover-enter-y': '7px' } as React.CSSProperties);
+      ? ({ '--amulet-popover-enter-y': '-7px' } as React.CSSProperties)
+      : ({ '--amulet-popover-enter-y': '7px' } as React.CSSProperties);
   const animate =
     typeof document === 'undefined' ||
     !document.body.classList.contains('no-anim');

@@ -2,30 +2,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: calc(var(--pintra-space-sm) * var(--pintra-spacing-mult)) 0;
+  margin: calc(var(--amulet-space-sm) * var(--amulet-spacing-mult)) 0;
   padding: 2px 2px 2px 0;
   font-size: 0.86em;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   user-select: none;
-  animation: working-indicator-fade-in 0.2s var(--pintra-ease-out) both;
+  animation: working-indicator-fade-in 0.2s var(--amulet-ease-out) both;
 }
 
 /* Shared retro loading dots, tinted with the accent color. */
 .progress-dots {
-  color: var(--pintra-accent);
+  color: var(--amulet-accent);
 }
 
 .progress-label {
   font-weight: 600;
-  color: color-mix(in srgb, var(--pintra-muted) 55%, var(--pintra-fg));
+  color: color-mix(in srgb, var(--amulet-muted) 55%, var(--amulet-fg));
 }
 
 .progress-time {
   font-size: 0.85em;
   font-weight: 500;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--pintra-tracking-wide);
+  letter-spacing: var(--amulet-tracking-wide);
 }
 
 @keyframes working-indicator-fade-in {

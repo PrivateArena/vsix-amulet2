@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 /**
  * Imperative handle the composer publishes so host-driven commands
- * (`pintra.addFileToChat`, `pintra.focusInput`, `pintra.editMessage`) can drive
+ * (`amulet.addFileToChat`, `amulet.focusInput`, `amulet.editMessage`) can drive
  * the draft. The composer owns its own input state, so the shell can't set it
  * directly — it goes through here.
  */

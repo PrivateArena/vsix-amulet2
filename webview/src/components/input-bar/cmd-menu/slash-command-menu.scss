@@ -4,13 +4,13 @@
   display: flex;
   flex-direction: column;
   margin-bottom: 6px;
-  background: var(--pintra-menu-bg);
-  border: 1px solid var(--pintra-menu-border);
-  border-radius: var(--pintra-radius);
-  box-shadow: var(--pintra-menu-shadow);
+  background: var(--amulet-menu-bg);
+  border: 1px solid var(--amulet-menu-border);
+  border-radius: var(--amulet-radius);
+  box-shadow: var(--amulet-menu-shadow);
   overflow: hidden;
   animation: slash-menu-in 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
-  z-index: var(--pintra-z-dropdown);
+  z-index: var(--amulet-z-dropdown);
 }
 
 body.animations-disabled .cmd-menu {
@@ -29,17 +29,17 @@ body.animations-disabled .cmd-menu {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   cursor: pointer;
   transition: background 0.08s ease;
 
   &:hover,
   &.focused {
-    background: var(--pintra-list-hover-bg);
+    background: var(--amulet-list-hover-bg);
   }
 
   &.focused {
-    box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+    box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
   }
 }
 
@@ -54,20 +54,20 @@ body.animations-disabled .cmd-menu {
 .cmd-item-name {
   font-size: 0.85em;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 
   .cmd-item-slash {
-    color: var(--pintra-accent);
+    color: var(--amulet-accent);
     margin-right: 1px;
   }
 }
 
 .cmd-item-desc {
   font-size: 0.75em;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -78,15 +78,15 @@ body.animations-disabled .cmd-menu {
   flex-shrink: 0;
   font-size: 0.7em;
   font-weight: 500;
-  color: var(--pintra-secondary-fg);
+  color: var(--amulet-secondary-fg);
   padding: 2px 6px;
-  border-radius: var(--pintra-radius-pill);
-  background: color-mix(in srgb, var(--pintra-secondary-fg) 8%, transparent);
+  border-radius: var(--amulet-radius-pill);
+  background: color-mix(in srgb, var(--amulet-secondary-fg) 8%, transparent);
 }
 
 /* Fuzzy match highlight */
 .cmd-item-name .fuzzy-hl {
-  color: var(--pintra-accent);
+  color: var(--amulet-accent);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 2px;
@@ -98,8 +98,8 @@ body.animations-disabled .cmd-menu {
   align-items: center;
   gap: 12px;
   padding: 6px 10px;
-  border-top: 1px solid var(--pintra-hairline);
-  background: color-mix(in srgb, var(--pintra-surface) 60%, transparent);
+  border-top: 1px solid var(--amulet-hairline);
+  background: color-mix(in srgb, var(--amulet-surface) 60%, transparent);
 }
 
 .cmd-hint {
@@ -107,7 +107,7 @@ body.animations-disabled .cmd-menu {
   align-items: center;
   gap: 4px;
   font-size: 0.7em;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   font-weight: 500;
 }
 
@@ -122,20 +122,20 @@ body.animations-disabled .cmd-menu {
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
-  font-family: var(--pintra-font);
+  font-family: var(--amulet-font);
   font-size: 0.9em;
   font-weight: 600;
-  color: var(--pintra-secondary-fg);
-  background: color-mix(in srgb, var(--pintra-fg) 6%, transparent);
-  border: 1px solid var(--pintra-hairline);
+  color: var(--amulet-secondary-fg);
+  background: color-mix(in srgb, var(--amulet-fg) 6%, transparent);
+  border: 1px solid var(--amulet-hairline);
   border-radius: 4px;
-  box-shadow: 0 1px 0 var(--pintra-hairline);
+  box-shadow: 0 1px 0 var(--amulet-hairline);
 }
 
 @keyframes slash-menu-in {
   from {
     opacity: 0;
-    transform: translateY(var(--pintra-popover-enter-y, 7px)) scale(0.985);
+    transform: translateY(var(--amulet-popover-enter-y, 7px)) scale(0.985);
   }
   to {
     opacity: 1;

@@ -183,7 +183,7 @@ export class PiRuntime {
 
   private friendlyStartupError(binaryPath: string, raw: string): string {
     if (/ENOENT|not running|spawn/i.test(raw)) {
-      return `Could not launch "${binaryPath}". Make sure the pi runtime is installed and on your PATH, or set an absolute path in "pintra.binaryPath".`;
+      return `Could not launch "${binaryPath}". Make sure the pi runtime is installed and on your PATH, or set an absolute path in "amulet.binaryPath".`;
     }
     return raw;
   }

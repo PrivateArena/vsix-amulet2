@@ -14,36 +14,36 @@ export function registerCommands(
   const reg = (id: string, fn: (...args: any[]) => any) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('pintra.newChat', () => provider.dispatch({ type: 'newChat' }));
-  reg('pintra.abort', () => provider.dispatch({ type: 'abort' }));
-  reg('pintra.compact', () => provider.dispatch({ type: 'compact' }));
-  reg('pintra.cycleModel', () => provider.dispatch({ type: 'cycleModel' }));
-  reg('pintra.openChatInEditor', () => editorManager.open());
-  reg('pintra.exportChat', () => provider.dispatch({ type: 'exportChat' }));
-  reg('pintra.editMessage', () =>
+  reg('amulet.newChat', () => provider.dispatch({ type: 'newChat' }));
+  reg('amulet.abort', () => provider.dispatch({ type: 'abort' }));
+  reg('amulet.compact', () => provider.dispatch({ type: 'compact' }));
+  reg('amulet.cycleModel', () => provider.dispatch({ type: 'cycleModel' }));
+  reg('amulet.openChatInEditor', () => editorManager.open());
+  reg('amulet.exportChat', () => provider.dispatch({ type: 'exportChat' }));
+  reg('amulet.editMessage', () =>
     provider.dispatch({ type: 'openForkPicker' }),
   );
 
-  reg('pintra.cycleThinkingLevel', async () => {
+  reg('amulet.cycleThinkingLevel', async () => {
     const runtime = sessions.getActiveRuntime();
     if (!runtime.isReady) return;
     const result = await runtime.cycleThinkingLevel();
     if (result)
       vscode.window.setStatusBarMessage(
-        `Pintra thinking: ${result.level}`,
+        `Amulet thinking: ${result.level}`,
         2000,
       );
     await provider.dispatch({ type: 'requestState' });
   });
 
-  reg('pintra.focusInput', async () => {
+  reg('amulet.focusInput', async () => {
     await provider.reveal();
     provider.focusInput();
   });
 
-  reg('pintra.switchModel', () => switchModel(sessions, provider, log));
+  reg('amulet.switchModel', () => switchModel(sessions, provider, log));
 
-  reg('pintra.addFileToChat', async (uri?: vscode.Uri) => {
+  reg('amulet.addFileToChat', async (uri?: vscode.Uri) => {
     const target = uri ?? vscode.window.activeTextEditor?.document.uri;
     if (!target) return;
     const rel = vscode.workspace.asRelativePath(target, false);
@@ -52,10 +52,10 @@ export function registerCommands(
     provider.focusInput();
   });
 
-  reg('pintra.restartRuntime', async () => {
+  reg('amulet.restartRuntime', async () => {
     await vscode.window.withProgress(
       {
-        location: { viewId: 'pintra.chatView' },
+        location: { viewId: 'amulet.chatView' },
         title: 'Restarting pi runtime…',
       },
       async () => {
@@ -65,7 +65,7 @@ export function registerCommands(
     );
   });
 
-  reg('pintra.showLog', () => log.show());
+  reg('amulet.showLog', () => log.show());
 }
 
 async function switchModel(
@@ -75,7 +75,7 @@ async function switchModel(
 ): Promise<void> {
   const runtime = sessions.getActiveRuntime();
   if (!runtime.isReady) {
-    void vscode.window.showWarningMessage('Pintra runtime is not ready yet.');
+    void vscode.window.showWarningMessage('Amulet runtime is not ready yet.');
     return;
   }
   try {
@@ -114,6 +114,6 @@ async function switchModel(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.error(`switchModel failed: ${message}`);
-    void vscode.window.showErrorMessage(`Pintra: ${message}`);
+    void vscode.window.showErrorMessage(`Amulet: ${message}`);
   }
 }

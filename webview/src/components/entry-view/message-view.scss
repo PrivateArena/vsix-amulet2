@@ -1,13 +1,13 @@
 .entry {
   display: block;
   line-height: 1.7;
-  margin-top: calc(var(--pintra-space-lg) * var(--pintra-spacing-mult)) 0;
+  margin-top: calc(var(--amulet-space-lg) * var(--amulet-spacing-mult)) 0;
   margin-bottom: 15px;
   padding-top: 10px;
 }
 
 .entry.entry-in {
-  animation: entry-in 0.34s var(--pintra-ease-out) both;
+  animation: entry-in 0.34s var(--amulet-ease-out) both;
 }
 
 .entry.user-entry.entry-in .entry-bubble {
@@ -47,7 +47,7 @@
 /* System turns — a quiet left rule anchors them in the transcript. */
 .entry:not(.agent-entry):not(.user-entry)>.entry-body {
   padding-left: 12px;
-  border-left: 2px solid var(--pintra-border-subtle);
+  border-left: 2px solid var(--amulet-border-subtle);
 }
 
 /* User turns — a full-width bubble sets your input apart. */
@@ -64,12 +64,12 @@
   padding: 8px 14px;
   /* VS Code's input tokens — a designed fg/bg pair, so contrast holds in every
      theme: white-ish on light themes, an elevated dark surface on dark ones. */
-  color: var(--vscode-input-foreground, var(--pintra-fg));
-  background: var(--vscode-input-background, var(--pintra-surface-subtle));
-  border: 1px solid var(--pintra-border-subtle);
+  color: var(--vscode-input-foreground, var(--amulet-fg));
+  background: var(--vscode-input-background, var(--amulet-surface-subtle));
+  border: 1px solid var(--amulet-border-subtle);
   /* Rounded, with the bottom-right corner tucked — a chat-bubble tell. */
-  border-radius: var(--pintra-radius-lg);
-  box-shadow: var(--pintra-shadow-sm);
+  border-radius: var(--amulet-radius-lg);
+  box-shadow: var(--amulet-shadow-sm);
 }
 
 /* A long question still shouldn't eat the panel while you read the answer, so cap
@@ -98,14 +98,14 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--pintra-fg-muted, var(--vscode-descriptionForeground));
+  color: var(--amulet-fg-muted, var(--vscode-descriptionForeground));
   font: inherit;
   font-size: 0.85em;
   cursor: pointer;
 }
 
 .bubble-toggle:hover {
-  color: var(--vscode-textLink-foreground, var(--pintra-fg));
+  color: var(--vscode-textLink-foreground, var(--amulet-fg));
   text-decoration: underline;
 }
 
@@ -128,15 +128,15 @@
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: var(--pintra-radius-pill);
-  background: var(--vscode-input-background, var(--pintra-surface-subtle));
+  border-radius: var(--amulet-radius-pill);
+  background: var(--vscode-input-background, var(--amulet-surface-subtle));
   box-shadow:
-    0 0 0 1px var(--pintra-accent-glow-soft),
-    var(--pintra-shadow-sm);
-  color: var(--pintra-accent);
+    0 0 0 1px var(--amulet-accent-glow-soft),
+    var(--amulet-shadow-sm);
+  color: var(--amulet-accent);
   font-size: 0.72em;
   font-weight: 600;
-  letter-spacing: var(--pintra-tracking-wide);
+  letter-spacing: var(--amulet-tracking-wide);
   pointer-events: none;
   user-select: none;
   animation: bubble-in 0.16s ease-out both;
@@ -144,7 +144,7 @@
 
 /* The right-click menu is open on this bubble. */
 .entry-bubble.is-ctx-open {
-  border-color: var(--pintra-accent-line);
+  border-color: var(--amulet-accent-line);
 }
 
 .entry-role {
@@ -153,25 +153,25 @@
   gap: 6px;
   font-size: 0.68em;
   font-weight: 650;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   text-transform: uppercase;
-  letter-spacing: var(--pintra-tracking-caps);
+  letter-spacing: var(--amulet-tracking-caps);
   white-space: nowrap;
   font-variation-settings: 'MONO' 1;
 }
 
 /* Phosphor marker — the agent's signature identity. */
 .agent-entry .entry-role {
-  color: color-mix(in srgb, var(--pintra-muted) 60%, var(--pintra-fg));
+  color: color-mix(in srgb, var(--amulet-muted) 60%, var(--amulet-fg));
 }
 
 .agent-entry .entry-role::before {
   content: '';
   width: 6px;
   height: 6px;
-  border-radius: var(--pintra-radius-pill);
-  background: var(--pintra-accent);
-  box-shadow: 0 0 8px var(--pintra-accent-glow);
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-accent);
+  box-shadow: 0 0 8px var(--amulet-accent-glow);
   flex-shrink: 0;
 }
 
@@ -200,7 +200,7 @@
 }
 
 .entry-attachment {
-  border-radius: var(--pintra-radius-md);
+  border-radius: var(--amulet-radius-md);
   overflow: hidden;
 }
 
@@ -208,9 +208,9 @@
   display: block;
   max-width: 280px;
   max-height: 200px;
-  border-radius: var(--pintra-radius-md);
+  border-radius: var(--amulet-radius-md);
   object-fit: contain;
-  border: 1px solid var(--pintra-border-subtle);
+  border: 1px solid var(--amulet-border-subtle);
 }
 
 .entry-attachment-file {
@@ -218,9 +218,9 @@
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--pintra-surface-secondary);
-  border: 1px solid var(--pintra-border);
-  border-radius: var(--pintra-radius-md);
+  background: var(--amulet-surface-secondary);
+  border: 1px solid var(--amulet-border);
+  border-radius: var(--amulet-radius-md);
   min-width: 160px;
   max-width: 260px;
 }
@@ -231,9 +231,9 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--pintra-radius-sm);
-  background: var(--pintra-accent-muted);
-  color: var(--pintra-accent);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-accent-muted);
+  color: var(--amulet-accent);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -249,7 +249,7 @@
 .entry-attachment-name {
   font-size: 12px;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -257,5 +257,5 @@
 
 .entry-attachment-size {
   font-size: 11px;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
 }

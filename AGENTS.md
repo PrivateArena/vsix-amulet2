@@ -4,9 +4,9 @@ Guidance for AI coding agents working in this repository.
 
 ## What this is
 
-**Pintra** (`pintra`) is a VS Code extension that embeds the [`pi` coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) as a chat sidebar. The extension host spawns an external `pi --mode rpc` child process and speaks its JSON-lines RPC protocol; a React webview renders the streaming conversation, thinking, and tool calls.
+**Amulet** (`amulet`) is a VS Code extension that embeds the [`pi` coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) as a chat sidebar. The extension host spawns an external `pi --mode rpc` child process and speaks its JSON-lines RPC protocol; a React webview renders the streaming conversation, thinking, and tool calls.
 
-The `pi` runtime is **not bundled** — it is an external CLI the user must install and authenticate separately. The extension resolves the binary from `pintra.binaryPath` (default `pi`).
+The `pi` runtime is **not bundled** — it is an external CLI the user must install and authenticate separately. The extension resolves the binary from `amulet.binaryPath` (default `pi`).
 
 ## Architecture
 
@@ -59,7 +59,7 @@ pnpm run format       # prettier --write
 `./scripts/build-vsix.sh --fast` to skip the gates, or `--install` to load the artifact into the
 local VS Code.
 
-- **Run/debug:** press **F5** ("Run Pintra Extension") to launch an Extension Development Host; the `pnpm: watch` task starts automatically. Open the **Pintra** view in the activity bar.
+- **Run/debug:** press **F5** ("Run Amulet Extension") to launch an Extension Development Host; the `pnpm: watch` task starts automatically. Open the **Amulet** view in the activity bar.
 - **Bundling is esbuild only** ([`esbuild.mjs`](esbuild.mjs)). `tsc` is configured with `noEmit` and is used _purely_ for type-checking — do not expect it to produce output.
 - `.scss` files are compiled by a custom sass plugin in `esbuild.mjs` and injected as CSS; load paths are rooted at `webview/src`.
 
@@ -92,7 +92,7 @@ suite built from such a capture.
 
 ## Configuration surface
 
-Extension settings live under the `pintra.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `extraArgs`. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage`.
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `extraArgs`. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage`.
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 

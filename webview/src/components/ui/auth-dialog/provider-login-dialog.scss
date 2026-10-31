@@ -8,7 +8,7 @@
   justify-content: center;
   padding: 16px;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--pintra-bg) 52%, transparent);
+  background: color-mix(in srgb, var(--amulet-bg) 52%, transparent);
   backdrop-filter: blur(3px) saturate(1.1);
   -webkit-backdrop-filter: blur(3px) saturate(1.1);
   animation: pl-fade-in 0.15s ease both;
@@ -22,13 +22,13 @@
   max-width: 100%;
   max-height: calc(100vh - 32px);
   border: 1px solid
-    color-mix(in srgb, var(--pintra-border-strong) 62%, transparent);
-  border-radius: var(--pintra-radius-md);
-  background: var(--pintra-surface-elevated);
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
   box-shadow:
-    var(--pintra-shadow-lg),
-    inset 0 1px var(--pintra-highlight);
-  animation: pl-enter 0.2s var(--pintra-ease-out) both;
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+  animation: pl-enter 0.2s var(--amulet-ease-out) both;
   overflow: hidden;
 }
 
@@ -40,13 +40,13 @@
   gap: 8px;
   flex-shrink: 0;
   padding: 12px 12px 12px 16px;
-  border-bottom: 1px solid var(--pintra-border-subtle);
+  border-bottom: 1px solid var(--amulet-border-subtle);
 }
 
 .auth-titlebar-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .auth-close {
@@ -58,25 +58,25 @@
   height: 26px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   background: transparent;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   cursor: pointer;
   transition:
-    color var(--pintra-transition-fast),
-    background-color var(--pintra-transition-fast),
-    border-color var(--pintra-transition-fast);
+    color var(--amulet-transition-fast),
+    background-color var(--amulet-transition-fast),
+    border-color var(--amulet-transition-fast);
 }
 
 .auth-close:hover {
-  color: var(--pintra-fg);
-  background: var(--pintra-surface-hover);
-  border-color: var(--pintra-input-border);
+  color: var(--amulet-fg);
+  background: var(--amulet-surface-hover);
+  border-color: var(--amulet-input-border);
 }
 
 .auth-close:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px var(--pintra-focus-ring);
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
 }
 
 /* Body */
@@ -102,13 +102,13 @@
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 12%,
-    var(--pintra-surface-subtle)
+    var(--amulet-accent) 12%,
+    var(--amulet-surface-subtle)
   );
-  color: color-mix(in srgb, var(--pintra-accent) 72%, var(--pintra-fg));
+  color: color-mix(in srgb, var(--amulet-accent) 72%, var(--amulet-fg));
 }
 
 .auth-head-text {
@@ -118,7 +118,7 @@
 .auth-head-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   overflow-wrap: anywhere;
 }
 
@@ -126,7 +126,7 @@
   margin-top: 2px;
   font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 /* Method options */
@@ -143,25 +143,25 @@
   gap: 10px;
   width: 100%;
   padding: 12px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius);
   background: transparent;
   text-align: left;
   cursor: pointer;
   transition:
-    background-color var(--pintra-transition-fast),
-    border-color var(--pintra-transition-fast);
+    background-color var(--amulet-transition-fast),
+    border-color var(--amulet-transition-fast);
 }
 
 .auth-option:hover {
-  background: var(--pintra-surface-hover);
-  border-color: var(--pintra-input-border);
+  background: var(--amulet-surface-hover);
+  border-color: var(--amulet-input-border);
 }
 
 .auth-option:focus-visible {
   outline: none;
-  border-color: var(--pintra-input-border);
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  border-color: var(--amulet-input-border);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
 }
 
 .auth-option-icon {
@@ -171,13 +171,13 @@
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 12%,
-    var(--pintra-surface-subtle)
+    var(--amulet-accent) 12%,
+    var(--amulet-surface-subtle)
   );
-  color: color-mix(in srgb, var(--pintra-accent) 72%, var(--pintra-fg));
+  color: color-mix(in srgb, var(--amulet-accent) 72%, var(--amulet-fg));
 }
 
 .auth-option-text {
@@ -190,13 +190,13 @@
 .auth-option-title {
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .auth-option-desc {
   font-size: 0.78rem;
   line-height: 1.4;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 /* Provider / choice list */
@@ -219,31 +219,31 @@
   width: 100%;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: var(--pintra-radius);
-  background: var(--pintra-surface-subtle);
+  border-radius: var(--amulet-radius);
+  background: var(--amulet-surface-subtle);
   text-align: left;
   cursor: pointer;
   transition:
-    background-color var(--pintra-transition-fast),
-    border-color var(--pintra-transition-fast);
+    background-color var(--amulet-transition-fast),
+    border-color var(--amulet-transition-fast);
 }
 
 .auth-row:hover {
-  background: var(--pintra-surface-hover);
-  border-color: var(--pintra-input-border);
+  background: var(--amulet-surface-hover);
+  border-color: var(--amulet-input-border);
 }
 
 .auth-row:focus-visible {
   outline: none;
-  border-color: var(--pintra-input-border);
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  border-color: var(--amulet-input-border);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
 }
 
 .auth-row-label {
   min-width: 0;
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -253,7 +253,7 @@
   flex-shrink: 0;
   font-size: 0.76rem;
   font-weight: 500;
-  color: var(--pintra-success);
+  color: var(--amulet-success);
   white-space: nowrap;
 }
 
@@ -263,10 +263,10 @@
   box-sizing: border-box;
   height: 32px;
   padding: 4px 10px;
-  border: 1px solid var(--pintra-input-border);
-  border-radius: var(--pintra-radius);
-  background: var(--pintra-input-bg);
-  color: var(--pintra-fg);
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-fg);
   font: inherit;
   font-size: 0.86rem;
   line-height: 1.4;
@@ -276,18 +276,18 @@
 }
 
 .auth-input::placeholder {
-  color: var(--vscode-input-placeholderForeground, var(--pintra-muted));
+  color: var(--vscode-input-placeholderForeground, var(--amulet-muted));
   opacity: 0.8;
 }
 
 .auth-input:focus {
   border-color: color-mix(
     in srgb,
-    var(--pintra-focus-ring) 70%,
-    var(--pintra-input-border)
+    var(--amulet-focus-ring) 70%,
+    var(--amulet-input-border)
   );
   box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--pintra-focus-ring) 34%, transparent);
+    color-mix(in srgb, var(--amulet-focus-ring) 34%, transparent);
 }
 
 /* Highlighted inline sub-form (e.g. GHE host) */
@@ -296,12 +296,12 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius);
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 6%,
-    var(--pintra-surface-subtle)
+    var(--amulet-accent) 6%,
+    var(--amulet-surface-subtle)
   );
 }
 
@@ -323,25 +323,25 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius);
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 6%,
-    var(--pintra-surface-subtle)
+    var(--amulet-accent) 6%,
+    var(--amulet-surface-subtle)
   );
 }
 
 .auth-status-done {
   background: color-mix(
     in srgb,
-    var(--pintra-success) 8%,
-    var(--pintra-surface-subtle)
+    var(--amulet-success) 8%,
+    var(--amulet-surface-subtle)
   );
   border-color: color-mix(
     in srgb,
-    var(--pintra-success) 24%,
-    var(--pintra-border-subtle)
+    var(--amulet-success) 24%,
+    var(--amulet-border-subtle)
   );
 }
 
@@ -349,7 +349,7 @@
   min-width: 0;
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .auth-spinner {
@@ -357,11 +357,11 @@
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--pintra-accent) 28%, transparent);
+  border: 2px solid color-mix(in srgb, var(--amulet-accent) 28%, transparent);
   border-top-color: color-mix(
     in srgb,
-    var(--pintra-accent) 82%,
-    var(--pintra-fg)
+    var(--amulet-accent) 82%,
+    var(--amulet-fg)
   );
   animation: pl-spin 0.7s linear infinite;
 }
@@ -373,7 +373,7 @@
   flex-shrink: 0;
   width: 15px;
   height: 15px;
-  color: var(--pintra-success);
+  color: var(--amulet-success);
 }
 
 @keyframes pl-spin {

@@ -1,5 +1,9 @@
 # Pintra fork — provenance, baseline, drift
 
+> This document keeps the upstream product name **Pintra** wherever it describes the source project
+> (`bilalbentoumi/pi-vsc`). Our product is **Amulet** since 1.0.15 — see "Rebrand" below. Do not
+> rename the upstream references: they are the MIT provenance record.
+
 ## Provenance
 
 | Item | Value |
@@ -147,10 +151,30 @@ whatever else is running.
 2. **Multi-surface state**: one `SessionManager` pool feeds N `ChatBridge` instances
    (`src/webview/chat-bridge.ts`, 865 lines — the largest file). Audit which per-surface state is
    actually global before changing it.
-3. **Rebrand to Amulet**: `package.json` `name`/`publisher`/`private: true`, extension ids
-   `pintra.*` in `contributes` + every `src/commands.ts` handler, config keys in `src/config.ts`,
-   `.github/FUNDING.yml` (still points at upstream's sponsor list). Note the extension id is
-   `publisher.name`, so the current vsix collides with the marketplace Pintra until renamed.
+3. **Rebrand to Amulet** — done (2026-10-31, v1.0.15). Extension id is now `gunir.amulet`, so the vsix
+   no longer collides with the marketplace Pintra. What moved:
+   - `package.json`: `name` `pi-vsc` → `amulet`, `publisher` → `gunir`, `repository` →
+     `github.com/gunir/vsix-amulet2` (repo keeps its working name for now), artifact glob in
+     `vscode:install` → `amulet-*.vsix`. Artifact is derived from `name` by `scripts/build-vsix.sh`.
+   - All `pintra.*` ids: commands, `amulet-container`/`amulet.chatView`, `onView:` activation event,
+     `amulet.chatEditor` (code-only, not in the manifest), and the `SECTION` constant in
+     `src/config.ts` which drives the 8 `amulet.*` settings keys. **Existing user settings do not
+     migrate** — a renamed id means a fresh install, so there is nothing to migrate anyway.
+   - `--pintra-*` design tokens → `--amulet-*` (128 tokens, 30 `.scss` files) and the `@font-face`
+     families `Pintra Mono`/`Pintra Pixel` → `Amulet Mono`/`Amulet Pixel`, which cross the
+     host (`src/webview/html.ts`) → SCSS (`variables.scss`, `logo-text.scss`) boundary.
+   - User-visible brand strings, the `PINTRA` wordmark (`logo-text.tsx`, still 6 letters), the output
+     channel name (`createOutputChannel('Amulet')` ⟷ `amulet.showLog` ⟷ `error-boundary.tsx` prose).
+   - Extension-id references that contain no brand text and so are invisible to a brand grep:
+     `'@ext:bilalbentoumi.pi-vsc'` in `src/webview/chat-bridge.ts` and `REPO_URL` in
+     `webview/src/components/topbar/settings-menu/settings-dropdown.tsx`. Both now read `gunir`/`amulet`.
+   - Logo: the blocky `P` mark became a symmetric `A` on the same 270-unit grid (60-unit stems, 150×90
+     counter). Three hardcoded copies of the path — `media/icon.svg`, `media/activity-bar-icon.svg`
+     (translated +80/+80 into the 430 viewport) and `webview/src/components/logo-icon.tsx` — plus a
+     re-rasterised 430×430 `media/icon.png` (opaque black, pure white glyph, hard edges, artwork at
+     80..349, exactly like the original export).
+   - `.github/FUNDING.yml` now points at `gunir` instead of upstream's sponsor list.
+   **Still to do:** `media/screenshot.png` pixels still show the old wordmark.
 4. **Test story**: two vitest files only — `shared/blocks.test.ts` (block reconstruction) and
    `webview/src/store.test.ts`; AGENTS.md says "there is no test suite" for behaviour. Host↔webview changes need a manual F5 pass.
 5. **Lineage hygiene** (carried over from `vsix-amulet`): `../vsix-amulet/extension/` is EULA'd —
@@ -159,8 +183,11 @@ whatever else is running.
 ## Open decisions
 
 - Create the GitHub fork under `gunir` (or an org?) and set it as `origin` — one command:
-  `gh repo fork bilalbentoumi/pi-vsc --clone=false --remote-name=origin`.
-- New extension id / display name / publisher for the Amulet build.
+  `gh repo fork bilalbentoumi/pi-vsc --clone=false --remote-name=origin`. `origin` currently points at
+  the private `PrivateArena/vsix-amulet2`, which is why the README badges may render "unknown" until a
+  public `gunir/vsix-amulet2` exists.
+- ~~New extension id / display name / publisher for the Amulet build.~~ Decided: `gunir.amulet`,
+  displayName "Amulet — Pi Agent for VS Code", version line kept at 1.0.x.
 
 ## Thinking level contract (pi 1.4.0, verified against the installed runtime)
 
@@ -183,7 +210,7 @@ and reading `dist/core/agent-session.js` + `pi-ai/dist/models.js`:
   `core/agent-session.js:1992`). The capability list therefore travels with every host-initiated model
   change — `setModel`, `cycleModel`, `newChat`, `editAndFork`, `switchSession`/`restart` (via
   `pushSnapshot`), provider-login restart — plus the fetch-on-open in the picker.
-- Startup: `pintra.thinkingLevel` defaults to `disabled`, which sends **nothing** (previously the host
+- Startup: `amulet.thinkingLevel` defaults to `disabled`, which sends **nothing** (previously the host
   always sent `medium`, overriding pi's `defaultThinkingLevel`, per-model levels, and the resumed
   session). Any concrete value is applied per runtime start and live on the setting change
   (`applyThinkingLevelSetting`); `disabled` itself only takes effect on the next runtime start because

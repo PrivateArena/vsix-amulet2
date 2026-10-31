@@ -86,7 +86,7 @@ export function CommandMenu({
           left: composerRect.left,
           width: composerRect.width,
           bottom: window.innerHeight - composerRect.top + GAP,
-          '--pintra-popover-enter-y': '7px',
+          '--amulet-popover-enter-y': '7px',
         } as React.CSSProperties
       }>
       <div className="cmd-menu-list">

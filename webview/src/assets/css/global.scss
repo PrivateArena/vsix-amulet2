@@ -13,18 +13,18 @@ body {
   height: 100%;
   overflow: hidden;
   overflow-x: hidden;
-  font-family: var(--pintra-font);
-  font-size: var(--pintra-font-size);
+  font-family: var(--amulet-font);
+  font-size: var(--amulet-font-size);
   font-synthesis: none;
   font-variation-settings:
     'MONO' 0,
     'CASL' 0,
     'CRSV' 0;
-  font-weight: var(--pintra-font-weight);
-  font-style: var(--pintra-font-style);
-  letter-spacing: var(--pintra-tracking-tight);
-  color: var(--pintra-fg);
-  background: var(--pintra-bg);
+  font-weight: var(--amulet-font-weight);
+  font-style: var(--amulet-font-style);
+  letter-spacing: var(--amulet-tracking-tight);
+  color: var(--amulet-fg);
+  background: var(--amulet-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -33,14 +33,14 @@ body {
 *,
 html,
 body {
-  scrollbar-color: var(--pintra-scrollbar-thumb) var(--pintra-scrollbar-track);
+  scrollbar-color: var(--amulet-scrollbar-thumb) var(--amulet-scrollbar-track);
   scrollbar-width: thin;
 }
 
 /* Selection — phosphor-tinted */
 ::selection {
-  background: color-mix(in srgb, var(--pintra-accent) 26%, transparent);
-  color: var(--pintra-fg);
+  background: color-mix(in srgb, var(--amulet-accent) 26%, transparent);
+  color: var(--amulet-fg);
 }
 
 /* Scrollbar */
@@ -50,24 +50,24 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: var(--pintra-scrollbar-track);
+  background: var(--amulet-scrollbar-track);
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--pintra-scrollbar-thumb);
-  border-radius: var(--pintra-radius-pill);
+  background: var(--amulet-scrollbar-thumb);
+  border-radius: var(--amulet-radius-pill);
   border: 2px solid transparent;
   background-clip: padding-box;
   transition: background 0.16s ease;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--pintra-scrollbar-thumb-hover);
+  background: var(--amulet-scrollbar-thumb-hover);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:active {
-  background: var(--pintra-scrollbar-thumb-active);
+  background: var(--amulet-scrollbar-thumb-active);
   background-clip: padding-box;
 }
 

@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--pintra-bg) 52%, transparent);
+  background: color-mix(in srgb, var(--amulet-bg) 52%, transparent);
   backdrop-filter: blur(3px) saturate(1.1);
   -webkit-backdrop-filter: blur(3px) saturate(1.1);
   animation: confirm-fade-in 0.15s ease both;
@@ -18,26 +18,26 @@
   max-width: calc(100vw - 32px);
   padding: 20px;
   border: 1px solid
-    color-mix(in srgb, var(--pintra-border-strong) 62%, transparent);
-  border-radius: var(--pintra-radius-md);
-  background: var(--pintra-surface-elevated);
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
   box-shadow:
-    var(--pintra-shadow-lg),
-    inset 0 1px var(--pintra-highlight);
-  animation: confirm-enter 0.2s var(--pintra-ease-out) both;
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+  animation: confirm-enter 0.2s var(--amulet-ease-out) both;
 }
 
 .modal-title {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   margin-bottom: 10px;
 }
 
 .modal-message {
   font-size: 0.88rem;
   line-height: 1.5;
-  color: color-mix(in srgb, var(--pintra-fg) 78%, var(--pintra-muted));
+  color: color-mix(in srgb, var(--amulet-fg) 78%, var(--amulet-muted));
   margin-bottom: 18px;
 }
 

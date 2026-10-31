@@ -22,8 +22,8 @@
 .crash-detail {
   margin: 0;
   padding: 10px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius-md, 6px);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-md, 6px);
   background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 0.82em;
@@ -40,7 +40,7 @@
   align-self: flex-start;
   padding: 4px 12px;
   border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: var(--pintra-radius-md, 6px);
+  border-radius: var(--amulet-radius-md, 6px);
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   font: inherit;

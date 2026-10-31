@@ -1,13 +1,13 @@
 .entry-content a:focus-visible,
 .exec-block > summary:focus-visible {
-  outline: 2px solid var(--pintra-focus-ring);
+  outline: 2px solid var(--amulet-focus-ring);
   outline-offset: 2px;
 }
 
 :is(code, pre, kbd, samp, .patch-container, .exec-output) {
-  font-family: var(--pintra-monospace);
-  font-size: var(--pintra-type-code);
-  line-height: var(--pintra-line-code);
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+  line-height: var(--amulet-line-code);
   font-synthesis: none;
   font-variation-settings:
     'MONO' 1,
@@ -23,32 +23,32 @@
 .md-table-wrap {
   overflow-x: auto;
   margin: 8px 0;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius);
 }
 
 .md-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--pintra-type-sm);
-  line-height: var(--pintra-line-body);
+  font-size: var(--amulet-type-sm);
+  line-height: var(--amulet-line-body);
 }
 
 .md-table th,
 .md-table td {
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--pintra-hairline);
+  border-bottom: 1px solid var(--amulet-hairline);
   white-space: nowrap;
 }
 
 .md-table th {
   font-weight: 600;
-  font-size: var(--pintra-type-xs);
+  font-size: var(--amulet-type-xs);
   text-transform: uppercase;
-  letter-spacing: var(--pintra-tracking-caps);
-  color: var(--pintra-fg-muted);
-  background: var(--pintra-surface-subtle);
+  letter-spacing: var(--amulet-tracking-caps);
+  color: var(--amulet-fg-muted);
+  background: var(--amulet-surface-subtle);
 }
 
 .md-table tbody tr:last-child td {
@@ -56,7 +56,7 @@
 }
 
 .md-table tbody tr:hover {
-  background: var(--pintra-surface-raise);
+  background: var(--amulet-surface-raise);
 }
 
 /* ── Markdown code ─────────────────────────────────────
@@ -71,9 +71,9 @@
   white-space: pre;
   /* Share the user bubble's surface (VS Code's designed input tokens) so code
      reads as the same material in every theme. */
-  background: var(--vscode-input-background, var(--pintra-surface-subtle));
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius);
+  background: var(--vscode-input-background, var(--amulet-surface-subtle));
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius);
 }
 
 .entry-content-md pre.md-code-block code {
@@ -86,9 +86,9 @@
 
 .entry-content-md :not(pre) > code {
   padding: 1px 5px;
-  background: var(--pintra-surface-raise);
-  border: 1px solid var(--pintra-hairline);
-  border-radius: var(--pintra-radius-sm);
+  background: var(--amulet-surface-raise);
+  border: 1px solid var(--amulet-hairline);
+  border-radius: var(--amulet-radius-sm);
 }
 
 /* ── Assistant message empty-state handling ────────── */
@@ -165,13 +165,13 @@
   transform: translateY(0);
   pointer-events: auto;
   opacity: 1;
-  border-color: var(--pintra-border-subtle);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--pintra-bg) 16%, transparent);
+  border-color: var(--amulet-border-subtle);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--amulet-bg) 16%, transparent);
 }
 
 #scroll-down.visible:hover,
 #scroll-up.visible:hover {
-  background: var(--pintra-panel);
+  background: var(--amulet-panel);
 }
 
 #scroll-down .pi-icon,
@@ -181,12 +181,12 @@
 }
 
 /* ── highlight.js token colors ─────────────────────────
-   Palette adapts to theme via the --pintra-hljs-* variables
+   Palette adapts to theme via the --amulet-hljs-* variables
    defined in variables.scss. */
 
 .hljs {
   background: transparent;
-  color: var(--pintra-hljs-fg);
+  color: var(--amulet-hljs-fg);
 }
 
 .hljs-doctag,
@@ -196,14 +196,14 @@
 .hljs-template-variable,
 .hljs-type,
 .hljs-variable.language_ {
-  color: var(--pintra-hljs-keyword);
+  color: var(--amulet-hljs-keyword);
 }
 
 .hljs-title,
 .hljs-title.class_,
 .hljs-title.class_.inherited__,
 .hljs-title.function_ {
-  color: var(--pintra-hljs-title);
+  color: var(--amulet-hljs-title);
 }
 
 .hljs-attr,
@@ -216,44 +216,44 @@
 .hljs-selector-attr,
 .hljs-selector-class,
 .hljs-selector-id {
-  color: var(--pintra-hljs-attr);
+  color: var(--amulet-hljs-attr);
 }
 
 .hljs-regexp,
 .hljs-string,
 .hljs-meta .hljs-string {
-  color: var(--pintra-hljs-string);
+  color: var(--amulet-hljs-string);
 }
 
 .hljs-built_in,
 .hljs-symbol {
-  color: var(--pintra-hljs-built-in);
+  color: var(--amulet-hljs-built-in);
 }
 
 .hljs-code,
 .hljs-comment,
 .hljs-formula {
-  color: var(--pintra-hljs-comment);
+  color: var(--amulet-hljs-comment);
 }
 
 .hljs-name,
 .hljs-quote,
 .hljs-selector-tag,
 .hljs-selector-pseudo {
-  color: var(--pintra-hljs-name);
+  color: var(--amulet-hljs-name);
 }
 
 .hljs-subst {
-  color: var(--pintra-hljs-fg);
+  color: var(--amulet-hljs-fg);
 }
 
 .hljs-section {
-  color: var(--pintra-hljs-section);
+  color: var(--amulet-hljs-section);
   font-weight: 700;
 }
 
 .hljs-bullet {
-  color: var(--pintra-hljs-bullet);
+  color: var(--amulet-hljs-bullet);
 }
 
 .hljs-emphasis {
@@ -265,13 +265,13 @@
 }
 
 .hljs-addition {
-  color: var(--pintra-hljs-addition-fg);
-  background-color: var(--pintra-hljs-addition-bg);
+  color: var(--amulet-hljs-addition-fg);
+  background-color: var(--amulet-hljs-addition-bg);
 }
 
 .hljs-deletion {
-  color: var(--pintra-hljs-deletion-fg);
-  background-color: var(--pintra-hljs-deletion-bg);
+  color: var(--amulet-hljs-deletion-fg);
+  background-color: var(--amulet-hljs-deletion-bg);
 }
 
 /* ── Start page hint ─────────────────────────────────── */
@@ -279,7 +279,7 @@
 .home-hint {
   display: block;
   text-align: right;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-size: 0.74em;
   font-variation-settings: 'MONO' 1;
   letter-spacing: 0.01em;
@@ -310,30 +310,30 @@
 .suggest-icon-skill .pi-icon,
 .suggest-icon-ext .pi-icon,
 .suggest-icon-prompt .pi-icon {
-  color: color-mix(in srgb, var(--pintra-suggest-fg) 72%, var(--pintra-muted));
+  color: color-mix(in srgb, var(--amulet-suggest-fg) 72%, var(--amulet-muted));
 }
 
 .suggest-icon-dir .pi-icon {
   color: color-mix(
     in srgb,
-    var(--vscode-icon-folderForeground, var(--pintra-fg)) 74%,
-    var(--pintra-suggest-fg)
+    var(--vscode-icon-folderForeground, var(--amulet-fg)) 74%,
+    var(--amulet-suggest-fg)
   );
 }
 
 .suggest-icon-file .pi-icon {
   color: color-mix(
     in srgb,
-    var(--vscode-icon-fileForeground, var(--pintra-fg)) 74%,
-    var(--pintra-suggest-fg)
+    var(--vscode-icon-fileForeground, var(--amulet-fg)) 74%,
+    var(--amulet-suggest-fg)
   );
 }
 
 .suggest-name {
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
   font-size: 0.85em;
   font-weight: 600;
-  color: var(--pintra-suggest-fg);
+  color: var(--amulet-suggest-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -351,7 +351,7 @@
   padding: 0;
   box-sizing: border-box;
   overflow: hidden;
-  background: var(--pintra-bg);
+  background: var(--amulet-bg);
   user-select: none;
   -webkit-user-select: none;
   animation: home-fade 0.35s ease both;
@@ -375,8 +375,8 @@
 .home-composer {
   position: absolute;
   top: 54%;
-  left: var(--pintra-space-lg);
-  right: var(--pintra-space-lg);
+  left: var(--amulet-space-lg);
+  right: var(--amulet-space-lg);
   padding: 24px 0 0;
   padding-top: 0;
   margin: 0;
@@ -384,7 +384,7 @@
   z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: calc(var(--pintra-space-xl) * 2);
+  gap: calc(var(--amulet-space-xl) * 2);
 }
 
 /* ── Content typography ──────────────────────────────── */

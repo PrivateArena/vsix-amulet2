@@ -2,7 +2,7 @@
 .topbar .topbar-left {
   display: flex;
   align-items: center;
-  gap: var(--pintra-space-sm);
+  gap: var(--amulet-space-sm);
   flex: 1 1 auto;
   min-width: 0;
   position: relative;
@@ -30,14 +30,14 @@
   margin-left: 3px;
   font-size: 0.7em;
   font-weight: 650;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--pintra-tracking-wide);
+  letter-spacing: var(--amulet-tracking-wide);
   white-space: nowrap;
 }
 
 .turn-count-total {
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-weight: 500;
 }
 
@@ -50,21 +50,21 @@
   min-width: 0;
   padding: 2px 6px 2px 8px;
   border: 1px solid transparent;
-  border-radius: var(--pintra-radius-sm);
+  border-radius: var(--amulet-radius-sm);
   background: none;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   font: inherit;
   font-size: 0.9em;
   font-weight: 500;
   cursor: pointer;
   transition:
-    background var(--pintra-transition-fast) var(--pintra-ease-out),
-    border-color var(--pintra-transition-fast) var(--pintra-ease-out);
+    background var(--amulet-transition-fast) var(--amulet-ease-out),
+    border-color var(--amulet-transition-fast) var(--amulet-ease-out);
 
   &:hover,
   &.is-open {
-    background: var(--pintra-surface-hover);
-    border-color: var(--pintra-border-subtle);
+    background: var(--amulet-surface-hover);
+    border-color: var(--amulet-border-subtle);
   }
 }
 
@@ -79,7 +79,7 @@
   width: 12px;
   height: 12px;
   flex-shrink: 0;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
 }
 
 /* Jump list */
@@ -101,29 +101,29 @@
     width: 100%;
     padding: 5px 8px;
     border: 0;
-    border-radius: var(--pintra-radius-sm);
+    border-radius: var(--amulet-radius-sm);
     background: none;
-    color: var(--pintra-fg-muted);
+    color: var(--amulet-fg-muted);
     font: inherit;
     font-size: 0.88em;
     text-align: left;
     cursor: pointer;
 
     &:hover {
-      background: var(--pintra-surface-hover);
-      color: var(--pintra-fg);
+      background: var(--amulet-surface-hover);
+      color: var(--amulet-fg);
     }
 
     &.is-active {
-      color: var(--pintra-fg);
-      background: var(--pintra-surface-raise);
+      color: var(--amulet-fg);
+      background: var(--amulet-surface-raise);
     }
   }
 
   .turn-nav-index {
     flex-shrink: 0;
     min-width: 1.5em;
-    color: var(--pintra-accent);
+    color: var(--amulet-accent);
     font-weight: 650;
     font-variant-numeric: tabular-nums;
   }
@@ -139,13 +139,13 @@
   .turn-nav-time {
     flex-shrink: 0;
     font-size: 0.85em;
-    color: var(--pintra-fg-faint);
+    color: var(--amulet-fg-faint);
     font-variant-numeric: tabular-nums;
   }
 
   .turn-nav-empty {
     padding: 8px;
-    color: var(--pintra-fg-faint);
+    color: var(--amulet-fg-faint);
     font-size: 0.85em;
   }
 }

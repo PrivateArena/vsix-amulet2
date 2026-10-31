@@ -1,9 +1,9 @@
 {
-	"name": "pi-vsc",
-	"displayName": "Pintra — Pi Agent for VS Code",
+	"name": "amulet",
+	"displayName": "Amulet — Pi Agent for VS Code",
 	"description": "AI coding agent for VS Code, powered by the pi runtime.",
 	"version": "1.0.15",
-	"publisher": "bilalbentoumi",
+	"publisher": "gunir",
 	"private": true,
 	"icon": "media/icon.png",
 	"galleryBanner": {
@@ -12,7 +12,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/bilalbentoumi/pi-vsc.git"
+		"url": "https://github.com/gunir/vsix-amulet2.git"
 	},
 	"license": "MIT",
 	"engines": {
@@ -35,100 +35,100 @@
 	],
 	"main": "./dist/extension.js",
 	"activationEvents": [
-		"onView:pintra.chatView"
+		"onView:amulet.chatView"
 	],
 	"contributes": {
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "pintra-container",
-					"title": "Pintra",
+					"id": "amulet-container",
+					"title": "Amulet",
 					"icon": "media/activity-bar-icon.svg"
 				}
 			]
 		},
 		"views": {
-			"pintra-container": [
+			"amulet-container": [
 				{
 					"type": "webview",
-					"id": "pintra.chatView",
-					"name": "Pintra"
+					"id": "amulet.chatView",
+					"name": "Amulet"
 				}
 			]
 		},
 		"commands": [
 			{
-				"command": "pintra.newChat",
+				"command": "amulet.newChat",
 				"title": "New Chat",
-				"category": "Pintra",
+				"category": "Amulet",
 				"icon": "$(add)"
 			},
 			{
-				"command": "pintra.switchModel",
+				"command": "amulet.switchModel",
 				"title": "Switch Model",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.cycleModel",
+				"command": "amulet.cycleModel",
 				"title": "Cycle Model",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.cycleThinkingLevel",
+				"command": "amulet.cycleThinkingLevel",
 				"title": "Cycle Thinking Level",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.compact",
+				"command": "amulet.compact",
 				"title": "Compact Context",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.abort",
+				"command": "amulet.abort",
 				"title": "Stop Agent",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.focusInput",
+				"command": "amulet.focusInput",
 				"title": "Focus Chat Input",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.addFileToChat",
-				"title": "Add File to Pintra Chat",
-				"category": "Pintra"
+				"command": "amulet.addFileToChat",
+				"title": "Add File to Amulet Chat",
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.restartRuntime",
+				"command": "amulet.restartRuntime",
 				"title": "Restart Runtime",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.showLog",
+				"command": "amulet.showLog",
 				"title": "Show Log",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.openChatInEditor",
+				"command": "amulet.openChatInEditor",
 				"title": "Open Chat in Editor",
-				"category": "Pintra",
+				"category": "Amulet",
 				"icon": "$(split-horizontal)"
 			},
 			{
-				"command": "pintra.editMessage",
+				"command": "amulet.editMessage",
 				"title": "Edit a Previous Message",
-				"category": "Pintra"
+				"category": "Amulet"
 			},
 			{
-				"command": "pintra.exportChat",
+				"command": "amulet.exportChat",
 				"title": "Export Chat to HTML...",
-				"category": "Pintra"
+				"category": "Amulet"
 			}
 		],
 		"menus": {
 			"explorer/context": [
 				{
-					"command": "pintra.addFileToChat",
+					"command": "amulet.addFileToChat",
 					"when": "resourceScheme == file",
 					"group": "navigation@100"
 				}
@@ -136,40 +136,40 @@
 		},
 		"keybindings": [
 			{
-				"command": "pintra.focusInput",
+				"command": "amulet.focusInput",
 				"key": "ctrl+shift+i",
 				"mac": "cmd+shift+i"
 			},
 			{
-				"command": "pintra.newChat",
+				"command": "amulet.newChat",
 				"key": "ctrl+shift+alt+n",
 				"mac": "cmd+shift+alt+n"
 			}
 		],
 		"configuration": {
-			"title": "Pintra",
+			"title": "Amulet",
 			"properties": {
-				"pintra.binaryPath": {
+				"amulet.binaryPath": {
 					"type": "string",
 					"default": "pi",
 					"order": 0,
 					"scope": "machine",
 					"markdownDescription": "Command name or absolute path of the external pi-compatible agent executable (for example `pi` or `omp`). Runs in RPC mode. **Changing this restarts the runtime.** Scoped to machine so a workspace's `.vscode/settings.json` cannot override it (security: this value is used to spawn a child process)."
 				},
-				"pintra.agentDir": {
+				"amulet.agentDir": {
 					"type": "string",
 					"default": "",
 					"order": 1,
 					"scope": "machine",
 					"markdownDescription": "Directory where the pi runtime stores auth, models, and sessions. Defaults to the runtime's own default (`~/.pi/agent`). Passed as `PI_CODING_AGENT_DIR`. Scoped to machine so a workspace cannot redirect it."
 				},
-				"pintra.defaultModel": {
+				"amulet.defaultModel": {
 					"type": "string",
 					"default": "",
 					"order": 2,
 					"markdownDescription": "Optional default model pattern passed to the runtime at startup (for example `anthropic/claude-sonnet-5` or `provider/id:thinking`). Leave empty to use the runtime's configured default."
 				},
-				"pintra.thinkingLevel": {
+				"amulet.thinkingLevel": {
 					"type": "string",
 					"enum": [
 						"disabled",
@@ -195,25 +195,25 @@
 					"order": 3,
 					"markdownDescription": "Thinking level the extension applies to the runtime. Leave on `disabled` to send nothing: the level then comes from pi's own settings, the resumed session, and the model default, and you can still pick one per session in the chat box. Any other value is sent as `set_thinking_level` at every runtime start (and live when you change it), overriding those defaults; pi clamps it to what the selected model supports. Switching back to `disabled` takes effect on the next runtime start."
 				},
-				"pintra.autoCompact": {
+				"amulet.autoCompact": {
 					"type": "boolean",
 					"default": true,
 					"order": 4,
 					"markdownDescription": "Automatically compact context when the conversation grows large."
 				},
-				"pintra.autoRetry": {
+				"amulet.autoRetry": {
 					"type": "boolean",
 					"default": true,
 					"order": 5,
 					"markdownDescription": "Automatically retry on transient provider errors (rate limits, timeouts)."
 				},
-				"pintra.expandThinking": {
+				"amulet.expandThinking": {
 					"type": "boolean",
 					"default": false,
 					"order": 6,
 					"markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
 				},
-				"pintra.extraArgs": {
+				"amulet.extraArgs": {
 					"type": "array",
 					"items": {
 						"type": "string"
@@ -234,7 +234,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"vscode:prepublish": "node esbuild.mjs --production",
-		"vscode:install": "code --install-extension \"$(ls -t pi-vsc-*.vsix | head -1)\"",
+		"vscode:install": "code --install-extension \"$(ls -t amulet-*.vsix | head -1)\"",
 		"format": "npx prettier --write"
 	},
 	"devDependencies": {

@@ -10,13 +10,13 @@
   margin: 0 auto;
   /* `--chat-composer-h` is published by the composer (it floats over the log),
      so the reserved gap tracks the textarea as it grows instead of a fixed 160px. */
-  padding: calc(1px * var(--pintra-spacing-mult)) 2px
+  padding: calc(1px * var(--amulet-spacing-mult)) 2px
     calc(var(--chat-composer-h, 96px) + 4px);
   position: relative;
   transition:
     opacity 0.18s ease,
-    transform 0.22s var(--pintra-ease-out),
-    padding-bottom 0.26s var(--pintra-ease-out);
+    transform 0.22s var(--amulet-ease-out),
+    padding-bottom 0.26s var(--amulet-ease-out);
 }
 
 /* One turn = a user message + the reply that follows it. It scrolls as one block,
@@ -43,13 +43,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--pintra-space-xs);
+  gap: var(--amulet-space-xs);
 }
 
 .welcome-version {
   font-size: 0.7em;
   font-weight: 700;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   letter-spacing: 2px;
 }
 
@@ -61,13 +61,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--pintra-space-md);
-  width: calc(100% - 2 * var(--pintra-space-lg));
+  gap: var(--amulet-space-md);
+  width: calc(100% - 2 * var(--amulet-space-lg));
   max-width: 280px;
 }
 
 .welcome-glyph {
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   opacity: 0.75;
 }
 
@@ -75,29 +75,29 @@
   margin: 0;
   text-align: center;
   font-size: 0.94em;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 .notice-msg {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: var(--pintra-space-sm) var(--pintra-space-md);
-  margin: calc(var(--pintra-space-sm) * var(--pintra-spacing-mult)) 0;
+  padding: var(--amulet-space-sm) var(--amulet-space-md);
+  margin: calc(var(--amulet-space-sm) * var(--amulet-spacing-mult)) 0;
   font-size: 0.85em;
-  background: var(--pintra-info-bg);
-  color: var(--pintra-fg);
-  border-radius: var(--pintra-radius-sm);
+  background: var(--amulet-info-bg);
+  color: var(--amulet-fg);
+  border-radius: var(--amulet-radius-sm);
 }
 
 .notice-msg.compact-msg {
-  background: var(--pintra-surface-subtle);
-  border: 1px solid var(--pintra-border-subtle);
-  border-left: 2px solid var(--pintra-accent-line);
-  border-radius: var(--pintra-radius-sm);
-  margin: calc(4px * var(--pintra-spacing-mult)) 0;
+  background: var(--amulet-surface-subtle);
+  border: 1px solid var(--amulet-border-subtle);
+  border-left: 2px solid var(--amulet-accent-line);
+  border-radius: var(--amulet-radius-sm);
+  margin: calc(4px * var(--amulet-spacing-mult)) 0;
 }
 
 .notice-msg.compact-msg .pi-icon {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }

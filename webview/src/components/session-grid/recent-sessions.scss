@@ -6,13 +6,13 @@
   min-width: 0;
   font-size: 0.76rem;
   font-weight: 600;
-  color: color-mix(in srgb, var(--pintra-muted) 82%, var(--pintra-fg) 18%);
+  color: color-mix(in srgb, var(--amulet-muted) 82%, var(--amulet-fg) 18%);
   letter-spacing: 0.04em;
   text-transform: none;
   margin-bottom: 12px;
   padding: 0 4px 9px;
   border-bottom: 1px solid
-    color-mix(in srgb, var(--pintra-border-subtle) 76%, transparent);
+    color-mix(in srgb, var(--amulet-border-subtle) 76%, transparent);
   justify-content: space-between;
 }
 
@@ -30,7 +30,7 @@
   border: none;
   background: transparent;
   padding: 0;
-  color: var(--pintra-error);
+  color: var(--amulet-error);
   font: inherit;
   font-size: 0.76rem;
   font-weight: 600;
@@ -41,7 +41,7 @@
 
 .session-grid-delete-all:hover,
 .session-grid-delete-all:focus-visible {
-  color: color-mix(in srgb, var(--pintra-error) 82%, #000);
+  color: color-mix(in srgb, var(--amulet-error) 82%, #000);
   text-decoration: underline;
   outline: none;
 }
@@ -50,7 +50,7 @@
   height: 1px;
   flex: 1 1 auto;
   min-width: 20px;
-  background: color-mix(in srgb, var(--pintra-border-subtle) 76%, transparent);
+  background: color-mix(in srgb, var(--amulet-border-subtle) 76%, transparent);
 }
 
 /* Scrollable list container */
@@ -62,10 +62,10 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding: 6px;
-  border: 1px solid var(--pintra-border-subtle);
-  border-radius: var(--pintra-radius-lg);
-  background: var(--pintra-surface);
-  box-shadow: var(--pintra-shadow-md);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-lg);
+  background: var(--amulet-surface);
+  box-shadow: var(--amulet-shadow-md);
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease;
@@ -111,9 +111,9 @@ body[data-vscode-theme-kind*='high-contrast']
 
 /* Empty state */
 .session-grid-empty {
-  padding: 24px var(--pintra-space-lg);
+  padding: 24px var(--amulet-space-lg);
   text-align: center;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   font-size: 0.84em;
 }
 
@@ -167,7 +167,7 @@ body[data-vscode-theme-kind*='high-contrast']
   padding: 9px 12px 9px calc(12px + var(--session-branch-depth) * 22px);
   cursor: pointer;
   border: 1px solid rgba(0, 0, 0, 0);
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   background: #0000;
   box-sizing: border-box;
   transition:
@@ -187,28 +187,28 @@ body[data-vscode-theme-kind*='high-contrast']
 #home-panel .session-grid-row:hover {
   border-color: color-mix(
     in srgb,
-    var(--pintra-accent) 26%,
-    var(--pintra-border-subtle)
+    var(--amulet-accent) 26%,
+    var(--amulet-border-subtle)
   );
-  background: color-mix(in srgb, var(--pintra-surface-hover) 84%, transparent);
+  background: color-mix(in srgb, var(--amulet-surface-hover) 84%, transparent);
 }
 
 /* Row focus */
 #home-panel .session-grid-row:focus-visible {
-  outline: 1px solid var(--pintra-focus-ring);
+  outline: 1px solid var(--amulet-focus-ring);
   outline-offset: 1px;
-  border-color: color-mix(in srgb, var(--pintra-focus-ring) 48%, transparent);
-  background: color-mix(in srgb, var(--pintra-surface-hover) 70%, transparent);
+  border-color: color-mix(in srgb, var(--amulet-focus-ring) 48%, transparent);
+  background: color-mix(in srgb, var(--amulet-surface-hover) 70%, transparent);
 }
 
 /* Opening state */
 #home-panel .session-grid-row.is-opening {
   background: color-mix(
     in srgb,
-    var(--pintra-fg) 8%,
-    var(--pintra-surface-hover)
+    var(--amulet-fg) 8%,
+    var(--amulet-surface-hover)
   );
-  border-color: color-mix(in srgb, var(--pintra-border) 66%, transparent);
+  border-color: color-mix(in srgb, var(--amulet-border) 66%, transparent);
   cursor: wait;
   animation: session-load-glow 1.2s ease-in-out infinite;
 }
@@ -220,9 +220,9 @@ body[data-vscode-theme-kind*='high-contrast']
   top: 8px;
   bottom: 8px;
   width: 2px;
-  border-radius: var(--pintra-radius-pill);
-  background: var(--pintra-accent);
-  box-shadow: 0 0 8px var(--pintra-accent-glow);
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-accent);
+  box-shadow: 0 0 8px var(--amulet-accent-glow);
   animation: session-load-pulse 0.7s ease-in-out infinite;
 }
 
@@ -234,7 +234,7 @@ body[data-vscode-theme-kind*='high-contrast']
     100deg,
     transparent 0%,
     transparent 38%,
-    color-mix(in srgb, var(--pintra-fg) 12%, transparent) 50%,
+    color-mix(in srgb, var(--amulet-fg) 12%, transparent) 50%,
     transparent 62%,
     transparent 100%
   );
@@ -279,15 +279,15 @@ body[data-vscode-theme-kind*='high-contrast']
   to {
     background: color-mix(
       in srgb,
-      var(--pintra-fg) 6%,
-      var(--pintra-surface-hover)
+      var(--amulet-fg) 6%,
+      var(--amulet-surface-hover)
     );
   }
   50% {
     background: color-mix(
       in srgb,
-      var(--pintra-fg) 11%,
-      var(--pintra-surface-hover)
+      var(--amulet-fg) 11%,
+      var(--amulet-surface-hover)
     );
   }
 }
@@ -347,7 +347,7 @@ body[data-vscode-theme-kind*='high-contrast']
 #home-panel .session-grid-row-title {
   font-size: inherit;
   font-weight: 600;
-  color: color-mix(in srgb, var(--pintra-fg) 94%, var(--pintra-muted));
+  color: color-mix(in srgb, var(--amulet-fg) 94%, var(--amulet-muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -370,10 +370,10 @@ body[data-vscode-theme-kind*='high-contrast']
   min-width: 0;
   height: 24px;
   padding: 2px 6px;
-  border: 1px solid var(--pintra-input-border);
-  border-radius: var(--pintra-radius-sm);
-  background: var(--pintra-input-bg);
-  color: var(--pintra-fg);
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-fg);
   font: inherit;
   font-size: inherit;
   font-weight: 560;
@@ -386,11 +386,11 @@ body[data-vscode-theme-kind*='high-contrast']
 #home-panel .session-grid-rename-input:focus {
   border-color: color-mix(
     in srgb,
-    var(--pintra-focus-ring) 70%,
-    var(--pintra-input-border)
+    var(--amulet-focus-ring) 70%,
+    var(--amulet-input-border)
   );
   box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--pintra-focus-ring) 34%, transparent);
+    color-mix(in srgb, var(--amulet-focus-ring) 34%, transparent);
 }
 
 /* Action buttons (save, cancel, rename, open-editor, delete) */
@@ -405,9 +405,9 @@ body[data-vscode-theme-kind*='high-contrast']
   height: 24px;
   padding: 0;
   border: 1px solid rgba(0, 0, 0, 0);
-  border-radius: var(--pintra-radius-sm);
+  border-radius: var(--amulet-radius-sm);
   background: #0000;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -424,23 +424,23 @@ body[data-vscode-theme-kind*='high-contrast']
 #home-panel .session-grid-rename-save:focus-visible {
   border-color: color-mix(
     in srgb,
-    var(--pintra-success, #3fb950) 55%,
-    var(--pintra-input-border)
+    var(--amulet-success, #3fb950) 55%,
+    var(--amulet-input-border)
   );
   background: color-mix(
     in srgb,
-    var(--pintra-success, #3fb950) 12%,
-    var(--pintra-surface-hover)
+    var(--amulet-success, #3fb950) 12%,
+    var(--amulet-surface-hover)
   );
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 #home-panel .session-grid-rename-cancel:hover,
 #home-panel .session-grid-rename-cancel:focus-visible,
 .session-rename-btn:hover {
-  border-color: var(--pintra-input-border);
-  background: var(--pintra-surface-hover);
-  color: var(--pintra-fg);
+  border-color: var(--amulet-input-border);
+  background: var(--amulet-surface-hover);
+  color: var(--amulet-fg);
 }
 
 #home-panel .session-grid-rename-save:focus-visible,
@@ -448,7 +448,7 @@ body[data-vscode-theme-kind*='high-contrast']
 .session-rename-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--pintra-accent) 30%, transparent);
+    color-mix(in srgb, var(--amulet-accent) 30%, transparent);
 }
 
 #home-panel .session-grid-rename-save .pi-icon,
@@ -460,7 +460,7 @@ body[data-vscode-theme-kind*='high-contrast']
 
 /* Opening inline label */
 #home-panel .session-grid-row-loading {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 #home-panel .session-grid-opening {
@@ -517,22 +517,22 @@ body[data-vscode-theme-kind*='high-contrast']
 /* Open editor hover/focus */
 #home-panel .session-editor-btn:hover,
 #home-panel .session-editor-btn:focus-visible {
-  border-color: var(--pintra-input-border);
-  background: var(--pintra-surface-hover);
-  color: var(--pintra-fg);
+  border-color: var(--amulet-input-border);
+  background: var(--amulet-surface-hover);
+  color: var(--amulet-fg);
   outline: none;
 }
 
 /* Delete button hover/focus */
 #home-panel .session-del-btn:hover,
 #home-panel .session-del-btn:focus-visible {
-  border-color: color-mix(in srgb, var(--pintra-error) 45%, transparent);
+  border-color: color-mix(in srgb, var(--amulet-error) 45%, transparent);
   background: color-mix(
     in srgb,
-    var(--pintra-error) 12%,
-    var(--pintra-surface-hover)
+    var(--amulet-error) 12%,
+    var(--amulet-surface-hover)
   );
-  color: var(--pintra-error);
+  color: var(--amulet-error);
   outline: none;
 }
 
@@ -543,7 +543,7 @@ body[data-vscode-theme-kind*='high-contrast']
   gap: 6px;
   min-width: 0;
   font-size: 0.76rem;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -554,7 +554,7 @@ body[data-vscode-theme-kind*='high-contrast']
 
 #home-panel .session-grid-meta-time {
   margin-left: auto;
-  color: color-mix(in srgb, var(--pintra-fg-muted) 76%, transparent);
+  color: color-mix(in srgb, var(--amulet-fg-muted) 76%, transparent);
   font-size: 0.76rem;
   text-align: right;
 }
@@ -567,10 +567,10 @@ body[data-vscode-theme-kind*='high-contrast']
   width: fit-content;
   min-height: 18px;
   padding: 0 7px;
-  border: 1px solid var(--pintra-accent-line);
-  border-radius: var(--pintra-radius-pill);
-  background: var(--pintra-accent-faint);
-  color: var(--pintra-accent-strong);
+  border: 1px solid var(--amulet-accent-line);
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-accent-faint);
+  color: var(--amulet-accent-strong);
   font-size: 0.72rem;
   font-weight: 600;
   flex-shrink: 0;
@@ -603,8 +603,8 @@ body[data-vscode-theme-kind*='high-contrast']
 
 /* Empty session state */
 #home-panel .session-grid-empty-msg {
-  padding: var(--pintra-space-xl) var(--pintra-space-lg);
+  padding: var(--amulet-space-xl) var(--amulet-space-lg);
   text-align: center;
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   font-size: 0.9em;
 }

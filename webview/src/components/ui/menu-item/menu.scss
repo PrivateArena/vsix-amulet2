@@ -4,8 +4,8 @@
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: var(--pintra-radius);
-  color: var(--pintra-fg);
+  border-radius: var(--amulet-radius);
+  color: var(--amulet-fg);
   cursor: pointer;
   display: grid;
   font-family: inherit;
@@ -20,56 +20,56 @@
 }
 
 .menu-item:hover {
-  background: var(--pintra-list-hover-bg);
+  background: var(--amulet-list-hover-bg);
 }
 
 .menu-item:not(.disabled):active {
   background: color-mix(
     in srgb,
-    var(--pintra-list-hover-bg) 84%,
-    var(--pintra-list-selected-border) 16%
+    var(--amulet-list-hover-bg) 84%,
+    var(--amulet-list-selected-border) 16%
   );
 }
 
 .menu-item.menu-emphasized {
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 10%,
-    var(--pintra-surface-elevated)
+    var(--amulet-accent) 10%,
+    var(--amulet-surface-elevated)
   );
   box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--pintra-accent) 18%, var(--pintra-border-subtle));
+    color-mix(in srgb, var(--amulet-accent) 18%, var(--amulet-border-subtle));
 }
 
 .menu-item.menu-emphasized:hover {
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 14%,
-    var(--pintra-list-hover-bg)
+    var(--amulet-accent) 14%,
+    var(--amulet-list-hover-bg)
   );
 }
 
 .menu-item:focus-visible {
-  background: var(--pintra-list-hover-bg);
-  box-shadow: inset 0 0 0 1px var(--pintra-focus-ring);
+  background: var(--amulet-list-hover-bg);
+  box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
   outline: none;
 }
 
 .menu-item.menu-emphasized:focus-visible {
   background: color-mix(
     in srgb,
-    var(--pintra-accent) 14%,
-    var(--pintra-list-hover-bg)
+    var(--amulet-accent) 14%,
+    var(--amulet-list-hover-bg)
   );
   box-shadow:
     inset 0 0 0 1px
-      color-mix(in srgb, var(--pintra-accent) 24%, var(--pintra-border-subtle)),
-    inset 0 0 0 2px var(--pintra-focus-ring);
+      color-mix(in srgb, var(--amulet-accent) 24%, var(--amulet-border-subtle)),
+    inset 0 0 0 2px var(--amulet-focus-ring);
 }
 
 .menu-icon {
   box-shadow: none;
-  color: var(--pintra-secondary-fg);
+  color: var(--amulet-secondary-fg);
   display: inline-flex;
   height: 18px;
   justify-content: center;
@@ -83,7 +83,7 @@
 }
 
 .menu-item.menu-emphasized .menu-icon {
-  color: color-mix(in srgb, var(--pintra-accent) 72%, var(--pintra-fg));
+  color: color-mix(in srgb, var(--amulet-accent) 72%, var(--amulet-fg));
 }
 
 .menu-label {
@@ -95,7 +95,7 @@
 
 .menu-item.disabled,
 .menu-item:disabled {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
   cursor: default;
   opacity: 0.56;
 }
@@ -108,7 +108,7 @@
 
 .menu-item.disabled .menu-icon,
 .menu-item:disabled .menu-icon {
-  color: color-mix(in srgb, var(--pintra-muted) 80%, transparent);
+  color: color-mix(in srgb, var(--amulet-muted) 80%, transparent);
 }
 
 .menu-toggle {

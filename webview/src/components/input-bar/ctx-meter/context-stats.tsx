@@ -69,7 +69,7 @@ export function ContextMeter() {
               aria-hidden="true"
               style={
                 {
-                  '--ctx-color': `var(--pintra-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
+                  '--ctx-color': `var(--amulet-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
                 } as React.CSSProperties
               }>
               <circle className="ctx-meter-track" cx="8" cy="8" r={R} />

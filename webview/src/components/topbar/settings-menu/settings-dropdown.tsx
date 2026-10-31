@@ -17,7 +17,7 @@ import { useChatState } from '../../../contexts/chat-context';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
 
-const REPO_URL = 'https://github.com/bilalbentoumi/pi-vsc';
+const REPO_URL = 'https://github.com/gunir/vsix-amulet2';
 
 export function SettingsMenu() {
   const { session, expandThinking } = useChatState();

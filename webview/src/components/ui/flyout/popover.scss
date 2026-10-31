@@ -3,11 +3,11 @@
   position: fixed;
   box-sizing: border-box;
   overflow: hidden;
-  z-index: var(--pintra-z-dropdown);
-  background: var(--pintra-menu-bg);
-  border: 1px solid var(--pintra-menu-border);
-  border-radius: var(--pintra-radius);
-  box-shadow: var(--pintra-menu-shadow);
+  z-index: var(--amulet-z-dropdown);
+  background: var(--amulet-menu-bg);
+  border: 1px solid var(--amulet-menu-border);
+  border-radius: var(--amulet-radius);
+  box-shadow: var(--amulet-menu-shadow);
 }
 
 .flyout--animate {
@@ -41,7 +41,7 @@
 @keyframes flyout-enter {
   0% {
     opacity: 0;
-    transform: translateY(var(--pintra-popover-enter-y)) scale(0.985);
+    transform: translateY(var(--amulet-popover-enter-y)) scale(0.985);
   }
 
   to {

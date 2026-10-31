@@ -17,7 +17,7 @@
 
 .ctx-meter-track {
   fill: none;
-  stroke: color-mix(in srgb, var(--pintra-fg) 12%, transparent);
+  stroke: color-mix(in srgb, var(--amulet-fg) 12%, transparent);
   stroke-width: 2;
 }
 
@@ -25,7 +25,7 @@
   fill: none;
   stroke: var(
     --ctx-color,
-    color-mix(in srgb, var(--pintra-fg) 72%, transparent)
+    color-mix(in srgb, var(--amulet-fg) 72%, transparent)
   );
   stroke-width: 2;
   stroke-linecap: round;
@@ -42,12 +42,12 @@
 }
 
 .ctx-popup-row span {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 .ctx-popup-row strong {
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   white-space: nowrap;
 }
 
@@ -56,8 +56,8 @@
 .ctx-popup-actions {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid var(--pintra-hairline);
-  font-size: calc(var(--pintra-font-size) * 0.8);
+  border-top: 1px solid var(--amulet-hairline);
+  font-size: calc(var(--amulet-font-size) * 0.8);
 }
 
 .ctx-popup-actions .menu-item {

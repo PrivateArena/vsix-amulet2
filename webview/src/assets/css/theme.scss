@@ -24,8 +24,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--pintra-space-md);
-  padding: 0 var(--pintra-space-lg);
+  gap: var(--amulet-space-md);
+  padding: 0 var(--amulet-space-lg);
   box-sizing: border-box;
   pointer-events: none;
 }
@@ -34,11 +34,11 @@
 .screen-logo-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-size: 0.68rem;
   font-weight: 600;
   font-variation-settings: 'MONO' 1;
-  letter-spacing: var(--pintra-tracking-wide);
+  letter-spacing: var(--amulet-tracking-wide);
   text-transform: uppercase;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -46,7 +46,7 @@
 }
 
 .screen-logo-name {
-  color: color-mix(in srgb, var(--pintra-accent) 56%, var(--pintra-muted));
+  color: color-mix(in srgb, var(--amulet-accent) 56%, var(--amulet-muted));
 }
 
 /* Startup Screen */
@@ -89,7 +89,7 @@
 .ctx-popup-body {
   min-width: 200px;
   padding: 10px 12px;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   font-size: 0.82rem;
   line-height: 1.4;
 }
@@ -97,7 +97,7 @@
 .ctx-popup-title {
   font-size: 0.92em;
   font-weight: 600;
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   text-align: center;
   margin-bottom: 8px;
 }
@@ -119,7 +119,7 @@
   padding: 0.05rem 0.20rem 0.20rem;
 
   /* Scrim: dissolves the message list into the page background as it scrolls
-     under the floating composer. Built on the real --pintra-bg (not a black
+     under the floating composer. Built on the real --amulet-bg (not a black
      overlay) so it fades cleanly in every theme, and rendered as a pseudo so it
      can animate — a gradient set on `background` can't be transitioned. It
      reaches above the wrap for a longer, softer dissolve. */
@@ -133,12 +133,12 @@
     z-index: -1;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.3s var(--pintra-ease-out);
+    transition: opacity 0.3s var(--amulet-ease-out);
     background: linear-gradient(
       to top,
-      var(--pintra-bg) 0%,
-      color-mix(in srgb, var(--pintra-bg) 92%, transparent) 45%,
-      color-mix(in srgb, var(--pintra-bg) 55%, transparent) 74%,
+      var(--amulet-bg) 0%,
+      color-mix(in srgb, var(--amulet-bg) 92%, transparent) 45%,
+      color-mix(in srgb, var(--amulet-bg) 55%, transparent) 74%,
       transparent 100%
     );
   }

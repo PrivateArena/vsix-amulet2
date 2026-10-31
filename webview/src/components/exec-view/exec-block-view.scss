@@ -1,37 +1,37 @@
 .exec-block {
-  margin: calc(6px * var(--pintra-spacing-mult)) 0;
+  margin: calc(6px * var(--amulet-spacing-mult)) 0;
   border: 1px solid transparent;
-  border-radius: var(--pintra-radius);
+  border-radius: var(--amulet-radius);
   overflow: hidden;
   font-size: 0.93em;
   background: transparent;
   box-shadow: none;
   transition:
-    border-color var(--pintra-transition-fast) var(--pintra-ease-out),
-    background-color var(--pintra-transition-fast) var(--pintra-ease-out),
-    box-shadow var(--pintra-transition-fast) var(--pintra-ease-out);
+    border-color var(--amulet-transition-fast) var(--amulet-ease-out),
+    background-color var(--amulet-transition-fast) var(--amulet-ease-out),
+    box-shadow var(--amulet-transition-fast) var(--amulet-ease-out);
 }
 
 .exec-block[open] {
-  border-color: var(--pintra-block-border);
-  background-color: var(--pintra-tool-surface);
+  border-color: var(--amulet-block-border);
+  background-color: var(--amulet-tool-surface);
   box-shadow:
-    inset 2px 0 0 var(--pintra-accent-line),
-    var(--pintra-shadow-sm);
+    inset 2px 0 0 var(--amulet-accent-line),
+    var(--amulet-shadow-sm);
 }
 
 .exec-block.error[open] {
-  border-color: var(--pintra-error-border);
+  border-color: var(--amulet-error-border);
   box-shadow:
-    inset 2px 0 0 var(--pintra-error),
-    var(--pintra-shadow-sm);
+    inset 2px 0 0 var(--amulet-error),
+    var(--amulet-shadow-sm);
 }
 
 /* Joined stacking: collapse adjacent calls */
 .exec-block.exec-joined-prev {
   position: relative;
   isolation: isolate;
-  margin-top: calc(-8px * var(--pintra-spacing-mult));
+  margin-top: calc(-8px * var(--amulet-spacing-mult));
   border-top: none;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
@@ -69,8 +69,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
 
 /* Summary bar */
 .exec-header {
-  --pintra-tool-summary-control-height: 20px;
-  --pintra-tool-summary-label-size: 0.92rem;
+  --amulet-tool-summary-control-height: 20px;
+  --amulet-tool-summary-label-size: 0.92rem;
   background: transparent;
   box-shadow: none;
   padding: 8px 10px;
@@ -81,8 +81,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
   gap: 8px;
   text-align: left;
   user-select: none;
-  font-size: var(--pintra-tool-summary-label-size);
-  line-height: var(--pintra-line-body);
+  font-size: var(--amulet-tool-summary-label-size);
+  line-height: var(--amulet-line-body);
   white-space: nowrap;
   overflow: visible;
   list-style: none;
@@ -121,8 +121,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
 
 .exec-summary:focus-visible {
   outline: none;
-  border-radius: var(--pintra-radius-sm);
-  box-shadow: 0 0 0 3px var(--pintra-focus-halo);
+  border-radius: var(--amulet-radius-sm);
+  box-shadow: 0 0 0 3px var(--amulet-focus-halo);
 }
 
 .exec-header .exec-name,
@@ -134,30 +134,30 @@ body.spacing-compact .exec-block.exec-joined-prev {
 .exec-header .exec-edit-view {
   display: inline-flex;
   align-items: center;
-  min-height: var(--pintra-tool-summary-control-height);
-  font-size: var(--pintra-tool-summary-label-size);
-  line-height: var(--pintra-line-body);
+  min-height: var(--amulet-tool-summary-control-height);
+  font-size: var(--amulet-tool-summary-label-size);
+  line-height: var(--amulet-line-body);
   overflow: visible;
 }
 
 .exec-header .file-ref {
-  font-family: var(--pintra-font);
+  font-family: var(--amulet-font);
 }
 
 /* Summary hover when closed */
 .exec-block:not(.exec-noexpand):not(.pending):not([open]) > .exec-header:hover {
-  background: color-mix(in srgb, var(--pintra-surface-hover) 64%, transparent);
+  background: color-mix(in srgb, var(--amulet-surface-hover) 64%, transparent);
 }
 
 /* Summary background when open */
 .exec-block[open]:not(.is-collapsing) > .exec-header {
   background: color-mix(
     in srgb,
-    var(--pintra-tool-surface) 92%,
-    var(--pintra-surface-elevated)
+    var(--amulet-tool-surface) 92%,
+    var(--amulet-surface-elevated)
   );
   box-shadow: none;
-  border-bottom: 1px solid var(--pintra-block-divider);
+  border-bottom: 1px solid var(--amulet-block-divider);
 }
 
 .exec-header::-webkit-details-marker {
@@ -199,28 +199,28 @@ body.spacing-compact .exec-block.exec-joined-prev {
   z-index: 1;
   width: 15px;
   height: 15px;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
   opacity: 0.85;
   flex-shrink: 0;
   display: block;
 }
 
 .exec-block[open] .exec-type-icon {
-  color: var(--pintra-accent);
+  color: var(--amulet-accent);
   opacity: 1;
 }
 
 .exec-block.error .exec-type-icon,
 .exec-block.error[open] .exec-type-icon {
-  color: var(--pintra-error);
+  color: var(--amulet-error);
 }
 
 /* Tool name label */
 .exec-name {
   font-weight: 550;
-  color: var(--pintra-fg-muted);
+  color: var(--amulet-fg-muted);
   flex-shrink: 0;
-  letter-spacing: var(--pintra-tracking-tight);
+  letter-spacing: var(--amulet-tracking-tight);
 }
 
 /* Summary text (file path, argument, etc.) */
@@ -230,8 +230,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--pintra-fg);
-  font-family: var(--pintra-monospace);
+  color: var(--amulet-fg);
+  font-family: var(--amulet-monospace);
   font-variation-settings: 'MONO' 1;
 }
 
@@ -245,7 +245,7 @@ body.spacing-compact .exec-block.exec-joined-prev {
 }
 
 .exec-header .tool-duration {
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -263,16 +263,16 @@ body.spacing-compact .exec-block.exec-joined-prev {
   height: 20px;
   padding: 0;
   border: none;
-  border-radius: var(--pintra-radius-sm);
+  border-radius: var(--amulet-radius-sm);
   background: transparent;
-  color: var(--pintra-fg-faint);
+  color: var(--amulet-fg-faint);
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity var(--pintra-transition-fast) var(--pintra-ease-out),
-    color var(--pintra-transition-fast) var(--pintra-ease-out),
-    background-color var(--pintra-transition-fast) var(--pintra-ease-out);
+    opacity var(--amulet-transition-fast) var(--amulet-ease-out),
+    color var(--amulet-transition-fast) var(--amulet-ease-out),
+    background-color var(--amulet-transition-fast) var(--amulet-ease-out);
 }
 
 .exec-header:hover .exec-action,
@@ -292,18 +292,18 @@ body.animations-disabled .exec-action {
 }
 
 .exec-action:hover {
-  color: var(--pintra-fg);
-  background: var(--pintra-surface-hover);
+  color: var(--amulet-fg);
+  background: var(--amulet-surface-hover);
 }
 
 .exec-action:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--pintra-focus-halo);
+  box-shadow: 0 0 0 3px var(--amulet-focus-halo);
 }
 
 /* Copied stays lit after the pointer leaves, so the confirmation is readable. */
 .exec-header .exec-action.is-copied {
-  color: var(--pintra-success);
+  color: var(--amulet-success);
   opacity: 1;
   pointer-events: auto;
 }
@@ -314,12 +314,12 @@ body.animations-disabled .exec-action {
 }
 
 .exec-action-stop {
-  color: var(--pintra-error);
+  color: var(--amulet-error);
 }
 
 .exec-action-stop:hover {
-  color: var(--pintra-error);
-  background: color-mix(in srgb, var(--pintra-error) 16%, transparent);
+  color: var(--amulet-error);
+  background: color-mix(in srgb, var(--amulet-error) 16%, transparent);
 }
 
 /* Disclosure chevron */
@@ -330,14 +330,14 @@ body.animations-disabled .exec-action {
   /* The summary absorbs the free space, so the cluster and chevron sit at the edge. */
   margin-left: 0;
   flex-shrink: 0;
-  color: var(--pintra-fg-faint);
-  transition: color var(--pintra-transition-fast);
+  color: var(--amulet-fg-faint);
+  transition: color var(--amulet-transition-fast);
 }
 
 .exec-chevron svg {
   width: 14px;
   height: 14px;
-  transition: transform var(--pintra-transition-fast) var(--pintra-ease-out);
+  transition: transform var(--amulet-transition-fast) var(--amulet-ease-out);
 }
 
 .exec-block[open] .exec-chevron svg {
@@ -349,11 +349,11 @@ body.animations-disabled .exec-chevron svg {
 }
 
 .exec-header:hover .exec-chevron {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 .exec-block .exec-header {
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 /* Args and code resets */
@@ -375,9 +375,9 @@ body.animations-disabled .exec-chevron svg {
   display: inline-flex;
   align-items: center;
   align-self: center;
-  min-height: var(--pintra-tool-summary-control-height);
-  font-size: var(--pintra-tool-summary-label-size);
-  line-height: var(--pintra-line-body);
+  min-height: var(--amulet-tool-summary-control-height);
+  font-size: var(--amulet-tool-summary-label-size);
+  line-height: var(--amulet-line-body);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -395,16 +395,16 @@ body.animations-disabled .exec-chevron svg {
   padding: 0;
   border: 0;
   font: inherit;
-  line-height: var(--pintra-line-body);
+  line-height: var(--amulet-line-body);
 }
 
 .exec-bash .exec-args .exec-cmd {
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
   font-weight: 600;
 }
 
 .exec-bash .exec-args {
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .exec-output code {
@@ -416,7 +416,7 @@ body.animations-disabled .exec-chevron svg {
 
 /* Content area when open */
 .exec-block[open]:not(.is-collapsing) > .exec-content-wrap > .exec-content {
-  background: var(--pintra-tool-content-surface);
+  background: var(--amulet-tool-content-surface);
 }
 
 /* Content base */
@@ -457,7 +457,7 @@ body.animations-disabled .exec-chevron svg {
     .exec-write-stream
   )
   * {
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
 }
 
 .exec-has-image .exec-content {
@@ -469,8 +469,8 @@ body.animations-disabled .exec-chevron svg {
 .exec-block > .exec-content-wrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows var(--pintra-transition-slow)
-    var(--pintra-ease-out);
+  transition: grid-template-rows var(--amulet-transition-slow)
+    var(--amulet-ease-out);
 }
 
 .exec-block[open] > .exec-content-wrap {
@@ -493,7 +493,7 @@ body.animations-disabled .exec-block > .exec-content-wrap {
   overflow-y: auto;
   overscroll-behavior: contain;
   opacity: 0;
-  transition: opacity var(--pintra-transition-fast) var(--pintra-ease-out);
+  transition: opacity var(--amulet-transition-fast) var(--amulet-ease-out);
 }
 
 .exec-block[open] .exec-scroll {
@@ -521,7 +521,7 @@ body.animations-disabled .exec-scroll {
 .exec-block.exec-toggle-anim > .exec-content-wrap {
   display: block;
   overflow: hidden;
-  transition: height 0.24s var(--pintra-ease-out);
+  transition: height 0.24s var(--amulet-ease-out);
 }
 
 .exec-block.exec-toggle-anim > .exec-content-wrap > .exec-content {
@@ -565,7 +565,7 @@ body:not(.animations-disabled)
   margin: 0;
   padding: 10px 12px 12px;
   border-radius: 0;
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
   font-size: 0.9em;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -574,8 +574,8 @@ body:not(.animations-disabled)
 }
 
 .exec-bash-out {
-  font-family: var(--pintra-monospace);
-  color: var(--pintra-fg) !important;
+  font-family: var(--amulet-monospace);
+  color: var(--amulet-fg) !important;
 }
 
 /* ANSI styling */
@@ -584,28 +584,28 @@ body:not(.animations-disabled)
 }
 
 .exec-output .ansi-fg-default {
-  color: var(--pintra-fg);
+  color: var(--amulet-fg);
 }
 
 .exec-output .ansi-fg-dim,
 .exec-output .ansi-fg-muted {
-  color: var(--pintra-muted);
+  color: var(--amulet-muted);
 }
 
 .exec-output .ansi-fg-accent {
-  color: var(--pintra-accent);
+  color: var(--amulet-accent);
 }
 
 .exec-output .ansi-fg-warning {
-  color: var(--pintra-warning);
+  color: var(--amulet-warning);
 }
 
 .exec-output .ansi-fg-error {
-  color: var(--pintra-error);
+  color: var(--amulet-error);
 }
 
 .exec-output .ansi-fg-success {
-  color: var(--pintra-success);
+  color: var(--amulet-success);
 }
 
 /* State-specific summary overrides */
@@ -617,7 +617,7 @@ body:not(.animations-disabled)
 }
 
 .exec-block.error .exec-header {
-  background: var(--pintra-error-bg);
+  background: var(--amulet-error-bg);
 }
 
 /* Edit/write hover when closed */
@@ -625,7 +625,7 @@ body:not(.animations-disabled)
   > .exec-header:hover,
 .exec-block.exec-write:not(.exec-noexpand):not(.pending):not([open])
   > .exec-header:hover {
-  background: color-mix(in srgb, var(--pintra-surface-hover) 64%, transparent);
+  background: color-mix(in srgb, var(--amulet-surface-hover) 64%, transparent);
 }
 
 @keyframes exec-fade {

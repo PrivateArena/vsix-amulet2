@@ -220,7 +220,7 @@ export interface SessionState {
   model: ModelInfo | null;
   /**
    * Absent when nothing has been applied to the session: the runtime then uses the
-   * model/provider default, which is what `pintra.thinkingLevel: disabled` produces.
+   * model/provider default, which is what `amulet.thinkingLevel: disabled` produces.
    */
   thinkingLevel?: ThinkingLevel;
   isStreaming: boolean;
@@ -569,7 +569,7 @@ export type WebviewMessage =
   | { type: 'exportChat' }
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }
-  /** Persist the "Uncollapse thinking" preference (`pintra.expandThinking`). */
+  /** Persist the "Uncollapse thinking" preference (`amulet.expandThinking`). */
   | { type: 'setExpandThinking'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */

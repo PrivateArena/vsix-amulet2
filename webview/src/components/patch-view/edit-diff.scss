@@ -1,5 +1,5 @@
 .patch-container {
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
   font-size: 0.85em;
   line-height: 1.5;
   overflow-x: auto;
@@ -9,7 +9,7 @@
     'CASL' 0,
     'CRSV' 0;
   background: var(--vscode-editor-background, transparent);
-  color: var(--vscode-editor-foreground, var(--pintra-fg));
+  color: var(--vscode-editor-foreground, var(--amulet-fg));
 }
 /* per-line diff styling */
 .patch-line {
@@ -48,13 +48,13 @@
 .patch-stats {
   align-items: center;
   background: #80808014;
-  border-radius: var(--pintra-radius-sm);
-  color: var(--pintra-muted);
+  border-radius: var(--amulet-radius-sm);
+  color: var(--amulet-muted);
   column-gap: 8px;
   display: inline-flex;
-  font-family: var(--pintra-monospace);
+  font-family: var(--amulet-monospace);
   font-size: 0.82em;
-  margin-bottom: var(--pintra-space-xs);
+  margin-bottom: var(--amulet-space-xs);
   padding: 0.2em 0.55em;
   user-select: none;
 }

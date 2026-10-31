@@ -14,7 +14,7 @@ export interface PiConfig {
   extraArgs: string[];
 }
 
-const SECTION = 'pintra';
+const SECTION = 'amulet';
 
 export function readConfig(): PiConfig {
   const cfg = vscode.workspace.getConfiguration(SECTION);

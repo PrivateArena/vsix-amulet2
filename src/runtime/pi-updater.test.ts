@@ -19,7 +19,7 @@ const config = (binaryPath: string): PiConfig => ({
 
 /** Absolute path to an executable stub standing in for the global `pi`. */
 function fakePi(body: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pintra-updater-'));
+  const dir = mkdtempSync(join(tmpdir(), 'amulet-updater-'));
   const file = join(dir, 'pi');
   writeFileSync(file, `#!/bin/sh\n${body}\n`);
   chmodSync(file, 0o755);
