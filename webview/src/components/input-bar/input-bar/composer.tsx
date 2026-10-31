@@ -183,20 +183,6 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
       // First, let the slash command handler try to consume the event
       if (slash.onKeyDown(e)) return;
 
-      // @ key triggers file picker when at the start of input or after a space.
-      if (e.key === '@') {
-        const textarea = localRef.current;
-        if (textarea) {
-          const pos = textarea.selectionStart;
-          const before = input.slice(0, pos);
-          if (before.length === 0 || before.endsWith(' ')) {
-            e.preventDefault();
-            actions.pickFiles();
-            return;
-          }
-        }
-      }
-
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         submit();
@@ -313,7 +299,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               variant="ghost"
               icon={LuPaperclip}
               label="Attach files"
-              tooltip="Attach files (@)"
+              tooltip="Attach files"
               onClick={() => actions.pickFiles()}
             />
             <ContextMeter />
