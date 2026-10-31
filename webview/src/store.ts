@@ -270,7 +270,14 @@ export function reducer(state: ChatState, action: Action): ChatState {
   const message = action.message;
   switch (message.type) {
     case 'runtimeStatus':
-      return { ...state, status: message.status };
+      return {
+        ...state,
+        status: message.status,
+        // A dialog can only be answered by the child process that asked. Once the runtime is gone
+        // (crash, restart, error) its pending questions are dead — keeping them up would leave a modal
+        // overlay the human can answer forever without anything on the other end.
+        pendingUi: message.status.phase === 'ready' ? state.pendingUi : [],
+      };
     case 'models':
       return { ...state, models: message.models };
     case 'config':

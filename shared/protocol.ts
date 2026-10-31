@@ -392,10 +392,7 @@ export interface ExtensionUiRequest {
   type: 'extension_ui_request';
   id: string;
   method:
-    | 'select'
-    | 'confirm'
-    | 'input'
-    | 'editor'
+    | ExtensionUiModalMethod
     | 'notify'
     | 'setStatus'
     | 'setWidget'
@@ -411,6 +408,20 @@ export interface ExtensionUiResponse {
   value?: unknown;
   confirmed?: boolean;
 }
+
+/** The methods that await a reply (the others are fire-and-forget notifications/status updates). */
+export type ExtensionUiModalMethod = 'confirm' | 'select' | 'input' | 'editor';
+
+/**
+ * pi blocks the tool call until it gets an `extension_ui_response` for these, so a request must be
+ * routed to exactly one surface — see `hasVisibleUiSurface`/`claimUiRequest` on the host.
+ */
+export const MODAL_UI_METHODS: readonly ExtensionUiModalMethod[] = [
+  'confirm',
+  'select',
+  'input',
+  'editor',
+];
 
 // ============================================================================
 // Session browsing / stats / commands / forking

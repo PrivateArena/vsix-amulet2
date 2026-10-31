@@ -359,6 +359,59 @@ describe('reducer — local UI actions', () => {
     expect(cleared.pendingUi).toHaveLength(0);
   });
 
+  it('queues extension-UI requests in arrival order (pi-gate asks follow-ups per stage)', () => {
+    let state = reducer(
+      initialState,
+      host({
+        type: 'extensionUiRequest',
+        request: { type: 'extension_ui_request', id: 'q1', method: 'select' },
+      }),
+    );
+    state = reducer(
+      state,
+      host({
+        type: 'extensionUiRequest',
+        request: { type: 'extension_ui_request', id: 'q2', method: 'input' },
+      }),
+    );
+    // The prompt renders pendingUi[0]; dismissing it must reveal the next question, not drop it.
+    expect(state.pendingUi.map((u) => u.id)).toEqual(['q1', 'q2']);
+    state = reducer(state, { type: 'dismissUi', id: 'q1' });
+    expect(state.pendingUi.map((u) => u.id)).toEqual(['q2']);
+  });
+
+  it('drops pending extension-UI dialogs when the runtime goes away', () => {
+    const withUi = reducer(
+      initialState,
+      host({
+        type: 'runtimeStatus',
+        status: { phase: 'ready' },
+      }),
+    );
+    const open = reducer(
+      withUi,
+      host({
+        type: 'extensionUiRequest',
+        request: { type: 'extension_ui_request', id: 'd1', method: 'select' },
+      }),
+    );
+    expect(open.pendingUi).toHaveLength(1);
+    // A restart or crash kills the child that asked, so nobody can answer it any more.
+    for (const phase of ['starting', 'stopped', 'error'] as const) {
+      const next = reducer(
+        open,
+        host({ type: 'runtimeStatus', status: { phase } }),
+      );
+      expect(next.pendingUi).toEqual([]);
+    }
+    // `ready` keeps questions that are still live on the current child.
+    const alive = reducer(
+      open,
+      host({ type: 'runtimeStatus', status: { phase: 'ready' } }),
+    );
+    expect(alive.pendingUi).toHaveLength(1);
+  });
+
   it('sets, adds, and clears pending attachments', () => {
     const set = reducer(initialState, {
       type: 'setPendingAttachments',

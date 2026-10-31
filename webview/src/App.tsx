@@ -1,6 +1,7 @@
 import { Shell } from './app-shell';
 import { Modal } from './components/ui/modal';
 import { AuthDialog } from './components/ui/auth-dialog';
+import { PermissionPrompt } from './components/ui/permission-prompt';
 import { ChatCtx } from './contexts/chat-context';
 
 import './assets/css/styles.scss';
@@ -12,6 +13,7 @@ export function App() {
       <Shell />
       <Modal />
       <AuthDialog />
+      <PermissionPrompt />
     </ChatCtx>
   );
 }

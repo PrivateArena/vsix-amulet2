@@ -30,8 +30,12 @@ import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
 import { listSessions, sessionsDirForCwd } from '../session/session-store';
 import { handleExtensionUiRequest } from './extension-ui';
-
-const MODAL_UI_METHODS = new Set(['confirm', 'select', 'input', 'editor']);
+import {
+  claimUiRequest,
+  releaseUiRequest,
+  routeUiRequest,
+} from './ui-request-routing';
+import { hasVisibleUiSurface, registerUiSurface } from './ui-surfaces';
 
 /** Ceiling for the post-update runtime reload, so its result toast always shows. */
 const PI_RELOAD_TIMEOUT_MS = 30_000;
@@ -68,13 +72,19 @@ export class ChatBridge implements vscode.Disposable {
   private piUpdateInFlight = false;
   /** extension_ui_request ids we've handed to the webview and are awaiting a reply for. */
   private readonly forwardedUi = new Set<string>();
+  /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
+  private readonly unregisterSurface: () => void;
 
   constructor(
     private readonly sessions: SessionManager,
     private readonly log: Logger,
     private readonly post: (message: HostMessage) => void,
     private readonly options: ChatBridgeOptions,
-  ) {}
+  ) {
+    // Field initializers run before parameter properties are assigned under ES2022 class fields,
+    // so the registration that reads `this.options` has to happen here.
+    this.unregisterSurface = registerUiSurface(() => this.options.isVisible());
+  }
 
   async connect(): Promise<void> {
     this.detach();
@@ -398,6 +408,7 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'extensionUiResponse':
           this.forwardedUi.delete(message.response.id);
+          releaseUiRequest(message.response.id);
           runtime?.respondToExtensionUi(message.response);
           return;
       }
@@ -1050,13 +1061,26 @@ export class ChatBridge implements vscode.Disposable {
 
   // --- Extension UI dialogs ------------------------------------------------
 
+  /**
+   * Route one `extension_ui_request` to the human: the in-chat dialog while a surface can show it,
+   * a native VS Code dialog otherwise. See {@link ui-request-routing} for why a request may only be
+   * answered once, by whoever owns it.
+   */
   private async onUiRequest(req: ExtensionUiRequest): Promise<void> {
-    if (MODAL_UI_METHODS.has(req.method) && this.options.isVisible()) {
+    const route = routeUiRequest(req.method, {
+      selfVisible: this.options.isVisible(),
+      anyVisible: hasVisibleUiSurface(),
+    });
+    if (route === 'skip') return;
+    if (!claimUiRequest(req.id, route)) return;
+
+    if (route === 'webview') {
       this.forwardedUi.add(req.id);
       this.post({ type: 'extensionUiRequest', request: req });
       return;
     }
     const response = await handleExtensionUiRequest(req, this.log);
+    releaseUiRequest(req.id);
     if (response && !this.disposed) {
       this.runtime?.respondToExtensionUi(response);
     }
@@ -1071,6 +1095,7 @@ export class ChatBridge implements vscode.Disposable {
     this.disposed = true;
     // Answer any dialogs still open in the (now gone) webview so pi doesn't hang.
     for (const id of this.forwardedUi) {
+      releaseUiRequest(id);
       this.runtime?.respondToExtensionUi({
         type: 'extension_ui_response',
         id,
@@ -1078,6 +1103,7 @@ export class ChatBridge implements vscode.Disposable {
       });
     }
     this.forwardedUi.clear();
+    this.unregisterSurface();
     this.detach();
     this.runtime = null;
   }

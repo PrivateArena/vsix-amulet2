@@ -28,7 +28,7 @@ Fork **Pintra** (`bilalbentoumi/pi-vsc`). Chosen empirically, by running all can
 
 ## Status
 
-Build is green from a clean tree: `pnpm typecheck`, `pnpm build`, `pnpm test` (22 tests), `pnpm package`
+Build is green from a clean tree: `pnpm typecheck`, `pnpm build`, `pnpm test` (103 tests), `pnpm package`
 → `amulet-1.0.15.vsix`. Requires **pnpm 10**. Full provenance, drift analysis and the next-session task
 list: **`docs/pintra-fork.md`** — read that first.
 

@@ -56,7 +56,12 @@ export function Shell() {
     return off;
   }, []);
 
-  useEscapeKey(() => actions.abort(), state.streaming);
+  // While an extension dialog is open, Escape answers that question (deny) — it must not also abort the
+  // whole run underneath it, which is what the old unconditional binding did.
+  useEscapeKey(
+    () => actions.abort(),
+    state.streaming && state.pendingUi.length === 0,
+  );
 
   // Stay on the splash until the runtime is actually up. The runtime reports
   // `stopped` before `start()` runs (its initial status), so treating anything

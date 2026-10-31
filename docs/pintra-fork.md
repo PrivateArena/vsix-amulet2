@@ -255,3 +255,39 @@ will need. Two rules keep it honest and live:
 right after a compaction), so the meter derives `percent` from `tokens / contextWindow` itself, ignores
 pi's `percent`, and renders nothing when the window is unknown. Switching models changes the window,
 hence `setModel`/`cycleModel` re-push stats.
+
+## Extension-UI contract (pi 1.4.0) — pi-gate approvals in chat
+
+pi extensions ask the human things (`pi-gate`'s tool approval is the one that matters here) through
+`ctx.ui.*`. In RPC mode those calls become a round-trip on stdio, verified in
+`@earendil-works/pi-coding-agent/dist/modes/rpc/rpc-mode.js`:
+
+- Child → host: `{ type: "extension_ui_request", id, method, … }` where `method` is `select`
+  (`options: string[]`), `confirm` (`message`), `input` (`placeholder`), `editor` (`prefill`) — these four
+  **await an answer** — plus fire-and-forget `notify` / `setStatus` / `setTitle` / `setWidget` /
+  `set_editor_text` (`rpc-mode.js:77-191`).
+- Host → child: `{ type: "extension_ui_response", id, … }`, correlated by `id` (`rpc-mode.js:613-622`).
+  `select`/`input`/`editor` read `value`, `confirm` reads `confirmed`, and **`cancelled: true` (or no reply
+  at all) resolves to `undefined`** — pi-gate maps that to a deny, so an unanswered dialog never grants
+  (`buildUiResponse` in `webview/src/components/ui/permission-prompt/ui-response.ts` pins these shapes).
+
+While a dialog is unanswered pi parks the `tool_call`, which is why the whole path must be a closed loop:
+the old build forwarded `select` to the webview, stored it in `pendingUi`, and rendered nothing — the run
+hung until the panel was closed, whereupon the cleanup reply cancelled the call. Three pieces keep it
+closed:
+
+- **`PermissionPrompt`** (`webview/src/components/ui/permission-prompt/`) renders `pendingUi[0]` and answers
+  exactly once; Escape means `cancelled` (deny), never an implicit allow. Mounted in `App.tsx` next to the
+  confirm modal, and `Shell`'s Esc-to-abort is suppressed while a dialog is open so Esc answers the question
+  instead of killing the run.
+- **One owner per request** (`src/webview/ui-request-routing.ts`): every live `ChatBridge` subscribes to the
+  same runtime, so each `extension_ui_request` reaches all of them and pi takes the first reply.
+  `routeUiRequest` picks `webview` (this surface visible) / `skip` (another surface is on screen) / `native`
+  (nothing visible), and `claimUiRequest` makes that decision survive the race between listeners.
+- **Surface registry** (`src/webview/ui-surfaces.ts`): each bridge registers a visibility probe, so a hidden
+  sidebar can no longer answer natively while a visible editor panel should have shown the dialog.
+  `hasVisibleUiSurface()` is a probe call, not a cached flag, because VS Code flips `WebviewView.visible`
+  without notifying anyone.
+
+The reducer also clears `pendingUi` on any `runtimeStatus` other than `ready`: the child that asked is gone,
+so the question can no longer be answered and a modal overlay would be permanent.
