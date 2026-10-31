@@ -3,6 +3,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
+  PromptStreamingBehavior,
   RpcCommand,
   RpcEvent,
   RpcResponse,
@@ -150,8 +151,12 @@ export class RpcClient {
   // raw `send()`/`call()` directly only when a caller genuinely needs the full
   // response envelope.
 
-  async prompt(message: string, images?: unknown[]): Promise<void> {
-    await this.call({ type: 'prompt', message, images });
+  async prompt(
+    message: string,
+    images?: unknown[],
+    streamingBehavior?: PromptStreamingBehavior,
+  ): Promise<void> {
+    await this.call({ type: 'prompt', message, images, streamingBehavior });
   }
   async steer(message: string, images?: unknown[]): Promise<void> {
     await this.call({ type: 'steer', message, images });

@@ -17,10 +17,14 @@ export const actions = {
   ready: () => postMessage({ type: 'ready' }),
 
   // conversation
-  sendMessage: (text: string, attachments?: Attachment[]) =>
-    postMessage({ type: 'sendMessage', text, attachments }),
+  sendMessage: (
+    text: string,
+    attachments?: Attachment[],
+    followUps?: string[],
+  ) => postMessage({ type: 'sendMessage', text, attachments, followUps }),
   pickFiles: () => postMessage({ type: 'pickFiles' }),
-  steer: (text: string) => postMessage({ type: 'steer', text }),
+  steer: (text: string, followUps?: string[]) =>
+    postMessage({ type: 'steer', text, followUps }),
   abort: () => postMessage({ type: 'abort' }),
   compact: () => postMessage({ type: 'compact' }),
   editAndFork: (entryId: string, text: string) =>

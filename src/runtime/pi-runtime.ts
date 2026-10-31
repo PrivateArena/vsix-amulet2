@@ -10,6 +10,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
+  PromptStreamingBehavior,
   RpcEvent,
   RuntimeStatus,
   SessionState,
@@ -240,8 +241,16 @@ export class PiRuntime {
     return this.client;
   }
 
-  prompt(message: string, images?: unknown[]): Promise<unknown> {
-    return this.requireClient().prompt(message, images);
+  /**
+   * Send a prompt. `streamingBehavior` decides what pi does when a run is
+   * already in flight (`queued` disposition) — it is ignored while idle.
+   */
+  prompt(
+    message: string,
+    images?: unknown[],
+    streamingBehavior?: PromptStreamingBehavior,
+  ): Promise<unknown> {
+    return this.requireClient().prompt(message, images, streamingBehavior);
   }
   steer(message: string): Promise<unknown> {
     return this.requireClient().steer(message);

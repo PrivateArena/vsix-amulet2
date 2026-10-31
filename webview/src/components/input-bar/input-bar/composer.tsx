@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -11,9 +12,11 @@ import type { Attachment } from '../../../../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../../../../shared/constants';
 import { actions } from '../../../apis/actions';
 import { useChatDispatch, useChatState } from '../../../contexts/chat-context';
+import type { SlashTokenRange } from '../../../hooks/use-slash-commands';
 import { useSlashCommands } from '../../../hooks/use-slash-commands';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
+import { splitPromptChain } from '../../../utils/prompt-chain';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
@@ -99,11 +102,27 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     const ready = status.phase === 'ready';
 
     const [input, setInput] = useState('');
+    /** Live caret offset — the menu completes only the token under the caret. */
+    const [caret, setCaret] = useState(0);
     const localRef = useRef<HTMLTextAreaElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    /** Caret offset to restore after the next render (slash insertion). */
+    const pendingCaret = useRef<number | null>(null);
 
     useAutoGrow(localRef, input);
     usePublishComposerHeight(rootRef);
+
+    // Re-apply the caret after a command was inserted — React only restores the
+    // selection when the value changed as a side effect of typing.
+    useLayoutEffect(() => {
+      const pos = pendingCaret.current;
+      if (pos === null) return;
+      pendingCaret.current = null;
+      const textarea = localRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(pos, pos);
+    }, [input]);
 
     const setRefs = (el: HTMLTextAreaElement | null) => {
       localRef.current = el;
@@ -113,51 +132,82 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
           el;
     };
 
-    const submit = (text?: string) => {
-      const message = (text ?? input).trim();
+    /**
+     * Commands the runtime expands from message text — prompt templates and
+     * skills. Extension commands are excluded: they execute immediately and
+     * cannot be queued as a follow-up.
+     */
+    const chainableNames = useMemo(() => {
+      const names = new Set<string>();
+      for (const cmd of commands) {
+        if (cmd.source === 'extension') continue;
+        names.add(cmd.name.replace(/^\/+/, ''));
+      }
+      return names;
+    }, [commands]);
+
+    const submit = () => {
+      const message = input.trim();
       if (!message && pendingAttachments.length === 0) return;
+      // One `/command` per prompt: the runtime expands only the leading command,
+      // so a chained entry is split and the tail queues behind the first run.
+      const parts = splitPromptChain(message, (name) =>
+        chainableNames.has(name),
+      );
+      const followUps = parts.length > 1 ? parts.slice(1) : undefined;
+      const text = parts[0] ?? message;
       if (streaming) {
-        actions.steer(message);
+        actions.steer(text, followUps);
       } else {
         // Leave the attachments in `pendingAttachments`: the store links them to
         // the user message's uid when its `message_start` event arrives, which is
         // what lets the bubble render them.
         actions.sendMessage(
-          message,
+          text,
           pendingAttachments.length > 0 ? pendingAttachments : undefined,
+          followUps,
         );
       }
       setInput('');
     };
 
-    const handleSlashSelect = useCallback(
-      (command: SlashCommand) => {
-        // Handle built-in commands that trigger actions
-        switch (command.clean) {
-          case 'clear':
-            actions.newChat();
-            setInput('');
-            break;
-          case 'compact':
-            actions.compact();
-            setInput('');
-            break;
-          case 'login':
-            openProviderLogin();
-            setInput('');
-            break;
-          default:
-            // For runtime commands, send as text
-            submit(`/${command.clean}`);
-        }
-      },
-      [streaming, input],
-    );
+    /**
+     * Drop the in-progress `/token` and put the invocation in its place, leaving
+     * the caret after `/name ` so arguments — or another `/command` — can follow.
+     * Only the commands this UI executes itself skip the composer entirely, and
+     * even those lose just their own token: the rest of the draft survives.
+     */
+    const applySlashCommand = (
+      command: SlashCommand,
+      token: SlashTokenRange,
+    ) => {
+      const restOfDraft = () =>
+        (input.slice(0, token.start) + input.slice(token.end)).trim();
+      switch (command.clean) {
+        case 'clear':
+          actions.newChat();
+          setInput(restOfDraft());
+          return;
+        case 'compact':
+          actions.compact();
+          setInput(restOfDraft());
+          return;
+        case 'login':
+          openProviderLogin();
+          setInput(restOfDraft());
+          return;
+      }
+      const inserted = `/${command.clean} `;
+      pendingCaret.current = token.start + inserted.length;
+      setCaret(pendingCaret.current);
+      setInput(input.slice(0, token.start) + inserted + input.slice(token.end));
+    };
 
     const slash = useSlashCommands({
       commands,
       value: input,
-      onSelect: handleSlashSelect,
+      caret,
+      onSelect: applySlashCommand,
     });
 
     // Request commands from the host on mount
@@ -277,7 +327,15 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             rows={1}
             disabled={!ready}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setCaret(e.target.selectionStart);
+            }}
+            // A caret move without a value change never re-renders the textarea,
+            // so the menu must observe it to know which token it completes.
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+            onClick={(e) => setCaret(e.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
           />
@@ -287,7 +345,9 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               query={slash.query}
               focused={slash.focused}
               onHover={slash.onHover}
-              onSelect={handleSlashSelect}
+              onSelect={(command) => {
+                if (slash.token) applySlashCommand(command, slash.token);
+              }}
               textareaRef={localRef}
             />
           )}

@@ -32,8 +32,16 @@ interface UseSlashCommandsOptions {
   commands: CommandInfo[];
   /** Current textarea value. */
   value: string;
-  /** Called when a slash command is selected (after the menu handles it). */
-  onSelect: (command: SlashCommand, fullCommand: string) => void;
+  /** Called when a slash command is selected, with the range it should replace. */
+  onSelect: (command: SlashCommand, token: SlashTokenRange) => void;
+  /** Caret offset in `value`; the menu only tracks a token at the caret. */
+  caret?: number;
+}
+
+/** Range of the in-progress `/token` inside the textarea value. */
+export interface SlashTokenRange {
+  start: number;
+  end: number;
 }
 
 interface UseSlashCommandsReturn {
@@ -49,6 +57,8 @@ interface UseSlashCommandsReturn {
   onHover: (index: number) => void;
   /** The query string (text after `/`). */
   query: string;
+  /** Range of the in-progress `/token`, for callers that insert instead of send. */
+  token: SlashTokenRange | null;
 }
 
 /**
@@ -63,6 +73,7 @@ export function useSlashCommands({
   commands,
   value,
   onSelect,
+  caret,
 }: UseSlashCommandsOptions): UseSlashCommandsReturn {
   // Detect slash command: the value ends with `/something`
   const match = useMemo(() => {
@@ -70,7 +81,10 @@ export function useSlashCommands({
     const re = /(?:^|\s)\/([^\s/]*)$/;
     const m = value.match(re);
     if (!m) return null;
-    return { fullMatch: m[0].trimStart(), query: m[1] };
+    // The token itself runs from its slash to the end of the value; the leading
+    // whitespace the regex matched is not part of it.
+    const query = m[1];
+    return { query, start: value.length - query.length - 1, end: value.length };
   }, [value]);
 
   const query = match?.query ?? '';
@@ -85,7 +99,10 @@ export function useSlashCommands({
     );
     return [...commands, ...extras];
   }, [commands]);
-  const visible = match !== null;
+  // A caret moved back into the text means the trailing token is not what the
+  // user is completing, so the menu would insert in the wrong place.
+  const atCaret = caret === undefined || caret >= value.length;
+  const visible = match !== null && atCaret;
 
   // Filter and enrich commands
   const items = useMemo<SlashCommand[]>(() => {
@@ -113,9 +130,7 @@ export function useSlashCommands({
   const selectItem = useCallback(
     (item: SlashCommand) => {
       if (!match) return;
-      // Build the full command text to insert (e.g. "/compact")
-      const fullCommand = `/${item.clean}`;
-      onSelect(item, fullCommand);
+      onSelect(item, { start: match.start, end: match.end });
     },
     [match, onSelect],
   );
@@ -157,5 +172,6 @@ export function useSlashCommands({
     onKeyDown,
     onHover: setFocused,
     query,
+    token: visible && match ? { start: match.start, end: match.end } : null,
   };
 }

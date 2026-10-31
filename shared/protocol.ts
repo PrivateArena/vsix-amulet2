@@ -153,12 +153,15 @@ export interface ModelInfo {
 // pi RPC — commands (host -> pi)
 // ============================================================================
 
+/** Queueing behaviour for `prompt` when the agent is already running. */
+export type PromptStreamingBehavior = 'steer' | 'followUp';
+
 export type RpcCommand =
   | {
       type: 'prompt';
       message: string;
       images?: unknown[];
-      streamingBehavior?: unknown;
+      streamingBehavior?: PromptStreamingBehavior;
     }
   | { type: 'steer'; message: string; images?: unknown[] }
   | { type: 'follow_up'; message: string; images?: unknown[] }
@@ -549,8 +552,18 @@ export interface RuntimeStatus {
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
   | { type: 'ready' }
-  | { type: 'sendMessage'; text: string; attachments?: Attachment[] }
-  | { type: 'steer'; text: string }
+  /**
+   * `followUps` carries the tail of a chained slash-prompt message (see
+   * `splitPromptChain`): the host sends `text` first, then each follow-up as its
+   * own prompt so the pi runtime expands one `/command` per message.
+   */
+  | {
+      type: 'sendMessage';
+      text: string;
+      attachments?: Attachment[];
+      followUps?: string[];
+    }
+  | { type: 'steer'; text: string; followUps?: string[] }
   | { type: 'abort' }
   | { type: 'newChat' }
   | { type: 'setModel'; provider: string; modelId: string }

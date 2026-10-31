@@ -23,7 +23,8 @@ interface SlashCommandMenuProps {
 /**
  * The floating command palette shown above the composer while a `/token` is
  * being typed. Purely presentational — navigation lives in `useSlashCommands`.
- * Renders nothing when there are no matches so the composer can ignore it.
+ * A pick hands the command back to `onSelect`, which inserts it so arguments and
+ * further `/commands` can be typed before the message is sent.
  *
  * Uses a portal + fixed positioning to escape overflow:hidden containers.
  * Positions itself above the composer using `bottom` to avoid overlaps.
@@ -126,7 +127,7 @@ export function CommandMenu({
           <kbd className="cmd-kbd">
             <LuCornerDownLeft size={11} />
           </kbd>
-          Select
+          Insert
         </span>
         <span className="cmd-hint cmd-hint-end">
           <kbd className="cmd-kbd">Esc</kbd>

@@ -54,7 +54,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/exec-view/tool-display.ts | Shared display mapping so child rows and parent header match | 258 | `toolPreview(name: string, args: unknown): string`, `toolDuration(tool?: ToolExec, now: number, preferredMs?: string)`, `tipHead/tipTail(text, maxLines, maxChars)`, `childCalls(tool?, tools?): ToolExec[]` |
 | components/exec-view/subagent-calls/subagent-details.ts | Sole reader of the subagent payload (`args.task`/`prompt`/…, `details`) | 163 | `resolveSubagentCard(name: string, details: unknown, args: unknown): SubagentDetailsView \| null`, `subagentPrompt(args, details?): string` |
 | components/exec-view/subagent-calls/subagent-calls.tsx | Nested call list + report inside the parent card | 227 | `SubagentCalls({ calls, tools, details, report, status, complete })` |
-| components/input-bar/input-bar/composer.tsx | Textarea, slash commands, attachments, submit/steer | 338 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
+| components/input-bar/input-bar/composer.tsx | Textarea, slash-command insertion + chaining, attachments, submit/steer | 398 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
 | components/input-bar/ctx-meter/context-usage.ts | Intra-turn token estimate from streaming `usage` | 72 | `contextUsageOf(stats: SessionStats \| null, messages: UiMessage[]): ContextUsageView \| null`, `contextTokensOf(usage?: Usage): number \| null` |
 | components/input-bar/ctx-meter/context-stats.tsx | Ring + tooltip rendering of that figure | ~120 | Props: none; Hooks: `useChatState` |
@@ -66,6 +66,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/ui/flyout/popover.tsx | Inline hover surface (no portal) with clamping + line budget | 368 | `Flyout`/`Popover` components |
 | components/ui/session-info-dialog/session-info.ts | `SessionStats` -> display rows, NaN-safe | 166 | `modelLabel(session: SessionState \| null): string \| null`, `SessionInfoView` |
 | webview/src/utils/find-query.ts | Case/regex query compile + match collection | ~110 | `compileFindQuery(query: string, options?: FindOptions): { pattern: RegExp \| null; error?: string }`, `findMatches(haystack, query, options?): FindHits` |
+| webview/src/utils/prompt-chain.ts | Split one composer entry into chained `/commands` (pi expands only the leading one) | 68 | `splitPromptChain(text: string, isCommand: (name: string) => boolean): string[]` |
 | webview/src/hooks/use-stick-to-bottom.ts | Follow-newest while reading nested output, hand back on scroll-up | ~102 | `useStickToBottom<T extends HTMLElement>(revision: unknown, active = true): StickToBottom<T>` |
 | webview/src/stores/composer-store.ts | Imperative composer API (insert/focus/attachments) | 62 | `useComposerStore`, `type ComposerOp = (api: ComposerApi) => void` |
 
@@ -113,7 +114,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | Add a message/tool render style | `components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`, `exec-view/tool-display.ts`, matching `.scss` |
 | Add a host message type | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer |
 | Send something new to the host | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage` |
-| Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts` |
+| Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |
 | Change the context meter | `components/input-bar/ctx-meter/context-usage.ts`, `context-stats.tsx`, host `pushStats` |
 | Change approval dialogs | `components/ui/permission-prompt/` (`permission-prompt.tsx`, `ui-response.ts`), `App.tsx` mount point |
 | Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts`, `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |

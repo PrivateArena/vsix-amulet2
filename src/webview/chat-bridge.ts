@@ -215,10 +215,12 @@ export class ChatBridge implements vscode.Disposable {
             promptText,
             rpcImages.length > 0 ? rpcImages : undefined,
           );
+          await this.sendFollowUps(runtime, message.followUps);
           return;
         }
         case 'steer':
           await runtime?.steer(message.text);
+          await this.sendFollowUps(runtime, message.followUps);
           return;
         case 'abort':
           await runtime?.abort();
@@ -405,6 +407,34 @@ export class ChatBridge implements vscode.Disposable {
   }
 
   // --- Derived data pushes -------------------------------------------------
+
+  /**
+   * Send the tail of a chained slash-prompt message (`followUps`). Every part
+   * starts with its own `/command`, which is what lets one composer entry carry
+   * several prompts: the runtime only expands the *leading* command of a message.
+   *
+   * The tail always goes out as a `followUp` prompt — never as a `steer` queue
+   * entry. Queued steering survives a run that ends before it is drained and would
+   * surface in some later turn; `followUp` queues behind the run in flight and
+   * starts a fresh one if that run already finished. A failure stops the chain, so
+   * a rejected part cannot leave the rest to pile up unnoticed.
+   */
+  private async sendFollowUps(
+    runtime: PiRuntime | null | undefined,
+    parts: string[] | undefined,
+  ): Promise<void> {
+    if (!runtime || !parts || parts.length === 0) return;
+    for (const part of parts) {
+      try {
+        await runtime.prompt(part, undefined, 'followUp');
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        this.log.error(`Chained prompt "${part.slice(0, 40)}" failed: ${text}`);
+        void vscode.window.showErrorMessage(`Amulet: ${text}`);
+        return;
+      }
+    }
+  }
 
   private async pushState(): Promise<void> {
     const runtime = this.runtime;
