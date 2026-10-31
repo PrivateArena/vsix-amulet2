@@ -181,6 +181,13 @@ export class RpcClient {
       type: 'cycle_thinking_level',
     });
   }
+  getAvailableThinkingLevels(): Promise<ThinkingLevel[]> {
+    return this.call<{ levels?: unknown }>({
+      type: 'get_available_thinking_levels',
+    }).then((d) =>
+      Array.isArray(d?.levels) ? (d.levels as ThinkingLevel[]) : [],
+    );
+  }
   compact(customInstructions?: string): Promise<unknown> {
     return this.call({ type: 'compact', customInstructions });
   }

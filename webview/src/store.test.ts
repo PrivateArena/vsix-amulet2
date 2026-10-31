@@ -36,23 +36,18 @@ describe('reducer — host state messages', () => {
     );
     expect(
       reducer(
-        initialState,
-        host({
-          type: 'config',
-          config: { thinkingLevel: 'high', expandThinking: true },
-        }),
-      ),
-    ).toMatchObject({ thinkingLevel: 'high', expandThinking: true });
-    // A config push on an open panel re-applies the thinking default live.
-    expect(
-      reducer(
         { ...initialState, expandThinking: true },
-        host({
-          type: 'config',
-          config: { thinkingLevel: 'high', expandThinking: false },
-        }),
+        host({ type: 'config', config: { expandThinking: false } }),
       ).expandThinking,
     ).toBe(false);
+  });
+
+  it('applies the thinking levels reported by the runtime', () => {
+    const next = reducer(
+      initialState,
+      host({ type: 'thinkingLevels', levels: ['off', 'low', 'xhigh'] }),
+    );
+    expect(next.thinkingLevels).toEqual(['off', 'low', 'xhigh']);
   });
 
   it('derives streaming/compacting/thinkingLevel from session state', () => {
@@ -76,6 +71,51 @@ describe('reducer — host state messages', () => {
     expect(next.streaming).toBe(true);
     expect(next.compacting).toBe(false);
     expect(next.thinkingLevel).toBe('low');
+  });
+
+  it('keeps thinkingLevel null when the runtime has none applied', () => {
+    const next = reducer(
+      { ...initialState, thinkingLevel: 'medium' },
+      host({
+        type: 'state',
+        state: {
+          model: null,
+          isStreaming: false,
+          isCompacting: false,
+          steeringMode: '',
+          followUpMode: '',
+          autoCompactionEnabled: false,
+          messageCount: 0,
+          pendingMessageCount: 0,
+        },
+      }),
+    );
+    expect(next.thinkingLevel).toBeNull();
+  });
+
+  it('tracks thinking_level_changed events (cycle command / extensions)', () => {
+    const event = { type: 'thinking_level_changed', level: 'xhigh' };
+    const state = {
+      ...initialState,
+      session: {
+        model: null,
+        thinkingLevel: 'low' as const,
+        isStreaming: false,
+        isCompacting: false,
+        steeringMode: '',
+        followUpMode: '',
+        autoCompactionEnabled: false,
+        messageCount: 0,
+        pendingMessageCount: 0,
+      },
+    };
+    const next = reducer(state, host({ type: 'rpcEvent', event }));
+    expect(next.thinkingLevel).toBe('xhigh');
+    // The cached session is kept in step, so nothing renders a stale level.
+    expect(next.session?.thinkingLevel).toBe('xhigh');
+    expect(
+      reducer(state, host({ type: 'rpcEvent', event: { type: 'queue_update' } })),
+    ).toBe(state);
   });
 
   it('marks history loaded on sessions', () => {

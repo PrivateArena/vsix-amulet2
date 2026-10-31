@@ -10,12 +10,15 @@ import type {
   HostMessage,
   ProviderLoginRequest,
   SessionStats,
+  ThinkingLevel,
   WebviewMessage,
 } from '../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
+import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
   EXPAND_THINKING_KEY,
+  THINKING_LEVEL_KEY,
   readConfig,
   setExpandThinking,
   webviewConfig,
@@ -54,6 +57,10 @@ export class ChatBridge implements vscode.Disposable {
   private runtime: PiRuntime | null = null;
   private subscriptions: Array<() => void> = [];
   private disposed = false;
+  /** Guarded so a runtime that predates the command is asked only once. */
+  private thinkingLevelsSupported = true;
+  /** Drops levels computed for a superseded call (runtime restart, model switch). */
+  private thinkingLevelsSeq = 0;
   /** Guards {@link ChatBridgeOptions.openFresh} so only the first connect starts fresh. */
   private consumedOpenFresh = false;
   /** True while a `pi update` child process is running (the menu is re-entrant). */
@@ -91,6 +98,9 @@ export class ChatBridge implements vscode.Disposable {
       if (e.affectsConfiguration(EXPAND_THINKING_KEY)) {
         this.post({ type: 'config', config: webviewConfig() });
       }
+      if (e.affectsConfiguration(THINKING_LEVEL_KEY)) {
+        void this.applyThinkingLevelSetting();
+      }
     });
     this.subscriptions.push(() => configSub.dispose());
 
@@ -120,6 +130,12 @@ export class ChatBridge implements vscode.Disposable {
     if (event.type === 'agent_end' || event.type === 'compaction_end') {
       void this.pushStats();
     }
+    // pi has no model-changed wire event, so a level change is our only hint that
+    // the model (and with it the capability list) may have moved underneath us.
+    if (event.type === 'thinking_level_changed') {
+      void this.pushState();
+      void this.pushThinkingLevels();
+    }
   }
 
   private async pushSnapshot(): Promise<void> {
@@ -135,6 +151,7 @@ export class ChatBridge implements vscode.Disposable {
       this.post({ type: 'history', messages: messages as AppMessage[] });
       this.post({ type: 'state', state });
       await Promise.all([
+        this.pushThinkingLevels(),
         this.pushStats(),
         this.pushCommands(),
         this.pushSessions(),
@@ -184,15 +201,18 @@ export class ChatBridge implements vscode.Disposable {
           await runtime?.newSession();
           this.post({ type: 'history', messages: [] });
           await this.pushState();
+          void this.pushThinkingLevels();
           await Promise.all([this.pushStats(), this.pushSessions()]);
           return;
         case 'setModel':
           await runtime?.setModel(message.provider, message.modelId);
           await this.pushState();
+          await this.pushThinkingLevels();
           return;
         case 'cycleModel':
           await runtime?.cycleModel();
           await this.pushState();
+          await this.pushThinkingLevels();
           return;
         case 'setThinkingLevel':
           await runtime?.setThinkingLevel(message.level);
@@ -208,6 +228,9 @@ export class ChatBridge implements vscode.Disposable {
           if (models) this.post({ type: 'models', models });
           return;
         }
+        case 'requestThinkingLevels':
+          await this.pushThinkingLevels();
+          return;
         case 'requestState':
           await this.pushState();
           return;
@@ -383,6 +406,51 @@ export class ChatBridge implements vscode.Disposable {
       this.post({ type: 'state', state: await runtime.getState() });
     } catch {
       /* ignore */
+    }
+  }
+
+  /**
+   * Push the thinking levels the runtime actually offers for the current model.
+   * The list is the harness's, never ours: only a runtime that answers
+   * `get_available_thinking_levels` as "unknown command" (pi before 0.81.0) gets the
+   * shared preset, and any other failure keeps the list the webview already has.
+   */
+  private async pushThinkingLevels(): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime?.isReady || !this.thinkingLevelsSupported) return;
+    const seq = ++this.thinkingLevelsSeq;
+    let levels: ThinkingLevel[];
+    try {
+      levels = await runtime.getAvailableThinkingLevels();
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      if (!/unknown command/i.test(text)) {
+        this.log.warn(`Could not read thinking levels: ${text}`);
+        return;
+      }
+      this.thinkingLevelsSupported = false;
+      levels = FALLBACK_THINKING_LEVELS;
+    }
+    const stale = this.disposed || seq !== this.thinkingLevelsSeq;
+    if (stale || !levels.length) return;
+    this.post({ type: 'thinkingLevels', levels });
+  }
+
+  /**
+   * Apply a `pintra.thinkingLevel` change to the live runtime. `disabled` cannot be
+   * undone mid-session (pi has no "unset" command), so it only takes effect on the
+   * next runtime start.
+   */
+  private async applyThinkingLevelSetting(): Promise<void> {
+    const { thinkingLevel } = readConfig();
+    if (thinkingLevel === 'disabled' || !this.runtime?.isReady) return;
+    try {
+      await this.runtime.setThinkingLevel(thinkingLevel);
+      await this.pushState();
+    } catch (err) {
+      this.log.warn(
+        `Could not apply thinking level: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -645,6 +713,8 @@ export class ChatBridge implements vscode.Disposable {
     // Refresh history to reflect the truncated branch, then send the edited text.
     const messages = await runtime.getMessages();
     this.post({ type: 'history', messages: messages as AppMessage[] });
+    // A fork starts a new session, which re-resolves the model and its levels.
+    void this.pushThinkingLevels();
     await runtime.prompt(text);
   }
 
@@ -836,6 +906,7 @@ export class ChatBridge implements vscode.Disposable {
         const models = await this.runtime.getAvailableModels();
         this.post({ type: 'models', models });
         await this.pushState();
+        void this.pushThinkingLevels();
         finish(true);
       } else {
         finish(

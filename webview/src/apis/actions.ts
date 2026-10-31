@@ -32,6 +32,7 @@ export const actions = {
   requestModels: () => postMessage({ type: 'requestModels' }),
   setThinkingLevel: (level: ThinkingLevel) =>
     postMessage({ type: 'setThinkingLevel', level }),
+  requestThinkingLevels: () => postMessage({ type: 'requestThinkingLevels' }),
   setAutoCompaction: (enabled: boolean) =>
     postMessage({ type: 'setAutoCompaction', enabled }),
   setExpandThinking: (enabled: boolean) =>

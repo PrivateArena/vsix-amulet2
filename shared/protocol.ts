@@ -16,7 +16,52 @@
 // pi content blocks & messages
 // ============================================================================
 
-export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
+/**
+ * Thinking levels known to the pi runtime (mirrors pi's own `ThinkingLevel`).
+ * Which subset applies to the current model is decided by pi, from the model's
+ * `thinkingLevelMap` — ask `get_available_thinking_levels`, never assume.
+ */
+export type ThinkingLevel =
+  | 'off'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
+
+/** Canonical pi ordering (weakest to strongest); used to display harness levels. */
+export const THINKING_LEVEL_ORDER: ThinkingLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+/**
+ * Levels offered when the runtime answers `get_available_thinking_levels` with
+ * "unknown command" — the command only exists since pi 0.81.0. These are the levels
+ * every reasoning model exposes today; `max` is deliberately absent because pi only
+ * exposes it when the model maps it.
+ */
+export const FALLBACK_THINKING_LEVELS: ThinkingLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+];
+
+/**
+ * `disabled` is an extension-side value, never sent to pi: it means the host does
+ * not touch the runtime's thinking level at all, so the pi settings, the resumed
+ * session and the model's own default decide.
+ */
+export type ThinkingLevelSetting = 'disabled' | ThinkingLevel;
 
 export interface TextBlock {
   type: 'text';
@@ -131,6 +176,7 @@ export type RpcCommand =
   | { type: 'get_available_models' }
   | { type: 'set_thinking_level'; level: ThinkingLevel }
   | { type: 'cycle_thinking_level' }
+  | { type: 'get_available_thinking_levels' }
   | { type: 'set_steering_mode'; mode: string }
   | { type: 'set_follow_up_mode'; mode: string }
   | { type: 'compact'; customInstructions?: string }
@@ -172,7 +218,11 @@ export interface RpcResponse {
 
 export interface SessionState {
   model: ModelInfo | null;
-  thinkingLevel: ThinkingLevel;
+  /**
+   * Absent when nothing has been applied to the session: the runtime then uses the
+   * model/provider default, which is what `pintra.thinkingLevel: disabled` produces.
+   */
+  thinkingLevel?: ThinkingLevel;
   isStreaming: boolean;
   isCompacting: boolean;
   steeringMode: string;
@@ -331,7 +381,7 @@ export type RpcEvent =
   | { type: 'auto_retry_start'; [k: string]: unknown }
   | { type: 'auto_retry_end'; [k: string]: unknown }
   | { type: 'model_select'; [k: string]: unknown }
-  | { type: 'thinking_level_changed'; [k: string]: unknown }
+  | { type: 'thinking_level_changed'; level: ThinkingLevel }
   | { type: 'session_info_changed'; [k: string]: unknown }
   | { type: 'session_shutdown'; [k: string]: unknown }
   | { type: 'extension_error'; [k: string]: unknown }
@@ -491,6 +541,7 @@ export type WebviewMessage =
   | { type: 'setThinkingLevel'; level: ThinkingLevel }
   | { type: 'compact' }
   | { type: 'requestModels' }
+  | { type: 'requestThinkingLevels' }
   | { type: 'requestState' }
   | { type: 'restart' }
   | { type: 'showLog' }
@@ -531,6 +582,8 @@ export type HostMessage =
   | { type: 'rpcEvent'; event: RpcEvent }
   | { type: 'state'; state: SessionState }
   | { type: 'models'; models: ModelInfo[] }
+  /** Levels the current model supports, per `get_available_thinking_levels`. */
+  | { type: 'thinkingLevels'; levels: ThinkingLevel[] }
   | { type: 'history'; messages: AppMessage[] }
   | { type: 'config'; config: WebviewConfig }
   | { type: 'focusInput' }
@@ -545,7 +598,6 @@ export type HostMessage =
   | { type: 'extensionUiRequest'; request: ExtensionUiRequest };
 
 export interface WebviewConfig {
-  thinkingLevel: ThinkingLevel;
   /** Render reasoning blocks expanded unless the user overrode one locally. */
   expandThinking: boolean;
   autoExpandEditLineThreshold?: number;

@@ -2,7 +2,7 @@
 	"name": "pi-vsc",
 	"displayName": "Pintra — Pi Agent for VS Code",
 	"description": "AI coding agent for VS Code, powered by the pi runtime.",
-	"version": "1.0.12",
+	"version": "1.0.14",
 	"publisher": "bilalbentoumi",
 	"private": true,
 	"icon": "media/icon.png",
@@ -172,16 +172,28 @@
 				"pintra.thinkingLevel": {
 					"type": "string",
 					"enum": [
+						"disabled",
 						"off",
 						"minimal",
 						"low",
 						"medium",
 						"high",
-						"xhigh"
+						"xhigh",
+						"max"
 					],
-					"default": "medium",
+					"enumDescriptions": [
+						"Do not send any thinking level - pi, the model config, and the provider defaults decide.",
+						"Explicitly disable thinking for every model that supports it.",
+						"Minimal reasoning effort.",
+						"Low reasoning effort.",
+						"Medium reasoning effort.",
+						"High reasoning effort.",
+						"Extra high reasoning effort (only where the model maps it).",
+						"Maximum reasoning effort (only where the model maps it)."
+					],
+					"default": "disabled",
 					"order": 3,
-					"markdownDescription": "Default thinking level for model responses."
+					"markdownDescription": "Thinking level the extension applies to the runtime. Leave on `disabled` to send nothing: the level then comes from pi's own settings, the resumed session, and the model default, and you can still pick one per session in the chat box. Any other value is sent as `set_thinking_level` at every runtime start (and live when you change it), overriding those defaults; pi clamps it to what the selected model supports. Switching back to `disabled` takes effect on the next runtime start."
 				},
 				"pintra.autoCompact": {
 					"type": "boolean",

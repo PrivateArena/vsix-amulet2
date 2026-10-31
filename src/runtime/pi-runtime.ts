@@ -167,7 +167,11 @@ export class PiRuntime {
     config: PiConfig,
   ): Promise<void> {
     try {
-      await client.setThinkingLevel(config.thinkingLevel);
+      // `disabled` deliberately sends nothing: the pi settings, the resumed session
+      // and the model's own default then decide the thinking level.
+      if (config.thinkingLevel !== 'disabled') {
+        await client.setThinkingLevel(config.thinkingLevel);
+      }
       await client.setAutoCompaction(config.autoCompact);
       await client.setAutoRetry(config.autoRetry);
     } catch (err) {
@@ -265,6 +269,10 @@ export class PiRuntime {
   }
   cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
     return this.requireClient().cycleThinkingLevel();
+  }
+  /** Thinking levels the current model supports, as reported by the runtime. */
+  getAvailableThinkingLevels(): Promise<ThinkingLevel[]> {
+    return this.requireClient().getAvailableThinkingLevels();
   }
   compact(customInstructions?: string): Promise<unknown> {
     return this.requireClient().compact(customInstructions);

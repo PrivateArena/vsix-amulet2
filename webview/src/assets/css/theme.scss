@@ -114,7 +114,9 @@
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 0.75rem 0.75rem 0.875rem;
+  /* Tight frame — the composer card carries its own shadow, so the wrap only
+     needs enough inset to separate it from the panel edges. */
+  padding: 0.05rem 0.20rem 0.20rem;
 
   /* Scrim: dissolves the message list into the page background as it scrolls
      under the floating composer. Built on the real --pintra-bg (not a black

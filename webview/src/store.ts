@@ -26,6 +26,7 @@ import {
   normalizeContent,
   textOfContent,
 } from '../../shared/blocks';
+import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
 
 export type ToolStatus = 'running' | 'done' | 'error';
 
@@ -81,7 +82,9 @@ export interface ChatState {
   tools: Record<string, ToolExec>;
   streaming: boolean;
   compacting: boolean;
-  thinkingLevel: ThinkingLevel;
+  thinkingLevel: ThinkingLevel | null;
+  /** Levels the runtime offers for the current model (pi is the source of truth). */
+  thinkingLevels: ThinkingLevel[];
   /** Host preference: render reasoning blocks expanded by default. */
   expandThinking: boolean;
   pendingUi: ExtensionUiRequest[];
@@ -105,7 +108,8 @@ export const initialState: ChatState = {
   tools: {},
   streaming: false,
   compacting: false,
-  thinkingLevel: 'medium',
+  thinkingLevel: null,
+  thinkingLevels: [...FALLBACK_THINKING_LEVELS],
   expandThinking: false,
   pendingUi: [],
   sessions: [],
@@ -272,16 +276,19 @@ export function reducer(state: ChatState, action: Action): ChatState {
     case 'config':
       return {
         ...state,
-        thinkingLevel: message.config.thinkingLevel,
         expandThinking: message.config.expandThinking,
       };
+    case 'thinkingLevels':
+      return { ...state, thinkingLevels: message.levels };
     case 'state':
       return {
         ...state,
         session: message.state,
         streaming: message.state.isStreaming,
         compacting: message.state.isCompacting,
-        thinkingLevel: message.state.thinkingLevel,
+        // `undefined` means nothing has been applied to the session: the runtime is
+        // running on the model/pi default, which the picker shows as "Disabled".
+        thinkingLevel: message.state.thinkingLevel ?? null,
       };
     case 'history': {
       const newMessages = message.messages
@@ -518,6 +525,21 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       return { ...state, compacting: true };
     case 'compaction_end':
       return { ...state, compacting: false };
+    case 'thinking_level_changed': {
+      // Authoritative from the runtime: also covers `cycle_thinking_level` and
+      // extension-driven changes, which never round-trip through a host command.
+      // `RpcEvent` is deliberately open, so the level arrives as `unknown`; accept
+      // any string so a newer pi's levels still surface (labels fall back to raw).
+      if (typeof event.level !== 'string') return state;
+      const level = event.level as ThinkingLevel;
+      return {
+        ...state,
+        thinkingLevel: level,
+        session: state.session
+          ? { ...state.session, thinkingLevel: level }
+          : null,
+      };
+    }
     default:
       return state;
   }

@@ -49,7 +49,8 @@ Checked the client's RPC surface against the authoritative types shipped by the 
 `@earendil-works/pi-coding-agent/dist/modes/rpc/rpc-types.d.ts`:
 
 - **No breakage.** Every command Pintra sends exists in 1.4.0; Pintra uses a strict subset (31 of 33).
-- **Unused runtime capability** — `clear_queue`, `get_available_thinking_levels`. Free features to adopt.
+- **Unused runtime capability** — `clear_queue`. (`get_available_thinking_levels` is now wired up: see
+  "Thinking level contract" below.)
 - **Events Pintra does not model** (present in `core/agent-session.d.ts`): `agent_settled`,
   `entry_appended`, `queue_update`, `bash_execution_update`, `summarization_retry_*`. Events fan out
   through `PiRuntime.dispatchEvent` (`src/runtime/pi-runtime.ts:61,117`) to typed listeners, so
@@ -160,3 +161,30 @@ whatever else is running.
 - Create the GitHub fork under `gunir` (or an org?) and set it as `origin` — one command:
   `gh repo fork bilalbentoumi/pi-vsc --clone=false --remote-name=origin`.
 - New extension id / display name / publisher for the Amulet build.
+
+## Thinking level contract (pi 1.4.0, verified against the installed runtime)
+
+Verified by driving `pi --mode rpc` directly (`get_state`, `get_available_thinking_levels`, `set_model`)
+and reading `dist/core/agent-session.js` + `pi-ai/dist/models.js`:
+
+- The **harness owns the level list**. `get_available_thinking_levels` → `{ levels: ThinkingLevel[] }`,
+  built by `getSupportedThinkingLevels(model)` from the model's `thinkingLevelMap`: `null` entries drop a
+  level, `xhigh`/`max` appear only when explicitly mapped, and a model with `reasoning: false` gets
+  `["off"]`. The webview picker renders exactly this list — never a hard-coded menu — and only falls
+  back to the shared preset when pi answers "unknown command" (the command shipped in pi **0.81.0**).
+- `get_state.thinkingLevel` is **optional in our type**: the runtime omits it until something applies a
+  level (verified live — a fresh session on a non-reasoning model reports no `thinkingLevel` at all),
+  and the provider default then applies. pi's own `rpc-types.d.ts` declares the field required, so do
+  not "fix" the optionality. The picker shows the unset state as **Disabled** and says "…" until the
+  first `get_state` arrives.
+- `set_thinking_level` clamps to the available list (`clampThinkingLevel`), so sending a level the model
+  does not map silently changes it to a neighbour. Do not "help" by re-mapping client-side.
+- **pi emits no model-changed event on the wire** (`model_select` goes to the extension runner only,
+  `core/agent-session.js:1992`). The capability list therefore travels with every host-initiated model
+  change — `setModel`, `cycleModel`, `newChat`, `editAndFork`, `switchSession`/`restart` (via
+  `pushSnapshot`), provider-login restart — plus the fetch-on-open in the picker.
+- Startup: `pintra.thinkingLevel` defaults to `disabled`, which sends **nothing** (previously the host
+  always sent `medium`, overriding pi's `defaultThinkingLevel`, per-model levels, and the resumed
+  session). Any concrete value is applied per runtime start and live on the setting change
+  (`applyThinkingLevelSetting`); `disabled` itself only takes effect on the next runtime start because
+  pi has no "unset" command.

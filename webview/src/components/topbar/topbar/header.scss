@@ -3,10 +3,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px var(--pintra-space-md);
+  padding: 2px var(--pintra-space-md);
   border-bottom: 1px solid var(--pintra-border);
   background: var(--pintra-bg);
   flex-shrink: 0;
-  min-height: calc(var(--pintra-header-height) - 11px);
+  min-height: var(--pintra-header-height);
   user-select: none;
+
+  /* Icon actions match `.btn-sm` (26px) so the bar hugs its content instead of
+     inheriting the 30px md height. Scoped to the direct children because flyout
+     popovers render inline inside `.topbar` and keep their own sizing. */
+  > .topbar-right > .btn {
+    height: 26px;
+  }
 }
