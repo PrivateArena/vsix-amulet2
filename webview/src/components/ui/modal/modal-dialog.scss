@@ -7,8 +7,6 @@
   align-items: center;
   justify-content: center;
   background: color-mix(in srgb, var(--amulet-bg) 52%, transparent);
-  backdrop-filter: blur(3px) saturate(1.1);
-  -webkit-backdrop-filter: blur(3px) saturate(1.1);
   animation: confirm-fade-in 0.15s ease both;
 }
 

@@ -57,18 +57,15 @@ function getContainingBlock(element: HTMLElement): HTMLElement | null {
   let node = element.parentElement;
   while (node) {
     const s = getComputedStyle(node) as CSSStyleDeclaration & {
-      webkitBackdropFilter?: string;
       containerType?: string;
     };
-    const backdrop = s.backdropFilter || s.webkitBackdropFilter;
     if (
       s.transform !== 'none' ||
       s.filter !== 'none' ||
       s.perspective !== 'none' ||
       /\b(transform|filter|perspective)\b/.test(s.willChange) ||
       /\b(paint|layout|strict|content)\b/.test(s.contain) ||
-      (s.containerType && s.containerType !== 'normal') ||
-      (backdrop && backdrop !== 'none')
+      (s.containerType && s.containerType !== 'normal')
     )
       return node;
     node = node.parentElement;

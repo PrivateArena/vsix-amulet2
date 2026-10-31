@@ -9,8 +9,6 @@
   justify-content: center;
   padding: 16px;
   background: color-mix(in srgb, var(--amulet-bg) 58%, transparent);
-  backdrop-filter: blur(3px) saturate(1.1);
-  -webkit-backdrop-filter: blur(3px) saturate(1.1);
   animation: pp-fade-in 0.15s ease both;
 }
 
