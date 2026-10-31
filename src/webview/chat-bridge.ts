@@ -126,8 +126,15 @@ export class ChatBridge implements vscode.Disposable {
 
   private onRuntimeEvent(event: { type: string }): void {
     this.post({ type: 'rpcEvent', event: event as any });
-    // Refresh derived data when a turn completes or the session changes.
-    if (event.type === 'agent_end' || event.type === 'compaction_end') {
+    // Refresh derived data when a turn completes or the session changes. A run is
+    // many turns (one LLM call plus its tool results), so `turn_end` is what keeps
+    // the context meter moving inside a long run; the reply is derived from
+    // already-persisted entries, so it costs one cheap read per LLM call.
+    if (
+      event.type === 'turn_end' ||
+      event.type === 'agent_end' ||
+      event.type === 'compaction_end'
+    ) {
       void this.pushStats();
     }
     // pi has no model-changed wire event, so a level change is our only hint that
@@ -208,11 +215,14 @@ export class ChatBridge implements vscode.Disposable {
           await runtime?.setModel(message.provider, message.modelId);
           await this.pushState();
           await this.pushThinkingLevels();
+          // The window belongs to the model, so the usage percentage changes with it.
+          await this.pushStats();
           return;
         case 'cycleModel':
           await runtime?.cycleModel();
           await this.pushState();
           await this.pushThinkingLevels();
+          await this.pushStats();
           return;
         case 'setThinkingLevel':
           await runtime?.setThinkingLevel(message.level);

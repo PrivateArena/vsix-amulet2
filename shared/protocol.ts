@@ -441,7 +441,16 @@ export interface SessionStats {
     total: number;
   };
   cost: number;
-  contextUsage: { tokens: number; contextWindow: number; percent: number };
+  /**
+   * Absent when the runtime has nothing to measure against (no model resolved,
+   * or a compaction that left the session without a context window), so readers
+   * must treat it as optional.
+   */
+  contextUsage?: {
+    tokens: number;
+    contextWindow: number;
+    percent: number;
+  };
 }
 
 export interface CommandInfo {

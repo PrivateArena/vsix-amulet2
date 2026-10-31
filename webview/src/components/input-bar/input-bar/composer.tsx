@@ -316,6 +316,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               tooltip="Attach files (@)"
               onClick={() => actions.pickFiles()}
             />
+            <ContextMeter />
             <span className="toolbar-hide-narrow">
               <ModelPicker />
             </span>
@@ -324,7 +325,6 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             </span>
           </div>
           <div className="input-toolbar-group">
-            <ContextMeter />
             {streaming ? (
               <IconButton
                 size="sm"

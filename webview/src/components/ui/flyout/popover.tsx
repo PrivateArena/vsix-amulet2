@@ -19,6 +19,8 @@ const VIEWPORT_MARGIN = 8;
 const DEFAULT_GAP = 6;
 /** Default grace period before a hover-opened popover closes, in ms. */
 const DEFAULT_HOVER_CLOSE_DELAY = 120;
+/** Default dwell before a hover-opened popover opens, in ms (0 = immediate). */
+const DEFAULT_HOVER_OPEN_DELAY = 0;
 
 export type PopoverSide =
   | 'auto'
@@ -85,6 +87,8 @@ export interface PopoverProps {
   gap?: number;
   openOnHover?: boolean;
   hoverCloseDelay?: number;
+  /** Dwell on the trigger required to open on hover. 0 opens immediately. */
+  hoverOpenDelay?: number;
   /** When true, the popover cannot be opened and force-closes if already open. */
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -101,6 +105,7 @@ export function Flyout({
   gap = DEFAULT_GAP,
   openOnHover = false,
   hoverCloseDelay = DEFAULT_HOVER_CLOSE_DELAY,
+  hoverOpenDelay = DEFAULT_HOVER_OPEN_DELAY,
   disabled = false,
   onOpenChange,
 }: PopoverProps) {
@@ -108,6 +113,7 @@ export function Flyout({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const containingBlockRef = useRef<HTMLElement | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pos, setPos] = useState<Placement | null>(null);
   const [open, setOpenState] = useState(false);
   const openRef = useRef(open);
@@ -138,31 +144,64 @@ export function Flyout({
     }
   }, []);
 
+  const clearOpenTimer = useCallback(() => {
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  }, []);
+
   const close = useCallback(() => {
     clearCloseTimer();
+    clearOpenTimer();
     setOpen(false);
-  }, [clearCloseTimer, setOpen]);
+  }, [clearCloseTimer, clearOpenTimer, setOpen]);
   const toggle = useCallback(() => {
     if (disabled) return;
     clearCloseTimer();
+    clearOpenTimer();
     setOpen((v) => !v);
-  }, [disabled, clearCloseTimer, setOpen]);
+  }, [disabled, clearCloseTimer, clearOpenTimer, setOpen]);
 
   const scheduleClose = useCallback(() => {
     if (!openOnHover) return;
+    clearOpenTimer();
     clearCloseTimer();
     closeTimer.current = setTimeout(() => {
       closeTimer.current = null;
       setOpen(false);
     }, hoverCloseDelay);
-  }, [openOnHover, hoverCloseDelay, clearCloseTimer, setOpen]);
+  }, [openOnHover, hoverCloseDelay, clearOpenTimer, clearCloseTimer, setOpen]);
   const handleTriggerEnter = useCallback(() => {
     if (!openOnHover || disabled) return;
     clearCloseTimer();
-    setOpen(true);
-  }, [openOnHover, disabled, clearCloseTimer, setOpen]);
+    clearOpenTimer();
+    if (hoverOpenDelay <= 0) {
+      setOpen(true);
+      return;
+    }
+    // A dwell time keeps a popover from popping up while the pointer is only
+    // passing over the trigger on its way to a neighbour.
+    openTimer.current = setTimeout(() => {
+      openTimer.current = null;
+      setOpen(true);
+    }, hoverOpenDelay);
+  }, [
+    openOnHover,
+    disabled,
+    hoverOpenDelay,
+    clearCloseTimer,
+    clearOpenTimer,
+    setOpen,
+  ]);
 
-  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+  useEffect(
+    () => () => {
+      clearCloseTimer();
+      clearOpenTimer();
+    },
+    [clearCloseTimer, clearOpenTimer],
+  );
 
   // Force-close when disabled while open (e.g. another surface took over).
   useEffect(() => {

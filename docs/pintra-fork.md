@@ -188,3 +188,33 @@ and reading `dist/core/agent-session.js` + `pi-ai/dist/models.js`:
   session). Any concrete value is applied per runtime start and live on the setting change
   (`applyThinkingLevelSetting`); `disabled` itself only takes effect on the next runtime start because
   pi has no "unset" command.
+
+## Context meter contract (pi 1.4.0)
+
+The ring in the composer toolbar reads one value: how much of the model's window the **next** request
+will need. Two rules keep it honest and live:
+
+- **The host owns `SessionStats`.** `pushStats` in `src/webview/chat-bridge.ts` is the only producer
+  (`get_session_stats` → `{ type: 'stats' }`). It fires on the connect snapshot, `newChat`, `compact`,
+  `requestStats`, and from `onRuntimeEvent` on `turn_end`, `agent_end` and `compaction_end`. `turn_end`
+  is the important one: a run is many turns (one LLM call + its tool results), so refreshing per turn
+  is what moves the meter during a long run. **Do not poll it per delta** — `getSessionStats()` walks
+  a copy of every session entry inside pi (and one bridge per open panel means one walk per bridge).
+- **The webview fills the gap inside a turn.** pi only counts *persisted* messages, so the last
+  `get_session_stats` answer is already stale while the model is writing. `contextUsage.tokens` is just
+  `totalTokens || input + output + cacheRead + cacheWrite`, and that same `usage` rides on `message_end`
+  — and on the last few `message_update` deltas, per the `tmp/rpc-events-tool.jsonl` capture; every
+  earlier delta carries an all-zero `usage`. So `contextUsageOf`
+  (`webview/src/components/input-bar/ctx-meter/context-usage.ts`) recomputes the figure from the
+  streaming message, a beat ahead of the host's round-trip, with pi's own arithmetic — no visible jump
+  when `agent_end` delivers the authoritative value. The all-zero deltas are filtered out so the ring
+  never empties at the start of a run.
+
+  Consequence: the meter **steps once per LLM call, not once per token**. Providers report usage only
+  when a message finishes, so nothing on the wire describes the middle of a generation; filling that in
+  with a character-count estimate would make the meter disagree with pi's own `/context` reading.
+
+`contextUsage` is **optional at runtime** (absent with no resolved model, `{ tokens: null }`-shaped
+right after a compaction), so the meter derives `percent` from `tokens / contextWindow` itself, ignores
+pi's `percent`, and renders nothing when the window is unknown. Switching models changes the window,
+hence `setModel`/`cycleModel` re-push stats.

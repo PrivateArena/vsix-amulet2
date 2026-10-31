@@ -1,28 +1,10 @@
-.context-popup-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  outline: none;
-  padding: 2px;
-  border-radius: var(--pintra-radius-sm);
-  transition: background var(--pintra-transition-fast) var(--pintra-ease-out);
-}
-
-.context-popup-wrapper:hover,
-.context-popup-wrapper:focus-visible {
-  background: var(--pintra-surface-hover);
-}
-
-.ctx-meter-btn {
-  padding: 0 !important;
-  background: transparent !important;
-  border: none !important;
-}
-
-.ctx-meter-btn span {
-  display: inline-flex;
-  align-items: center;
+/* The ring is an icon-only toolbar button: same 26px square as `.btn-sm` icons
+   (three classes so it beats `.btn.btn-sm`'s horizontal padding regardless of
+   stylesheet order). The svg lives in the button as a child, not as `.btn-icon`,
+   because the meter is larger than the 12px icon box. */
+.btn.btn-sm.ctx-meter-btn {
+  width: 26px;
+  padding-inline: 0;
 }
 
 .ctx-meter {

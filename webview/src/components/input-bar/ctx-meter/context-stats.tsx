@@ -7,6 +7,7 @@ import { Button } from '../../ui/button';
 import { Flyout } from '../../ui/flyout';
 // Reused so the action row here looks exactly like every other menu in the app.
 import '../../ui/menu-item/menu.scss';
+import { contextUsageOf } from './context-usage';
 import './context-stats.scss';
 
 const R = 5.5;
@@ -19,15 +20,13 @@ function valueToneClass(pct: number): string {
 }
 
 export function ContextMeter() {
-  const { stats, streaming, compacting } = useChatState();
+  const { stats, messages, streaming, compacting } = useChatState();
   const confirm = useConfirm();
 
-  if (!stats) return null;
+  const usage = contextUsageOf(stats, messages);
+  if (!stats || !usage) return null;
 
-  const pct = Math.min(
-    100,
-    Math.max(0, Math.round(stats.contextUsage.percent)),
-  );
+  const pct = usage.percent;
 
   const handleCompact = async () => {
     const ok = await confirm({
@@ -50,39 +49,40 @@ export function ContextMeter() {
         side="top"
         align="center"
         minWidth={220}
+        openOnHover
+        hoverOpenDelay={180}
         popoverProps={{ role: 'dialog', 'aria-label': 'Context usage' }}
         trigger={({ ref, triggerProps }) => (
           <Button
             ref={ref}
             variant="ghost"
-            icon={() => (
-              <svg
-                className="ctx-meter"
-                viewBox="0 0 16 16"
-                width="18"
-                height="18"
-                aria-hidden="true"
-                style={
-                  {
-                    '--ctx-color': `var(--pintra-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
-                  } as React.CSSProperties
-                }>
-                <circle className="ctx-meter-track" cx="8" cy="8" r={R} />
-                <circle
-                  className="ctx-meter-fill"
-                  cx="8"
-                  cy="8"
-                  r={R}
-                  strokeDasharray={CIRCUMFERENCE}
-                  strokeDashoffset={offset}
-                />
-              </svg>
-            )}
+            size="sm"
+            className="ctx-meter-btn"
             aria-label={`Context usage: ${pct}%`}
-            title={`Context usage: ${pct}%`}
             aria-haspopup="dialog"
-            {...triggerProps}
-          />
+            {...triggerProps}>
+            <svg
+              className="ctx-meter"
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              aria-hidden="true"
+              style={
+                {
+                  '--ctx-color': `var(--pintra-${pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'info'})`,
+                } as React.CSSProperties
+              }>
+              <circle className="ctx-meter-track" cx="8" cy="8" r={R} />
+              <circle
+                className="ctx-meter-fill"
+                cx="8"
+                cy="8"
+                r={R}
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={offset}
+              />
+            </svg>
+          </Button>
         )}>
         {({ close }) => (
           <div className="ctx-popup-body">
@@ -91,8 +91,8 @@ export function ContextMeter() {
               <div className="ctx-popup-row">
                 <span>Tokens</span>
                 <strong className={valueToneClass(pct)}>
-                  {formatTokens(stats.contextUsage.tokens)} /{' '}
-                  {formatTokens(stats.contextUsage.contextWindow)}
+                  {formatTokens(usage.tokens)} /{' '}
+                  {formatTokens(usage.contextWindow)}
                   &nbsp;({pct}%)
                 </strong>
               </div>
