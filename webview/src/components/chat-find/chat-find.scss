@@ -1,0 +1,99 @@
+/* Quick-find bar — floats over the transcript, top-right, the way an editor's find
+   widget does. Sits outside #chat-log so scrolling never takes it along. */
+.chat-find {
+  --chat-find-z: 120;
+
+  position: absolute;
+  top: calc(
+    var(--amulet-header-height) + var(--amulet-space-sm) *
+      var(--amulet-spacing-mult)
+  );
+  right: var(--amulet-space-sm);
+  z-index: var(--chat-find-z);
+  display: flex;
+  align-items: center;
+  gap: var(--amulet-space-2xs);
+  max-width: calc(100% - var(--amulet-space-md));
+  padding: var(--amulet-space-2xs) var(--amulet-space-2xs)
+    var(--amulet-space-2xs) var(--amulet-space-sm);
+  background-color: var(--amulet-surface-elevated);
+  border: 1px solid var(--amulet-border-strong);
+  border-radius: var(--amulet-radius);
+  box-shadow: var(--amulet-shadow-lg);
+}
+
+.chat-find-input {
+  flex: 1 1 6rem;
+  min-width: 4rem;
+  height: 26px;
+  border: none;
+  background-color: transparent;
+  color: var(--amulet-fg);
+  font-family: var(--amulet-font);
+  font-size: 0.94em;
+  letter-spacing: var(--amulet-tracking-tight);
+  outline: none;
+
+  &::placeholder {
+    color: var(--amulet-fg-faint);
+  }
+
+  &:focus,
+  &:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  &[aria-invalid='true'] {
+    color: var(--amulet-error);
+  }
+}
+
+/* Match counter — `1 / 12`, or `Bad pattern` for a broken regex. */
+.chat-find-count {
+  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: center;
+  font-size: var(--amulet-type-xs);
+  font-variation-settings: 'MONO' 1;
+  font-feature-settings: 'tnum' 1;
+  color: var(--amulet-muted);
+  white-space: nowrap;
+}
+
+.chat-find-count.is-error {
+  color: var(--amulet-error);
+}
+
+.chat-find-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--amulet-space-2xs);
+  flex: 0 0 auto;
+  padding-left: var(--amulet-space-2xs);
+  border-left: 1px solid var(--amulet-hairline);
+}
+
+/* Option toggles (match case, regex) read as pressed while on. */
+.chat-find-toggle.btn {
+  color: var(--amulet-muted);
+}
+
+.chat-find-toggle.btn.is-active {
+  color: var(--amulet-accent-contrast);
+  background-color: var(--amulet-accent);
+}
+
+.chat-find-toggle.btn.is-active:hover {
+  background-color: var(--amulet-accent-strong);
+}
+
+/* Custom Highlight layers (transcript-index.ts). Backgrounds only — a highlight that
+   sets `color` paints over the real glyphs, which fights syntax highlighting. */
+::highlight(amulet-find-match) {
+  background-color: color-mix(in srgb, var(--amulet-warning) 34%, transparent);
+}
+
+::highlight(amulet-find-active) {
+  background-color: color-mix(in srgb, var(--amulet-accent) 62%, transparent);
+}

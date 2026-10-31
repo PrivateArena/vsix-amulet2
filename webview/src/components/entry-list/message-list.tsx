@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useChatState } from '../../contexts/chat-context';
 import { useTurnNavStore } from '../../stores/turn-nav-store';
 import { AgentTimeline, EntryView } from '../entry-view';
+import { ChatFind, scrollRangesIntoView } from '../chat-find';
 import { LogoIcon } from '../logo-icon';
 import { LogoText } from '../logo-text';
 import { ProgressBar } from '../progress-bar';
@@ -102,49 +103,63 @@ export function EntryList({
     syncActiveTurn();
   };
 
+  /**
+   * Reveal a quick-find match. Same contract as a turn jump: it's a deliberate move,
+   * so stop hugging the bottom and let the reader keep what they jumped to.
+   */
+  const revealMatches = useCallback((ranges: Range[]) => {
+    const log = listRef.current;
+    if (!log) return;
+    stickToBottom.current = false;
+    scrollRangesIntoView(ranges, log);
+  }, []);
+
   return (
-    <div id="chat-log" ref={listRef} onScroll={onScroll}>
-      {messages.length === 0 && ready && (
-        <div className="welcome">
-          <div className="welcome-logo">
-            <LogoText />
-            {APP_VERSION && (
-              <span className="welcome-version">v{APP_VERSION}</span>
-            )}
+    <>
+      <div id="chat-log" ref={listRef} onScroll={onScroll}>
+        {messages.length === 0 && ready && (
+          <div className="welcome" data-find-skip="">
+            <div className="welcome-logo">
+              <LogoText />
+              {APP_VERSION && (
+                <span className="welcome-version">v{APP_VERSION}</span>
+              )}
+            </div>
+            <div className="welcome-tagline">
+              <LogoIcon size={28} className="welcome-glyph" />
+              <p className="welcome-sub">
+                Ask Pi to build a feature, fix a bug, or explain the code in
+                this workspace.
+              </p>
+            </div>
           </div>
-          <div className="welcome-tagline">
-            <LogoIcon size={28} className="welcome-glyph" />
-            <p className="welcome-sub">
-              Ask Pi to build a feature, fix a bug, or explain the code in this
-              workspace.
-            </p>
-          </div>
-        </div>
-      )}
-      {groupIntoTurns(messages).map((turn) => {
-        // A turn is [user?, ...agent/system]; the user message stays a bubble
-        // while the reply that follows renders as one continuous timeline.
-        const hasUser = turn.items[0]?.role === 'user';
-        const userMsg = hasUser ? turn.items[0] : null;
-        const agentMsgs = hasUser ? turn.items.slice(1) : turn.items;
-        return (
-          <div
-            className="turn"
-            key={turn.key}
-            data-turn={turn.items[0]?.role === 'user' ? turn.key : undefined}>
-            {userMsg && (
-              <EntryView key={userMsg.uid} message={userMsg} tools={tools} />
-            )}
-            {agentMsgs.length > 0 && (
-              <AgentTimeline messages={agentMsgs} tools={tools} />
-            )}
-          </div>
-        );
-      })}
-      {streaming && !compacting && <ProgressBar />}
-      {compacting && (
-        <div className="notice-msg compact-msg">Compacting context…</div>
-      )}
-    </div>
+        )}
+        {groupIntoTurns(messages).map((turn) => {
+          // A turn is [user?, ...agent/system]; the user message stays a bubble
+          // while the reply that follows renders as one continuous timeline.
+          const hasUser = turn.items[0]?.role === 'user';
+          const userMsg = hasUser ? turn.items[0] : null;
+          const agentMsgs = hasUser ? turn.items.slice(1) : turn.items;
+          return (
+            <div
+              className="turn"
+              key={turn.key}
+              data-turn={turn.items[0]?.role === 'user' ? turn.key : undefined}>
+              {userMsg && (
+                <EntryView key={userMsg.uid} message={userMsg} tools={tools} />
+              )}
+              {agentMsgs.length > 0 && (
+                <AgentTimeline messages={agentMsgs} tools={tools} />
+              )}
+            </div>
+          );
+        })}
+        {streaming && !compacting && <ProgressBar />}
+        {compacting && (
+          <div className="notice-msg compact-msg">Compacting context…</div>
+        )}
+      </div>
+      <ChatFind containerRef={listRef} onReveal={revealMatches} />
+    </>
   );
 }

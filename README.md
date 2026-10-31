@@ -30,7 +30,7 @@
 
 ## Overview
 
-Amulet brings the [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) into VS Code and VSCodium as a focused chat sidebar. It spawns an external `pi` runtime and speaks its JSON-lines RPC protocol — streaming rich tool output and thinking, keeping session history and usage stats, and giving you model and reasoning controls, message forking, edit/write diffs, slash-command autocomplete, a full editor-tab chat, and HTML export.
+Amulet brings the [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) into VS Code and VSCodium as a focused chat sidebar. It spawns an external `pi` runtime and speaks its JSON-lines RPC protocol — streaming rich tool output and thinking, keeping session history and usage stats, and giving you model and reasoning controls, message forking, edit/write diffs, slash-command autocomplete, quick-find in the conversation (Ctrl+F), a full editor-tab chat, and HTML export.
 
 The `pi` runtime is not bundled: install and authenticate it once, and Amulet drives it from inside the editor.
 
