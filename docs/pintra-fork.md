@@ -174,6 +174,16 @@ whatever else is running.
      re-rasterised 430×430 `media/icon.png` (opaque black, pure white glyph, hard edges, artwork at
      80..349, exactly like the original export).
    - `.github/FUNDING.yml` now points at `gunir` instead of upstream's sponsor list.
+   - **Legacy settings fallback:** `readConfig()` reads `pintra.<key>` whenever `amulet.<key>` was never
+     set by the user (detected with `inspect()`, so the *declared default* does not shadow the old
+     value — important for the boolean keys). The old namespace is never written to. `affectsSetting()` /
+     `keyWithLegacy()` make `affectsRestart` and the thinking-level + expand-thinking listeners react to
+     edits in either namespace.
+   - **Latent token bug fixed in passing:** `--pintra-surface-secondary`, `--pintra-surface-tertiary` and
+     `--pintra-accent-muted` were referenced by the attachment UI (`input-bar.scss`, `message-view.scss`)
+     but declared nowhere upstream, so those `background:` declarations silently resolved to nothing.
+     Now declared in `variables.scss` as aliases of `-surface-subtle`, `-surface-hover` and
+     `-accent-faint` (the idiom every other accent badge already uses).
    **Still to do:** `media/screenshot.png` pixels still show the old wordmark.
 4. **Test story**: two vitest files only — `shared/blocks.test.ts` (block reconstruction) and
    `webview/src/store.test.ts`; AGENTS.md says "there is no test suite" for behaviour. Host↔webview changes need a manual F5 pass.

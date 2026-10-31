@@ -42,6 +42,13 @@
     var(--vscode-list-hoverBackground, var(--amulet-surface-subtle))
   );
   --amulet-surface-raise: #{blend(var(--amulet-fg), 5%)};
+  /*
+   * Named tiers above the attachment surfaces (composer chips, file-attachment rows). Aliases, not new
+   * recipes: `-secondary` is the recessed subtle fill, `-tertiary` the lighter hover step, so both
+   * track whatever the active theme supplies.
+   */
+  --amulet-surface-secondary: var(--amulet-surface-subtle);
+  --amulet-surface-tertiary: var(--amulet-surface-hover);
 
   --amulet-fg: var(--vscode-foreground, var(--vscode-editor-foreground));
   --amulet-muted: var(
@@ -70,6 +77,11 @@
   --amulet-accent-contrast: #04140f;
   --amulet-accent-glow: #{blend(var(--amulet-accent), 34%)};
   --amulet-accent-glow-soft: #{blend(var(--amulet-accent), 16%)};
+  /*
+   * Accent-tinted fill behind the small file-type badges (`.attach-icon`, `.entry-attachment-ext`).
+   * Alias of `-faint`, the idiom every other accent badge in the app already uses.
+   */
+  --amulet-accent-muted: var(--amulet-accent-faint);
 
   --amulet-focus-ring: #{blend(var(--amulet-accent), 62%)};
   --amulet-focus-halo: #{blend(var(--amulet-accent), 22%)};

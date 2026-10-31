@@ -19,6 +19,7 @@ import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
   EXPAND_THINKING_KEY,
   THINKING_LEVEL_KEY,
+  affectsSetting,
   readConfig,
   setExpandThinking,
   webviewConfig,
@@ -95,10 +96,10 @@ export class ChatBridge implements vscode.Disposable {
     // Mirror setting changes made here (or in the Settings editor, or in another
     // panel) into every connected webview.
     const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(EXPAND_THINKING_KEY)) {
+      if (affectsSetting(e, EXPAND_THINKING_KEY)) {
         this.post({ type: 'config', config: webviewConfig() });
       }
-      if (e.affectsConfiguration(THINKING_LEVEL_KEY)) {
+      if (affectsSetting(e, THINKING_LEVEL_KEY)) {
         void this.applyThinkingLevelSetting();
       }
     });
