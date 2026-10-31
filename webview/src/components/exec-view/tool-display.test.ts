@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ToolExec } from '../../store';
 import {
+  TIP_HEAD_CHARS,
+  TIP_HEAD_LINES,
+  TIP_TAIL_CHARS,
+  TIP_TAIL_LINES,
   childCalls,
+  countCallRows,
   formatDuration,
+  tipHead,
+  tipTail,
   toolDuration,
   toolFullText,
   toolPreview,
@@ -139,5 +146,80 @@ describe('childCalls', () => {
     expect(
       childCalls({ toolCallId: 'x', toolName: 'bash', status: 'done' }, tools),
     ).toEqual([]);
+  });
+});
+
+describe('tipTail', () => {
+  it('passes what fits the budget through untouched', () => {
+    expect(tipTail('total 12\nprobe.log')).toBe('total 12\nprobe.log');
+    expect(tipTail('x'.repeat(TIP_TAIL_CHARS))).toBe(
+      'x'.repeat(TIP_TAIL_CHARS),
+    );
+  });
+
+  it('keeps the last lines of a long output, and says what it dropped', () => {
+    const lines = Array.from({ length: 60 }, (_, i) => `line ${i}`);
+    const out = tipTail(lines.join('\n'));
+    expect(out.split('\n').slice(1)).toEqual(lines.slice(-TIP_TAIL_LINES));
+    expect(out.startsWith('… ')).toBe(true);
+    expect(out).toContain('earlier chars');
+    expect(out).not.toContain('line 0\n');
+  });
+
+  it('cuts to the character budget when few lines hold a wall of text', () => {
+    const text = 'a'.repeat(TIP_TAIL_CHARS * 3);
+    const out = tipTail(text);
+    expect(out).toHaveLength(
+      TIP_TAIL_CHARS + `… ${TIP_TAIL_CHARS * 2} earlier chars …\n`.length,
+    );
+    expect(out.endsWith('a')).toBe(true);
+  });
+});
+
+describe('tipHead', () => {
+  it('keeps a short command whole and trims its whitespace', () => {
+    expect(tipHead('  ls -la /tmp  ')).toBe('ls -la /tmp');
+    expect(tipHead('a'.repeat(TIP_HEAD_CHARS))).toBe(
+      'a'.repeat(TIP_HEAD_CHARS),
+    );
+  });
+
+  it('cuts the end of a long prompt, never its start', () => {
+    const lines = Array.from({ length: 40 }, (_, i) => `step ${i}`);
+    const out = tipHead(lines.join('\n'));
+    expect(out.split('\n').slice(0, TIP_HEAD_LINES)).toEqual(
+      lines.slice(0, TIP_HEAD_LINES),
+    );
+    expect(out).toContain('more chars');
+    expect(out).not.toContain('step 39');
+  });
+});
+
+describe('countCallRows', () => {
+  const nested: Record<string, ToolExec> = {
+    p: {
+      toolCallId: 'p',
+      toolName: 'subagent',
+      status: 'running',
+      childIds: ['p/1', 'p/2'],
+    },
+    'p/1': { toolCallId: 'p/1', toolName: 'bash', status: 'done' },
+    'p/2': {
+      toolCallId: 'p/2',
+      toolName: 'subagent',
+      status: 'running',
+      childIds: ['p/2/1'],
+    },
+    'p/2/1': { toolCallId: 'p/2/1', toolName: 'read', status: 'done' },
+  };
+
+  it('counts the nested rows a list renders, not just its top level', () => {
+    const calls = childCalls(nested.p, nested);
+    expect(calls).toHaveLength(2);
+    expect(countCallRows(calls, nested)).toBe(3);
+  });
+
+  it('is zero for an empty list', () => {
+    expect(countCallRows([], nested)).toBe(0);
   });
 });

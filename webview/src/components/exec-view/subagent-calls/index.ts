@@ -7,5 +7,6 @@ export {
   readSubagentDetails,
   resolveSubagentCard,
   subagentMetaLine,
+  subagentPrompt,
 } from './subagent-details';
 export type { SubagentDetailsView } from './subagent-details';

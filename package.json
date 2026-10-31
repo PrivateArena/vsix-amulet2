@@ -2,7 +2,7 @@
   "name": "amulet",
   "displayName": "Amulet — Pi Agent for VS Code",
   "description": "AI coding agent for VS Code, powered by the pi runtime.",
-  "version": "1.0.18",
+  "version": "1.0.20",
   "publisher": "gunir",
   "private": true,
   "icon": "media/icon.png",

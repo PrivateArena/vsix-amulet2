@@ -838,7 +838,14 @@ describe('reducer — nested (subagent) tool calls', () => {
     expect(s.tools[`${PARENT}/2`]).toMatchObject({
       status: 'error',
       argsOmittedBytes: 40000,
+      // pi's record keeps the error text of a failed nested call, and that is the one
+      // output a reloaded row can expand to.
+      resultText: 'EISDIR',
     });
+    expect(s.tools[`${PARENT}/1`].resultText).toBeUndefined();
+    // Marks the list as record-built, which is what tells the card its rows have no
+    // outputs to show.
+    expect(s.tools[PARENT].nestedFromRecord).toBe(true);
     expect(s.tools[`${PARENT}/3`]?.status).toBe('running');
     // The report comes off the persisted `details`, so it survives a reload.
     expect((s.tools[PARENT].details as { report?: string })?.report).toBe(

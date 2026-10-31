@@ -132,6 +132,42 @@
   border-color: var(--amulet-error-border);
 }
 
+/* Hover tooltip for a nested row: the full command, then its output. Inert on purpose
+   — the flyout renders inline, so an interactive surface would eat the clicks of the
+   rows it covers, and expanding a row is the gesture that matters here. Content is
+   therefore trimmed to a line budget (`tipHead`/`tipTail`) rather than scrolled. */
+.sub-call-tip {
+  max-width: min(440px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.sub-call-tip .tooltip-text {
+  box-sizing: border-box;
+  max-width: none;
+  white-space: pre-wrap;
+  font-family: var(--amulet-monospace);
+}
+
+.sub-call-tip-output {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 9px;
+  max-height: 220px;
+  overflow: hidden;
+  border-top: 1px solid var(--amulet-block-divider);
+  background: var(--amulet-tool-content-surface);
+  color: var(--amulet-fg-muted);
+  font-family: var(--amulet-monospace);
+  font-size: 0.8em;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sub-call-tip-output.is-error {
+  color: var(--amulet-error);
+}
+
 .sub-call-waiting {
   padding: 4px 12px;
   color: var(--amulet-fg-faint);
@@ -141,6 +177,12 @@
 .sub-call-note {
   padding: 2px 12px;
   color: var(--amulet-warning);
+}
+
+/* Not a truncation warning — a plain statement of what the record does not hold. */
+.sub-call-info {
+  padding: 2px 12px;
+  color: var(--amulet-fg-faint);
 }
 
 .sub-agent-report {

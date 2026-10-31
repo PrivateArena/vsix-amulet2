@@ -21,8 +21,10 @@ import {
   asRecord,
   basename,
   childCalls,
+  oneLine,
   statusClass,
   summarize,
+  tipHead,
   toolDuration,
   toolFullText,
 } from './tool-display';
@@ -31,6 +33,7 @@ import {
   SubagentCalls,
   cleanReport,
   resolveSubagentCard,
+  subagentPrompt,
   type SubagentDetailsView,
 } from './subagent-calls';
 import './exec-block-view.scss';
@@ -71,19 +74,25 @@ interface NestedView {
   tools: Record<string, ToolExec>;
   report?: string;
   nestedComplete?: boolean;
+  /** False for a list that came back from the runtime's persisted record. */
+  outputsStored: boolean;
 }
 
 export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   const effectiveArgs = asRecord(tool?.args ?? args);
   const status: ToolStatus = tool?.status ?? 'running';
   const running = status === 'running';
-  const summary = summarize(name, effectiveArgs);
   const result = tool?.resultText ?? '';
   const isError = tool?.isError ?? false;
 
   // A subagent card is identified by the `details` payload the tool reports, not by
   // its name, so a renamed or third-party subagent tool still renders correctly.
   const subagent = resolveSubagentCard(name, tool?.details, effectiveArgs);
+  // The task is what identifies a subagent call, and until now it had no home in the
+  // card at all: the header shows one line of it, the tooltip and the copy button the
+  // whole text.
+  const prompt = subagent ? subagentPrompt(effectiveArgs, subagent) : '';
+  const summary = prompt || summarize(name, effectiveArgs);
   const nested = childCalls(tool, tools);
   const report = subagent
     ? (subagent.report ??
@@ -95,6 +104,7 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
     tools: tools ?? {},
     report,
     nestedComplete: tool?.nestedComplete,
+    outputsStored: !tool?.nestedFromRecord,
   };
 
   // Whether pi is really executing this call right now. A card built from a tool call
@@ -121,19 +131,25 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
 
   const Icon = subagent ? LuBot : (TOOL_ICONS[name] ?? LuWrench);
   const label = subagent ? SUBAGENT_TITLE : (TOOL_LABELS[name] ?? name);
-  const displaySummary =
-    !subagent && FILE_TOOLS.has(name) && summary ? basename(summary) : summary;
+  const displaySummary = subagent
+    ? oneLine(summary)
+    : FILE_TOOLS.has(name) && summary
+      ? basename(summary)
+      : summary;
   // Elapsed time on every card, counting live while the call runs (from its own
   // `startedAt`, or from the subagent's `elapsedMs` progress field when it has one).
   const duration = toolDuration(tool, now, subagent?.elapsedMs);
-  // The untruncated command or path: the header ellipsizes it, so this is the only
-  // way to hand a long command to a shell elsewhere.
-  const copyText = subagent ? '' : toolFullText(name, effectiveArgs);
-  const copyHint = FILE_TOOLS.has(name)
-    ? 'path'
-    : name === 'bash'
-      ? 'command'
-      : 'arguments';
+  // The untruncated command, path or task: the header ellipsizes it, so this is the
+  // only way to hand a long value to a shell elsewhere.
+  const copyText = prompt || toolFullText(name, effectiveArgs);
+  const copyHint =
+    subagent && prompt
+      ? 'prompt'
+      : FILE_TOOLS.has(name)
+        ? 'path'
+        : name === 'bash'
+          ? 'command'
+          : 'arguments';
   const toggle = () => setExpandedOverride(!expanded);
 
   // pi has no per-tool cancel: `abort` cancels the run's signal, which the running
@@ -152,28 +168,27 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
       <div className="exec-header">
         {/* The disclosure is the summary, not the whole row: the row also carries the
             action buttons, and nesting them in a `role="button"` row would hide them
-            from assistive tech. */}
-        <button
-          type="button"
-          className="exec-summary"
-          aria-expanded={expanded}
-          onClick={toggle}
-          // A subagent card shows the full task in a styled tooltip instead.
-          title={subagent ? undefined : summary || undefined}>
-          <Icon className="exec-type-icon" aria-hidden />
-          <span className="exec-name">{label}</span>
-          {displaySummary &&
-            (subagent ? (
-              <Tooltip
-                content={summary || displaySummary}
-                side="bottom"
-                align="start">
-                <span className="exec-summary-text">{displaySummary}</span>
-              </Tooltip>
-            ) : (
+            from assistive tech. On a subagent card the hover tooltip on that same
+            surface carries the task in full, which has nowhere else to be read. */}
+        <Tooltip
+          content={subagent && prompt ? tipHead(prompt) : ''}
+          side="bottom"
+          align="start"
+          gap={4}
+          className="subagent-prompt-tip">
+          <button
+            type="button"
+            className="exec-summary"
+            aria-expanded={expanded}
+            onClick={toggle}
+            title={subagent ? undefined : summary || undefined}>
+            <Icon className="exec-type-icon" aria-hidden />
+            <span className="exec-name">{label}</span>
+            {displaySummary && (
               <span className="exec-summary-text">{displaySummary}</span>
-            ))}
-        </button>
+            )}
+          </button>
+        </Tooltip>
         {(duration || copyText || live) && (
           <span className="exec-actions">
             {duration && <span className="tool-duration">{duration}</span>}
@@ -246,6 +261,7 @@ function renderBody(
         report={view.report}
         status={status}
         complete={view.nestedComplete}
+        outputsStored={view.outputsStored}
       />
     );
   }

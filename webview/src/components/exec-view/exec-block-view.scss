@@ -27,6 +27,14 @@
     var(--amulet-shadow-sm);
 }
 
+/* A card with an open hover surface has to beat the cards stacked after it: a joined
+   card is its own stacking context (`isolation: isolate`), and a `.flyout` inside it
+   cannot lift itself out of that. */
+.exec-block:has(.flyout) {
+  position: relative;
+  z-index: 4;
+}
+
 /* Joined stacking: collapse adjacent calls */
 .exec-block.exec-joined-prev {
   position: relative;
@@ -87,7 +95,10 @@ body.spacing-compact .exec-block.exec-joined-prev {
   overflow: visible;
   list-style: none;
   position: relative;
-  z-index: 1;
+  /* Above `.exec-content` (z-index 1): a hover surface opened from the header is a DOM
+     child of it, and `.flyout` cannot lift itself out of this sibling relationship — at
+     an equal z-index the card body would paint over the prompt tooltip. */
+  z-index: 3;
   cursor: pointer;
   pointer-events: auto;
   border: none;
@@ -233,6 +244,22 @@ body.spacing-compact .exec-block.exec-joined-prev {
   color: var(--amulet-fg);
   font-family: var(--amulet-monospace);
   font-variation-settings: 'MONO' 1;
+}
+
+/* The subagent's task in full. The header only has room for a line of it, so the
+   hover surface is where the prompt is read. Like the nested-row surface it is inert:
+   it lies over the call list, and the list has to stay clickable. */
+.subagent-prompt-tip {
+  max-width: min(460px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.subagent-prompt-tip .tooltip-text {
+  box-sizing: border-box;
+  max-width: none;
+  max-height: 240px;
+  overflow: hidden;
+  white-space: pre-wrap;
 }
 
 /* Right-aligned elapsed time, plus the hover actions, in one trailing cluster. */

@@ -67,7 +67,17 @@ export function summarize(name: string, args: Record<string, unknown>): string {
     case 'ls':
       return first('path', 'dir') || '.';
     default:
-      return first('path', 'file', 'command', 'pattern', 'query', 'url');
+      // `task` is what a subagent-style call carries, and it is the only argument
+      // worth a preview there.
+      return first(
+        'path',
+        'file',
+        'command',
+        'pattern',
+        'query',
+        'url',
+        'task',
+      );
   }
 }
 
@@ -141,11 +151,14 @@ function toolElapsed(
   return tool.durationMs ?? preferredMs;
 }
 
+/** Collapse a multi-line value to one line; CSS does the ellipsis after that. */
+export function oneLine(text: string): string {
+  return text.replace(/\s*\n\s*/g, ' ').trim();
+}
+
 /** Single-line preview for a row: newlines and indent collapse, CSS does the ellipsis. */
 export function toolPreview(name: string, args: unknown): string {
-  return summarize(name, asRecord(args))
-    .replace(/\r?\n\s*/g, ' ')
-    .trim();
+  return oneLine(summarize(name, asRecord(args)));
 }
 
 /**
@@ -173,6 +186,63 @@ export function toolRowPreview(tool: ToolExec): string {
   return tool.argsOmittedBytes
     ? `[arguments omitted, ${tool.argsOmittedBytes} bytes]`
     : '';
+}
+
+/**
+ * Budgets for hover text. A tooltip surface cannot be scrolled — it is inert, so the
+ * pointer reaches whatever it covers instead (see `.sub-call-tip` / `.subagent-prompt-tip`
+ * in the cards' SCSS) — so what does not fit is simply not shown, and the line count is
+ * what keeps the surface inside the window.
+ */
+export const TIP_TAIL_LINES = 14;
+export const TIP_TAIL_CHARS = 1200;
+export const TIP_HEAD_LINES = 14;
+export const TIP_HEAD_CHARS = 1200;
+
+/**
+ * Tail of a call's output for the hover tooltip: the end is where the error or the
+ * result line is, so the head is what gets cut.
+ */
+export function tipTail(
+  text: string,
+  maxLines = TIP_TAIL_LINES,
+  maxChars = TIP_TAIL_CHARS,
+): string {
+  const lines = text.split('\n');
+  let out = lines.length > maxLines ? lines.slice(-maxLines).join('\n') : text;
+  if (out.length > maxChars) out = out.slice(-maxChars);
+  if (out.length >= text.length) return text;
+  return `… ${text.length - out.length} earlier chars …\n${out}`;
+}
+
+/**
+ * Head of a command or task, for the same surface. Cutting the end of a command or of a
+ * prompt is honest, cutting its start would not be, so this is the mirror of
+ * {@link tipTail} — and the card's Copy button is how you get the rest.
+ */
+export function tipHead(
+  text: string,
+  maxLines = TIP_HEAD_LINES,
+  maxChars = TIP_HEAD_CHARS,
+): string {
+  const trimmed = text.trim();
+  const lines = trimmed.split('\n');
+  let out =
+    lines.length > maxLines ? lines.slice(0, maxLines).join('\n') : trimmed;
+  if (out.length > maxChars) out = out.slice(0, maxChars).trimEnd();
+  if (out.length >= trimmed.length) return trimmed;
+  return `${out}\n… ${trimmed.length - out.length} more chars …`;
+}
+
+/** Rows a call list renders, counting the nested ones: the list's "newest content" signal. */
+export function countCallRows(
+  calls: ToolExec[],
+  tools: Record<string, ToolExec>,
+): number {
+  return calls.reduce(
+    (total, call) => total + 1 + countCallRows(childCalls(call, tools), tools),
+    0,
+  );
 }
 
 /** Direct nested calls of `tool`, in the order they were made. */

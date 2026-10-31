@@ -61,6 +61,12 @@ export interface ToolExec {
   childIds?: string[];
   /** False when pi truncated the nested-call record (count/size limits). */
   nestedComplete?: boolean;
+  /**
+   * True when this tool's nested list was rebuilt from pi's persisted `nestedCalls`
+   * record rather than from live events. The record carries arguments and error text
+   * only — never a successful output — so those rows have nothing to expand to.
+   */
+  nestedFromRecord?: boolean;
 }
 
 export interface UiMessage {
@@ -182,8 +188,8 @@ function seedToolsFromHistory(
       resultText: textOfContent(result.content),
     };
     // Nested calls are only recoverable from the parent's record: the child never
-    // produces messages in this session. Outputs are not persisted, so a reloaded
-    // card lists calls without expandable results.
+    // produces messages in this session. The record holds no outputs, so a reloaded row
+    // expands only when it failed — pi does persist the error text of a nested call.
     const nested = result.nestedCalls;
     if (!nested?.calls?.length) continue;
     const childIds: string[] = [];
@@ -204,12 +210,16 @@ function seedToolsFromHistory(
               : 'running',
         isError: call.status === 'error',
         durationMs: call.durationMs,
+        // A failed call is the one nested result pi does persist (500 chars), so the
+        // row is expandable and its tooltip has something to show.
+        resultText: call.error,
       };
     }
     tools[id] = {
       ...tools[id],
       childIds,
       nestedComplete: nested.complete,
+      nestedFromRecord: true,
     };
   }
   return tools;

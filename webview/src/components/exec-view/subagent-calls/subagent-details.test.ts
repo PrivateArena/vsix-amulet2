@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { oneLine } from '../tool-display';
 import {
   cleanReport,
   isSubagentTool,
   readSubagentDetails,
   resolveSubagentCard,
   subagentMetaLine,
+  subagentPrompt,
 } from './subagent-details';
 
 describe('readSubagentDetails', () => {
@@ -124,5 +126,29 @@ describe('cleanReport', () => {
     expect(cleanReport(raw)).toBe('## Findings\n\n- two files');
     expect(cleanReport('Plain report.')).toBe('Plain report.');
     expect(cleanReport('')).toBe('');
+  });
+});
+
+describe('subagentPrompt', () => {
+  it('returns the whole task, newlines and all, where the header fits one line', () => {
+    const task =
+      'Survey the directory.\n\nRead each file and report the sizes.';
+    expect(subagentPrompt({ role: 'explore', task })).toBe(task);
+    expect(oneLine(subagentPrompt({ role: 'explore', task }))).toBe(
+      'Survey the directory. Read each file and report the sizes.',
+    );
+  });
+
+  it('accepts the argument names a forked subagent tool uses', () => {
+    expect(subagentPrompt({ prompt: 'do x' })).toBe('do x');
+    expect(subagentPrompt({ message: 'do y' })).toBe('do y');
+  });
+
+  it('falls back to the runtime subtitle when the arguments are gone', () => {
+    expect(subagentPrompt({}, { subtitle: 'Survey the directory' })).toBe(
+      'Survey the directory',
+    );
+    expect(subagentPrompt(undefined, undefined)).toBe('');
+    expect(subagentPrompt({ role: 'explore' })).toBe('');
   });
 });

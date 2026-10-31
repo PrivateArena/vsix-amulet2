@@ -6,7 +6,7 @@
  * `tool_execution_end.result.details`. The shape is the runtime extension's own —
  * typed as `unknown` in the protocol — so it is narrowed here and nowhere else.
  */
-import { asRecord } from '../tool-display';
+import { asRecord, oneLine } from '../tool-display';
 
 /** Card header text while the child runs; the role name goes in the meta line. */
 export const SUBAGENT_TITLE = 'Launch Subagent';
@@ -45,6 +45,12 @@ function num(value: unknown): number | undefined {
     : undefined;
 }
 
+/** A one-line string field: the header shows `subtitle` in a single ellipsized row. */
+function line(value: unknown): string | undefined {
+  const text = str(value);
+  return text ? oneLine(text) : undefined;
+}
+
 /**
  * Narrow an arbitrary `details` payload to a subagent card, or null when the
  * payload is not one. Markers: the `pendant` display block, a `report`, a child
@@ -64,7 +70,7 @@ export function readSubagentDetails(
 
   return {
     title: str(pendant.title) ?? str(raw.displayName),
-    subtitle: str(pendant.subtitle) ?? str(raw.task) ?? str(raw.description),
+    subtitle: line(pendant.subtitle) ?? line(raw.task) ?? line(raw.description),
     status: str(raw.status),
     exit: str(raw.exit),
     report: str(raw.report),
@@ -84,6 +90,27 @@ export function isSubagentTool(name: string): boolean {
 }
 
 /**
+ * The task the main agent handed the child, untruncated.
+ *
+ * The card header only has room for one line of it, so this is what the hover
+ * tooltip and the copy button carry. `args.task` is the built-in subagent tool's
+ * own field (and the only place the full multi-line text ever appears); a fork may
+ * name it `prompt` or `message`, and `details.subtitle` is the runtime's one-line
+ * rendering of it, used when the arguments are not available.
+ */
+export function subagentPrompt(
+  args: unknown,
+  details?: SubagentDetailsView,
+): string {
+  const record = asRecord(args);
+  for (const key of ['task', 'prompt', 'message', 'instruction']) {
+    const text = str(record[key]);
+    if (text) return text;
+  }
+  return details?.subtitle ?? '';
+}
+
+/**
  * Card view for any tool: the parsed `details` when this is a subagent result, a
  * name-based fallback while the arguments are still streaming (no `details` yet),
  * or null for every other tool.
@@ -96,12 +123,9 @@ export function resolveSubagentCard(
   const parsed = readSubagentDetails(details);
   if (parsed) return parsed;
   if (!isSubagentTool(name)) return null;
-  const task = asRecord(args).task;
+  const prompt = subagentPrompt(args);
   return {
-    subtitle:
-      typeof task === 'string'
-        ? task.replace(/\s*\n\s*/g, ' ').trim()
-        : undefined,
+    subtitle: prompt ? oneLine(prompt) : undefined,
   };
 }
 

@@ -114,8 +114,11 @@ Three facts that are easy to get wrong:
 1. `message.nestedCalls` (on the settled `role: "toolResult"` message, and in
    `get_messages`) is `{ calls: NestedToolCallRecord[], complete: boolean }` — pi's
    bounded record (256 calls, 8 KB/call, 32 KB total; oversized args come back as
-   `argumentsBytes` only). **Outputs are not persisted**, so a reloaded card lists the
-   calls without expandable results.
+   `argumentsBytes` only). **Successful outputs are not persisted**; the only result the
+   record keeps is the `error` text of a failed call, truncated to 500 chars
+   (`NESTED_CALL_LIMITS.maxErrorChars`), which the webview maps onto that row's
+   `resultText` so a reloaded error row still expands. A reloaded card otherwise lists
+   calls without expandable results and says so (`ToolExec.nestedFromRecord`).
 2. `details.nestedCalls` inside the subagent payload is a **number**; do not conflate
    it with `message.nestedCalls`.
 3. pi's own TUI deliberately does not draw nested calls (`interactive-mode.js` skips
@@ -140,6 +143,33 @@ per-tool cancel, only the run-level signal handed to `execute()`, which a tool m
 ignore until it settles — so an aborted call comes back as an error result, and a card
 the runtime never reported on shows no cluster at all: aborting _it_ would only hit
 whatever else is running.
+
+What the card shows of a subagent, and where the limits are:
+
+- The **task** is `args.task` (a fork may call it `prompt`/`message`/`instruction`); it
+  is the only place the full multi-line text exists — `details.subtitle` and
+  `pendant.subtitle` are the runtime's one-line rendering of it. `subagentPrompt()` in
+  `subagent-details.ts` is the single reader of that key list: the header shows one line
+  of it, the header hover surface and the Copy button the whole text.
+- The nested call list **follows the newest row** while the child runs
+  (`hooks/use-stick-to-bottom.ts`), and hands control back the moment the reader scrolls
+  up. It is driven by a row count, not by render, so expanding a row's output does not
+  move the view.
+- Both hover surfaces are DOM children of the element they are anchored to — `Flyout`
+  renders inline, there is no portal. Paint order therefore follows the ancestors: hence
+  `.exec-header` above `.exec-content` (both were `z-index: 1`, so the card body covered
+  its own header tooltip) and `.exec-block:has(.flyout)` for the joined stack, where
+  `isolation: isolate` confines the surface to its card. The flyout clamps horizontally
+  only, so a surface caps its own width (`*.scss`).
+- **The surfaces are inert** (`pointer-events: none`) and their text is cut to a line
+  budget (`tipHead`/`tipTail`), not scrolled. An interactive surface would sit between
+  the pointer and the nested call list — the flyout cannot escape the card it belongs to,
+  so a click there would land on the tooltip's own row or header instead of the row being
+  pointed at, which is exactly the expansion gesture. Copy, not selection, is how the
+  full text leaves the card.
+- A row's tooltip shows the call **and its output**, tail-first: `resultText` is live for
+  a running call, and the end of an output is where the interesting line is. A command
+  and a task are cut the other way round — the head is what identifies them.
 
 ## Known gaps for the next session
 
