@@ -3,6 +3,7 @@ import type { HostMessage } from '../../shared/protocol';
 import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
+import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
 import { ChatScreen } from './screens/session-screen';
@@ -57,10 +58,12 @@ export function Shell() {
   }, []);
 
   // While an extension dialog is open, Escape answers that question (deny) — it must not also abort the
-  // whole run underneath it, which is what the old unconditional binding did.
+  // whole run underneath it, which is what the old unconditional binding did. Same for the session-info
+  // dialog, whose Escape only closes itself.
+  const sessionInfoOpen = useSessionInfoStore((s) => s.open);
   useEscapeKey(
     () => actions.abort(),
-    state.streaming && state.pendingUi.length === 0,
+    state.streaming && state.pendingUi.length === 0 && !sessionInfoOpen,
   );
 
   // Stay on the splash until the runtime is actually up. The runtime reports

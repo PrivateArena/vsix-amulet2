@@ -15,6 +15,7 @@ import {
 import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import { openProviderLogin } from '../../../stores/provider-login-store';
+import { openSessionInfo } from '../../../stores/session-info-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
 
 const REPO_URL = 'https://github.com/gunir/vsix-amulet2';
@@ -53,7 +54,7 @@ export function SettingsMenu() {
     {
       label: 'Show session info',
       icon: LuInfo,
-      onSelect: () => actions.showSessionInfo(),
+      onSelect: () => openSessionInfo(),
     },
     {
       label: 'Uncollapse thinking',

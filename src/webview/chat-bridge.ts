@@ -326,29 +326,6 @@ export class ChatBridge implements vscode.Disposable {
           }
           return;
         }
-        case 'showSessionInfo': {
-          if (!runtime?.isReady) {
-            void vscode.window.showInformationMessage(
-              'Amulet: no active session.',
-            );
-            return;
-          }
-          const s = await runtime.getState();
-          const summary = [
-            s.sessionName || 'Untitled session',
-            s.model ? s.model.name || s.model.id : null,
-            `${s.messageCount} message${s.messageCount === 1 ? '' : 's'}`,
-          ]
-            .filter(Boolean)
-            .join(' · ');
-          void vscode.window.showInformationMessage(summary, {
-            detail: s.sessionFile
-              ? `Session file: ${s.sessionFile}`
-              : undefined,
-            modal: false,
-          } as vscode.MessageOptions);
-          return;
-        }
         case 'openSettings':
           await vscode.commands.executeCommand(
             'workbench.action.openSettings',

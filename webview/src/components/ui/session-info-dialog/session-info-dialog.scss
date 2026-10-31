@@ -1,0 +1,204 @@
+/* Session Info dialog — same surface language as the confirm modal / auth dialog, scoped to si-*. */
+
+.si-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--amulet-bg) 55%, transparent);
+  animation: si-fade-in 0.15s ease both;
+}
+
+.si-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  max-height: calc(100vh - 32px);
+  border: 1px solid
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
+  box-shadow:
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+  animation: si-enter 0.2s var(--amulet-ease-out) both;
+  overflow: hidden;
+}
+
+.si-dialog:focus,
+.si-dialog:focus-visible {
+  outline: none;
+}
+
+.si-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--amulet-border-subtle);
+}
+
+.si-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.si-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.si-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+}
+
+.si-empty {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--amulet-muted);
+}
+
+.si-stale {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--amulet-warning) 35%, transparent);
+  border-radius: var(--amulet-radius-sm);
+  background: color-mix(in srgb, var(--amulet-warning) 10%, transparent);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--amulet-fg);
+}
+
+.si-section-title {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--amulet-accent);
+}
+
+.si-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 6px;
+  border-radius: var(--amulet-radius-xs);
+}
+
+.si-row:nth-child(odd) {
+  background: var(--amulet-surface-subtle);
+}
+
+.si-row dt {
+  flex: none;
+  min-width: 5.5em;
+  font-size: 0.78rem;
+  color: var(--amulet-muted);
+  white-space: nowrap;
+}
+
+.si-row dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--amulet-fg);
+}
+
+.si-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.si-mono {
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+  line-height: 1.5;
+}
+
+.si-copy {
+  appearance: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--amulet-radius-xs);
+  background: transparent;
+  color: var(--amulet-muted);
+  cursor: pointer;
+  transition:
+    color var(--amulet-transition-fast),
+    background-color var(--amulet-transition-fast);
+}
+
+.si-copy:hover {
+  color: var(--amulet-fg);
+  background: var(--amulet-surface-hover);
+}
+
+.si-copy:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
+}
+
+.si-copy.is-copied {
+  color: var(--amulet-success);
+}
+
+@keyframes si-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes si-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+body.animations-disabled .si-overlay,
+body.animations-disabled .si-dialog {
+  animation: none;
+}

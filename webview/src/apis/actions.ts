@@ -49,6 +49,10 @@ export const actions = {
     postMessage({ type: 'openSessionInEditor', path }),
   requestSessions: () => postMessage({ type: 'requestSessions' }),
   requestCommands: () => postMessage({ type: 'requestCommands' }),
+  /** Ask the host for a fresh `get_session_stats` push (`stats` HostMessage). */
+  requestStats: () => postMessage({ type: 'requestStats' }),
+  /** Ask the host for a fresh `get_state` push (`state` HostMessage). */
+  requestState: () => postMessage({ type: 'requestState' }),
   openForkPicker: () => postMessage({ type: 'openForkPicker' }),
   forkFromMessage: (text: string) =>
     postMessage({ type: 'forkFromMessage', text }),
@@ -57,7 +61,6 @@ export const actions = {
   // info menu
   exportChat: () => postMessage({ type: 'exportChat' }),
   restart: () => postMessage({ type: 'restart' }),
-  showSessionInfo: () => postMessage({ type: 'showSessionInfo' }),
   openPiFolder: () => postMessage({ type: 'openPiFolder' }),
   updatePi: () => postMessage({ type: 'updatePi' }),
   openSettings: () => postMessage({ type: 'openSettings' }),

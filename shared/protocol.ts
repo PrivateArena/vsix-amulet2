@@ -433,6 +433,9 @@ export interface SessionInfo {
 }
 
 export interface SessionStats {
+  /** Mirrored from `get_state`; pi includes both so the two sources agree. */
+  sessionFile?: string;
+  sessionId?: string;
   userMessages: number;
   assistantMessages: number;
   toolCalls: number;
@@ -579,7 +582,6 @@ export type WebviewMessage =
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
-  | { type: 'showSessionInfo' }
   | { type: 'openSettings' }
   | { type: 'pickFiles' }
   | { type: 'openExternal'; url: string }
