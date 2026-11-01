@@ -37,7 +37,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                                                                                                     |
 | Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                             |
 | Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                               |
-| pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
+| pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts) (one owner, ack watchdog, single answer), [`src/webview/ui-surfaces.ts`](src/webview/ui-surfaces.ts) (surface registry + fan-out), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
 | Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens |
 | Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                   |
 | React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                             |
@@ -101,6 +101,12 @@ Extension settings live under the `amulet.*` namespace (declared in [`package.js
 
 ## Gotchas
 
+- Dialog routing must not depend on `WebviewView.visible`/`WebviewPanel.visible`: VS Code only pushes that
+  flag on `onDidChangeVisibility` (it starts `false`), so it is wrong in both directions across versions. The
+  host therefore shows a dialog on **every** live surface, the webview proves it painted one by measuring its
+  own overlay (`extensionUiShown`), and if nothing proves it within the watchdog window the host answers with
+  a native VS Code dialog. `extension_ui_response` goes out exactly once per request id. Every step logs as
+  `[ui] …` in the Amulet output channel.
 - The `pi` binary is external and may not be on VS Code's PATH. Bootstrap logic and version detection live in [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts).
 - The webview cannot access the microphone, filesystem, or Node APIs directly — everything goes through the host bridge.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

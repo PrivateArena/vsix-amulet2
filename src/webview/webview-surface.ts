@@ -14,7 +14,12 @@ export interface WebviewSurface {
 }
 
 export interface CreateWebviewSurfaceOptions {
-  /** Whether the bound webview is currently visible (drives dialog routing). */
+  /** Human-readable name for this surface in the output-channel log. */
+  surfaceLabel: string;
+  /**
+   * Whether VS Code reports this webview as on screen. A hint for dialog routing (and for the log), not a
+   * guarantee: the flag is only pushed by `onDidChangeVisibility`, so the webview's own layout ack decides.
+   */
   isVisible: () => boolean;
   /** When true, the surface opens on a fresh session instead of resuming (see {@link ChatBridge}). */
   openFresh?: boolean;
@@ -50,7 +55,11 @@ export function createWebviewSurface(
     sessions,
     log,
     (message: HostMessage) => void webview.postMessage(message),
-    { isVisible: options.isVisible, openFresh: options.openFresh },
+    {
+      surfaceLabel: options.surfaceLabel,
+      isVisible: options.isVisible,
+      openFresh: options.openFresh,
+    },
   );
 
   const sub = webview.onDidReceiveMessage((message: WebviewMessage) => {

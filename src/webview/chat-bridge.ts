@@ -41,17 +41,31 @@ import {
   resolveToolImagePath,
 } from './tool-image';
 import {
-  claimUiRequest,
-  releaseUiRequest,
-  routeUiRequest,
+  ackUiRequest,
+  answerUiRequest,
+  armUiRequest,
+  beginUiRequest,
+  isModalUiMethod,
+  type DialogDeps,
 } from './ui-request-routing';
-import { hasVisibleUiSurface, registerUiSurface } from './ui-surfaces';
+import {
+  countSurfacesShowing,
+  dismissUiRequest,
+  registerUiSurface,
+  showUiRequest,
+  type UiSurface,
+} from './ui-surfaces';
 
 /** Ceiling for the post-update runtime reload, so its result toast always shows. */
 const PI_RELOAD_TIMEOUT_MS = 30_000;
 
 export interface ChatBridgeOptions {
-  /** Whether the bound webview is currently visible (drives in-webview vs native dialogs). */
+  /** Human-readable surface name in the output-channel log (`sidebar`, `editor`). */
+  surfaceLabel: string;
+  /**
+   * Whether VS Code reports the bound webview as on screen (`WebviewView.visible`). Logged as a hint only:
+   * dialog routing uses the webview's own layout ack, because this flag is unreliable across versions.
+   */
   isVisible: () => boolean;
   /**
    * When true, the first connect opens on a fresh session instead of resuming
@@ -66,7 +80,8 @@ export interface ChatBridgeOptions {
 /**
  * Connects one webview surface to the active pi runtime: forwards runtime events
  * and status to the webview, translates webview messages into runtime calls, and
- * surfaces pi extension dialogs either in-webview (when visible) or natively.
+ * surfaces pi extension dialogs in-webview, falling back to VS Code's own dialog
+ * when no webview can show one.
  */
 export class ChatBridge implements vscode.Disposable {
   private runtime: PiRuntime | null = null;
@@ -86,7 +101,7 @@ export class ChatBridge implements vscode.Disposable {
    * webview tree twice in development, and two surfaces read the same file.
    */
   private readonly imageReads = new Set<string>();
-  /** extension_ui_request ids we've handed to the webview and are awaiting a reply for. */
+  /** extension_ui_request ids this surface is showing and are still awaiting a reply. */
   private readonly forwardedUi = new Set<string>();
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
   private readonly unregisterSurface: () => void;
@@ -99,7 +114,32 @@ export class ChatBridge implements vscode.Disposable {
   ) {
     // Field initializers run before parameter properties are assigned under ES2022 class fields,
     // so the registration that reads `this.options` has to happen here.
-    this.unregisterSurface = registerUiSurface(() => this.options.isVisible());
+    this.unregisterSurface = registerUiSurface(this.asUiSurface());
+  }
+
+  /** This bridge's entry in the dialog surface registry. */
+  private asUiSurface(): UiSurface {
+    return {
+      label: this.options.surfaceLabel,
+      hostVisible: () => this.options.isVisible(),
+      show: (request, source) => {
+        // A dialog may only be shown by a surface bound to the child process that asked for it: an
+        // answer sent to another runtime would be ignored and the real question would stay parked.
+        if (this.disposed || this.runtime !== source) return false;
+        this.forwardedUi.add(request.id);
+        this.post({ type: 'extensionUiRequest', request });
+        this.log.info(
+          `[ui] ${request.method} ${request.id}: posted to ${this.options.surfaceLabel} ` +
+            `(host-visible=${this.options.isVisible()})`,
+        );
+        return true;
+      },
+      dismiss: (id) => {
+        if (!this.forwardedUi.delete(id)) return;
+        this.post({ type: 'extensionUiDismiss', id });
+      },
+      isShowing: (id) => this.forwardedUi.has(id),
+    };
   }
 
   async connect(): Promise<void> {
@@ -436,10 +476,22 @@ export class ChatBridge implements vscode.Disposable {
         case 'log':
           this.log[message.level](`[webview] ${message.text}`);
           return;
+        case 'extensionUiShown':
+          // Proof from this webview that it painted the dialog. Only a `visible` ack stops the host from
+          // handing the question to VS Code, so record both signals.
+          this.log.info(
+            `[ui] ${message.id}: ${this.options.surfaceLabel} painted=${message.visible} ` +
+              `(host-visible=${this.options.isVisible()})`,
+          );
+          ackUiRequest(message.id, message.visible);
+          return;
         case 'extensionUiResponse':
-          this.forwardedUi.delete(message.response.id);
-          releaseUiRequest(message.response.id);
-          runtime?.respondToExtensionUi(message.response);
+          // Routed through the dispatcher so the one-answer rule holds across surfaces.
+          if (!answerUiRequest(message.response.id, message.response)) {
+            this.log.info(
+              `[ui] ${message.response.id}: late answer dropped (already answered elsewhere)`,
+            );
+          }
           return;
       }
     } catch (err) {
@@ -1188,28 +1240,33 @@ export class ChatBridge implements vscode.Disposable {
   // --- Extension UI dialogs ------------------------------------------------
 
   /**
-   * Route one `extension_ui_request` to the human: the in-chat dialog while a surface can show it,
-   * a native VS Code dialog otherwise. See {@link ui-request-routing} for why a request may only be
-   * answered once, by whoever owns it.
+   * Route one `extension_ui_request` to the human. A modal request is shown on every surface of this
+   * runtime and answered once by whoever gets the click first, with a native VS Code dialog as the
+   * fallback if no webview proves it painted one. See {@link ui-request-routing}.
    */
   private async onUiRequest(req: ExtensionUiRequest): Promise<void> {
-    const route = routeUiRequest(req.method, {
-      selfVisible: this.options.isVisible(),
-      anyVisible: hasVisibleUiSurface(),
-    });
-    if (route === 'skip') return;
-    if (!claimUiRequest(req.id, route)) return;
+    const runtime = this.runtime;
+    if (!runtime) return;
 
-    if (route === 'webview') {
-      this.forwardedUi.add(req.id);
-      this.post({ type: 'extensionUiRequest', request: req });
+    if (!isModalUiMethod(req.method)) {
+      const response = await handleExtensionUiRequest(req, this.log);
+      if (response && !this.disposed) runtime.respondToExtensionUi(response);
       return;
     }
-    const response = await handleExtensionUiRequest(req, this.log);
-    releaseUiRequest(req.id);
-    if (response && !this.disposed) {
-      this.runtime?.respondToExtensionUi(response);
-    }
+
+    const deps: DialogDeps = {
+      fallbackToNative: (request) =>
+        handleExtensionUiRequest(request, this.log),
+      respond: (response) => {
+        if (!this.disposed) this.runtime?.respondToExtensionUi(response);
+      },
+      dismiss: dismissUiRequest,
+      log: (text) => this.log.info(text),
+    };
+    // Every bridge receives the request; the first one to claim it orchestrates for all of them.
+    if (!beginUiRequest(req, deps)) return;
+    const shown = showUiRequest(req, runtime);
+    armUiRequest(req.id, shown);
   }
 
   private detach(): void {
@@ -1219,17 +1276,19 @@ export class ChatBridge implements vscode.Disposable {
 
   dispose(): void {
     this.disposed = true;
-    // Answer any dialogs still open in the (now gone) webview so pi doesn't hang.
+    // Leave the registry first, so `countSurfacesShowing` below no longer counts this surface.
+    this.unregisterSurface();
+    // Answer any dialog still open in the (now gone) surface so pi doesn't hang — unless another surface
+    // is still showing the same question, where the human can answer it.
     for (const id of this.forwardedUi) {
-      releaseUiRequest(id);
-      this.runtime?.respondToExtensionUi({
+      if (countSurfacesShowing(id) > 0) continue;
+      answerUiRequest(id, {
         type: 'extension_ui_response',
         id,
         cancelled: true,
       });
     }
     this.forwardedUi.clear();
-    this.unregisterSurface();
     this.detach();
     this.runtime = null;
   }

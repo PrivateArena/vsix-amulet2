@@ -467,6 +467,22 @@ describe('reducer — local UI actions', () => {
     expect(cleared.pendingUi).toHaveLength(0);
   });
 
+  it('drops a dialog the host retracted because another surface answered it', () => {
+    const withUi = reducer(
+      initialState,
+      host({
+        type: 'extensionUiRequest',
+        request: { type: 'extension_ui_request', id: 'h1', method: 'select' },
+      }),
+    );
+    // The native fallback (or the other panel) answered — this copy must vanish without answering twice.
+    const cleared = reducer(
+      withUi,
+      host({ type: 'extensionUiDismiss', id: 'h1' }),
+    );
+    expect(cleared.pendingUi).toEqual([]);
+  });
+
   it('queues extension-UI requests in arrival order (pi-gate asks follow-ups per stage)', () => {
     let state = reducer(
       initialState,

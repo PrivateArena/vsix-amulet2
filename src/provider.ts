@@ -50,6 +50,7 @@ export class PiSidebarProvider implements vscode.WebviewViewProvider {
       // The sidebar always opens on a fresh chat; the prior conversation stays
       // in session history (non-destructive), reachable via the history dropdown.
       {
+        surfaceLabel: 'sidebar',
         isVisible: () => webviewView.visible,
         openFresh: true,
         onReady: () => this.flush(webviewView),

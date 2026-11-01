@@ -89,4 +89,7 @@ export const actions = {
   // dialogs
   extensionUiResponse: (response: ExtensionUiResponse) =>
     postMessage({ type: 'extensionUiResponse', response }),
+  /** Report whether this webview really painted the dialog (see `extensionUiShown`). */
+  extensionUiShown: (id: string, visible: boolean) =>
+    postMessage({ type: 'extensionUiShown', id, visible }),
 };

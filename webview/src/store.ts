@@ -504,6 +504,12 @@ export function reducer(state: ChatState, action: Action): ChatState {
     }
     case 'extensionUiRequest':
       return { ...state, pendingUi: [...state.pendingUi, message.request] };
+    case 'extensionUiDismiss':
+      // Answered elsewhere (another panel, or VS Code's native dialog): drop this copy without answering.
+      return {
+        ...state,
+        pendingUi: state.pendingUi.filter((u) => u.id !== message.id),
+      };
     case 'sessions':
       return { ...state, sessions: message.sessions, hasLoadedHistory: true };
     case 'stats':

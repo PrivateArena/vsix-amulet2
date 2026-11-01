@@ -36,7 +36,10 @@ export class EditorChatManager implements vscode.Disposable {
       this.sessions,
       this.log,
       this.appVersion,
-      { isVisible: () => panel.visible },
+      {
+        surfaceLabel: 'editor',
+        isVisible: () => panel.visible,
+      },
     );
 
     panel.onDidDispose(() => {

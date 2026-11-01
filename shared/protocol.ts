@@ -460,8 +460,8 @@ export interface ExtensionUiResponse {
 export type ExtensionUiModalMethod = 'confirm' | 'select' | 'input' | 'editor';
 
 /**
- * pi blocks the tool call until it gets an `extension_ui_response` for these, so a request must be
- * routed to exactly one surface — see `hasVisibleUiSurface`/`claimUiRequest` on the host.
+ * pi blocks the tool call until it gets an `extension_ui_response` for these, so the request is shown on
+ * every live surface and answered exactly once — see `ui-request-routing` on the host.
  */
 export const MODAL_UI_METHODS: readonly ExtensionUiModalMethod[] = [
   'confirm',
@@ -661,6 +661,14 @@ export type WebviewMessage =
     }
   /** Open the file behind a tool image in the VS Code viewer (full size). */
   | { type: 'openToolImage'; toolCallId: string; path: string }
+  /**
+   * Proof that this webview actually painted a forwarded dialog. The host cannot tell by itself:
+   * `WebviewView.visible`/`WebviewPanel.visible` start out `false` and are only pushed by
+   * `onDidChangeVisibility`, so a surface can be on screen and still report `false` (or the reverse).
+   * `visible` therefore comes from the webview's own layout — a detached or `display:none` webview
+   * measures 0×0 — and lets the host skip its native fallback.
+   */
+  | { type: 'extensionUiShown'; id: string; visible: boolean }
   | { type: 'openExternal'; url: string }
   | { type: 'copyText'; text: string }
   | { type: 'requestAuthStatus' }
@@ -702,7 +710,12 @@ export type HostMessage =
   | { type: 'enterForkMode'; entryId: string; text: string }
   | { type: 'authStatus'; status: AuthStatus }
   | { type: 'providerLoginResult'; result: ProviderLoginResult }
-  | { type: 'extensionUiRequest'; request: ExtensionUiRequest };
+  | { type: 'extensionUiRequest'; request: ExtensionUiRequest }
+  /**
+   * Retract a dialog the host already forwarded: another surface (or VS Code's native dialog) answered
+   * it, so this copy must disappear without sending a second answer.
+   */
+  | { type: 'extensionUiDismiss'; id: string };
 
 export interface WebviewConfig {
   /** Render reasoning blocks expanded unless the user overrode one locally. */

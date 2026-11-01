@@ -63,7 +63,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
 | components/input-bar/ctx-meter/context-usage.ts | Intra-turn token estimate from streaming `usage` | 72 | `contextUsageOf(stats: SessionStats \| null, messages: UiMessage[]): ContextUsageView \| null`, `contextTokensOf(usage?: Usage): number \| null` |
 | components/input-bar/ctx-meter/context-stats.tsx | Ring + tooltip rendering of that figure | ~120 | Props: none; Hooks: `useChatState` |
-| components/ui/permission-prompt/permission-prompt.tsx | Renders `pendingUi[0]`; answers exactly once, Esc = cancel = deny | 258 | `PermissionPrompt()`; Hooks: `useChatState` |
+| components/ui/permission-prompt/permission-prompt.tsx | Renders `pendingUi[0]`; answers exactly once, Esc = cancel = deny; measures its own overlay to report `extensionUiShown` (proof it really painted) | ~280 | `PermissionPrompt()`; Hooks: `useChatState` |
 | components/ui/permission-prompt/ui-response.ts | Exact wire shape of dialog replies | 78 | `buildUiResponse(req: Pick<ExtensionUiRequest,'id'\|'method'>, answer: UiAnswer): ExtensionUiResponse` |
 | components/ui/auth-dialog/provider-login-dialog.tsx | Subscription/API-key/device login flow | 439 | `ProviderLoginDialog(...)`; Hooks: `useProviderLoginStore` |
 | components/chat-find/chat-find.tsx | In-transcript find bar (case/regex, next-prev) | 310 | `ChatFind({ containerRef, onReveal }: ChatFindProps)` |

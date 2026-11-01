@@ -59,8 +59,8 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 | src/editor/panel-manager.ts | Editor-tab chat panel (same surface factory) | ~54 | `class EditorChatManager implements vscode.Disposable` — `open(): vscode.WebviewPanel` |
 | src/webview/webview-surface.ts | Shared surface factory: HTML, bridge wiring, bundle watch | ~104 | `createWebviewSurface(webview, extensionUri, sessions, log, appVersion, options): WebviewSurface` |
 | src/webview/chat-bridge.ts | **The bridge**: host<->webview messages, RPC fan-in, session/fork/auth/attachments | 1141 | `class ChatBridge` — `connect(): Promise<void>`, `handleMessage(m: WebviewMessage): Promise<void>`, `pushStats()`, `pushSnapshot()`, `onUiRequest(req: ExtensionUiRequest)` |
-| src/webview/ui-request-routing.ts | Which surface answers a `pi` dialog | ~58 | `routeUiRequest(method: string, surfaces: UiSurfaceState): UiRoute`, `claimUiRequest(id: string, route: UiRoute): boolean` |
-| src/webview/ui-surfaces.ts | Live visibility probes (VS Code flips `.visible` silently) | ~30 | `registerUiSurface(isVisible: () => boolean): () => void`, `hasVisibleUiSurface(): boolean` |
+| src/webview/ui-request-routing.ts | Lifecycle of one pi dialog: owner, paint ack, native fallback, one answer | ~150 | `beginUiRequest(req, deps): boolean`, `armUiRequest(id, shown): void`, `ackUiRequest(id, visible): boolean`, `answerUiRequest(id, res): boolean` |
+| src/webview/ui-surfaces.ts | Live webview surfaces + dialog fan-out | ~75 | `registerUiSurface(surface: UiSurface): () => void`, `showUiRequest(req, runtime): number`, `dismissUiRequest(id): void`, `countSurfacesShowing(id): number` |
 | src/webview/extension-ui.ts | Host-side handling of `extension_ui_request` (notify/status/widget vs dialogs) | ~97 | `handleExtensionUiRequest(...)` |
 | src/webview/html.ts | CSP'd webview HTML + asset URIs | ~73 | `renderWebviewHtml(...)` |
 | src/webview/tool-image.ts | Read one tool-result image off disk, typed by its file signature | ~175 | `readToolImage(p, {cwd}): Promise<ToolImageResult>`, `resolveToolImagePath(p, cwd?): string \| null`, `isSupportedImage(filePath): Promise<boolean>` |
@@ -105,10 +105,10 @@ webview (React)              host (Node)                                pi --mod
                                                      stdout: RpcResponse {id,...}   (correlated)
                              <--- onEvent: RpcEvent  {message_start|message_update|message_end|
                                                       tool_execution_start/update/end|turn_*|agent_*}
-                             <--- extension_ui_request {id,method}  -> routeUiRequest/claim -> dialog
+                             <--- extension_ui_request {id,method}  -> broadcast + ack watchdog -> dialog
   HostMessage  <----  ChatBridge.post  (state|history|models|thinkingLevels|stats|sessions|commands|
-                                        runtimeStatus|config|rpcEvent|extensionUiRequest|pickedFiles|
-                                        toolImage)
+                                        runtimeStatus|config|rpcEvent|extensionUiRequest|extensionUiDismiss|
+                                        pickedFiles|toolImage)
   reducer(state, {type:'host',message}) -> React
 ```
 
@@ -129,9 +129,13 @@ webview (React)              host (Node)                                pi --mod
    `parentToolCallId` and id `<parent>/<n>`; the webview keeps them as `ToolExec.childIds`, never as
    message blocks. `message.nestedCalls` in history is pi's bounded record that drops successful
    outputs — reloaded cards cannot expand results.
-5. **Extension-UI closed loop** (pi-gate approvals): `routeUiRequest` → `claimUiRequest` → visible
-   surface renders `pendingUi`; `cancelled`/no reply ⇒ pi resolves `undefined` ⇒ **deny**. Esc answers
-   the dialog instead of aborting the run.
+5. **Extension-UI closed loop** (pi-gate approvals): every live surface shows the dialog
+   (`showUiRequest`), one bridge orchestrates (`beginUiRequest`/`armUiRequest`), and a surface proves it
+   painted it (`extensionUiShown`/`ackUiRequest`) because `WebviewView.visible` is a pushed flag that lies in
+   both directions. Nobody proves it within `UI_DIALOG_ACK_TIMEOUT_MS` ⇒ VS Code's own dialog takes over.
+   `answerUiRequest` is the only route to `extension_ui_response` and fires once per id; the other copies get
+   `extensionUiDismiss`. No reply ⇒ pi resolves `undefined` ⇒ **deny**. Esc answers the dialog instead of
+   aborting the run.
 6. **Stats ownership split:** host `pushStats` (on connect, `newChat`, `compact`, `turn_end`,
    `agent_end`, `compaction_end` — never per delta) vs webview `contextUsageOf`, which re-derives
    tokens from the streaming `message_end`/late `usage` deltas to fill the intra-turn gap.
@@ -161,7 +165,7 @@ webview (React)              host (Node)                                pi --mod
 | Add a chat-box action / toolbar button | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), `src/webview/chat-bridge.ts` (`handleMessage`) |
 | Work on sessions (list, switch, rename, delete, fork, export) | `src/session/session-store.ts`, `src/webview/chat-bridge.ts` (session ops), `src/runtime/pi-runtime.ts` |
 | Fix sidebar-vs-editor-tab layout/width bugs | `src/webview/webview-surface.ts`, `src/provider.ts`, `src/editor/panel-manager.ts`, `webview/src/assets/css/*.scss` |
-| Touch approvals/dialogs from pi extensions | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/` |
+| Touch approvals/dialogs from pi extensions | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/`; the Amulet output channel logs every routing decision as `[ui] …` |
 | Change the context meter | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`) |
 | Show or change what an image tool result does to the wire | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`) |
 | Add/rename a setting | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`) |

@@ -46,6 +46,30 @@ interface PromptDialogProps {
 
 function PromptDialog({ request, queued }: PromptDialogProps) {
   const dispatch = useChatDispatch();
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Proof of paint for the host: it cannot tell whether this webview is on screen (VS Code's `visible`
+  // flag is only pushed by `onDidChangeVisibility` and lies in both directions), and its native fallback
+  // must not fire while the human is looking at this dialog. A detached or hidden webview measures 0×0,
+  // so it reports `visible: false` and the host keeps its timeout running.
+  useEffect(() => {
+    const probe = () => {
+      const box = overlayRef.current?.getBoundingClientRect();
+      const visible =
+        document.visibilityState !== 'hidden' &&
+        !!box &&
+        box.width > 0 &&
+        box.height > 0;
+      actions.extensionUiShown(request.id, visible);
+      return visible;
+    };
+    // Layout may still be pending on the first pass; a hidden webview never gets past it (rAF is throttled).
+    let raf = 0;
+    if (!probe()) raf = requestAnimationFrame(probe);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [request.id]);
 
   const answer = useCallback(
     (result: UiAnswer) => {
@@ -64,7 +88,7 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
       : '';
 
   return createPortal(
-    <div className="pp-overlay">
+    <div className="pp-overlay" ref={overlayRef}>
       <div
         className="pp-dialog"
         role="alertdialog"
