@@ -49,7 +49,7 @@ describe('write card while the arguments stream', () => {
     expect(html).toContain('the body is');
     expect(html).toContain('+3 lines');
     // The newest line is the one carrying the caret, so the stream reads as typing.
-    expect(html.indexOf('exec-write-caret')).toBeGreaterThan(
+    expect(html.indexOf('exec-stream-caret')).toBeGreaterThan(
       html.indexOf('the body is'),
     );
   });
@@ -85,7 +85,7 @@ describe('write card while the arguments stream', () => {
     });
     expect(html).toContain('exec-write-stream');
     expect(html).toContain('+2 lines');
-    expect(html).toContain('exec-write-caret');
+    expect(html).toContain('exec-stream-caret');
   });
 
   it('shows the body even when the model typed it before the path', () => {
@@ -107,7 +107,7 @@ describe('write card while the arguments stream', () => {
     const html = card({ name: 'write', args, tool });
     expect(html).toContain('patch-additions-only');
     expect(html).not.toContain('exec-write-stream');
-    expect(html).not.toContain('exec-write-caret');
+    expect(html).not.toContain('exec-stream-caret');
     expect(html).toContain('+2 lines');
   });
 
@@ -134,7 +134,7 @@ describe('write card while the arguments stream', () => {
     // preview pretending to type.
     const html = card({ name: 'write' });
     expect(html).not.toContain('exec-write-stream');
-    expect(html).not.toContain('exec-write-caret');
+    expect(html).not.toContain('exec-stream-caret');
   });
 });
 
@@ -168,6 +168,100 @@ describe('card while a call is still being typed', () => {
   it('offers no half-typed value to the copy button', () => {
     const html = card({ name: 'write', partialArgs: STREAMED });
     expect(html).not.toContain('Copy the path');
+  });
+});
+
+describe('terminal card while the command streams', () => {
+  /** A heredoc: the head of the command, then `count` lines of body. */
+  const heredocLines = (count: number) => [
+    "cat >> a.go << 'EOF'",
+    ...Array.from({ length: count }, (_, i) => `echo ${i}`),
+  ];
+
+  /** The same as the argument buffer the model has typed so far. */
+  const typedHeredoc = (count: number) =>
+    `{"command":"${heredocLines(count).join('\\n')}`;
+
+  it('shows the command in the followed box, prompt and caret and all', () => {
+    const html = card({ name: 'bash', partialArgs: '{"command":"wc -l src"' });
+    expect(html).toContain('exec-cmd-stream');
+    expect(html).toContain('$ wc -l src');
+    expect(html).toContain('Typing…');
+    // The newest line is the one carrying the caret, so the stream reads as typing.
+    expect(html.indexOf('exec-stream-caret')).toBeGreaterThan(
+      html.indexOf('wc -l src'),
+    );
+  });
+
+  it('folds the head of a heredoc away rather than losing its tail', () => {
+    const html = card({ name: 'bash', partialArgs: typedHeredoc(40) });
+    // The window is what the box holds, whatever the size of the heredoc.
+    expect(html).toContain('… 29 earlier lines …');
+    expect(html).toContain('>echo 28<');
+    expect(html).toContain('echo 39');
+    expect(html).not.toContain('>echo 27<');
+    // And the header still names the command the window starts below.
+    expect(html).toContain('cat &gt;&gt; a.go');
+  });
+
+  it('reads the command from its head once the model has typed it', () => {
+    // The runtime has the call now, so nothing about the command is moving any more: the window
+    // and its caret are retired, and the output that arrives next is what the card follows.
+    const command = heredocLines(40).join('\n');
+    const html = card({
+      name: 'bash',
+      tool: {
+        toolCallId: 'b1',
+        toolName: 'bash',
+        args: { command },
+        status: 'running',
+        startedAt: Date.now(),
+      },
+    });
+    expect(html).not.toContain('exec-cmd-stream');
+    expect(html).toContain('exec-bash');
+    expect(html).toContain('$ cat');
+    expect(html).toContain('Running…');
+  });
+
+  it('follows the output of a call that is running', () => {
+    // pi streams a running `bash`'s output on `tool_execution_update`; the card body is what
+    // holds it, and the card follows it there (`scroller`) until the reader takes the scroll.
+    const html = card({
+      name: 'bash',
+      tool: {
+        toolCallId: 'b1',
+        toolName: 'bash',
+        args: { command: 'go test ./...' },
+        status: 'running',
+        startedAt: Date.now(),
+        resultText: 'ok  internal/foo\n',
+      },
+    });
+    expect(html).toContain('$ go test ./...');
+    expect(html).toContain('exec-bash-out');
+    expect(html).toContain('ok  internal/foo');
+    expect(html).not.toContain('Running…');
+  });
+
+  it('reads a command that has run from its head', () => {
+    const command = heredocLines(40).join('\n');
+    const html = card({
+      name: 'bash',
+      args: { command },
+      tool: {
+        toolCallId: 'b1',
+        toolName: 'bash',
+        args: { command },
+        status: 'done',
+        durationMs: 12,
+        resultText: '',
+      },
+    });
+    expect(html).not.toContain('exec-cmd-stream');
+    expect(html).toContain('exec-bash');
+    expect(html).toContain('$ cat');
+    expect(html).toContain('\necho 0\n');
   });
 });
 

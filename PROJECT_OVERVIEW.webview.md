@@ -25,7 +25,8 @@ webview/src/stores/             zustand: composer-store, confirm-store, provider
                                 session-info-store, turn-nav-store
 webview/src/components/entry-list/    message-list.tsx (scroll + stick-to-bottom host)
 webview/src/components/entry-view/    agent-timeline.tsx (blocks -> rows), message-view.tsx
-webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, subagent-calls/, write-stream/, tool-images/
+webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, stream-tail.ts, subagent-calls/,
+                                      write-stream/, command-stream/, tool-images/
 webview/src/components/input-bar/     input-bar/composer.tsx, model-picker/, ctx-meter/,
                                       cmd-menu/, reasoning-select/
 webview/src/components/topbar/        topbar/, topbar-left/, topbar-right/, settings-menu/
@@ -50,14 +51,16 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/entry-list/message-list.tsx | Transcript scroller, streaming caret, load/scroll behaviour | ~180 | `EntryList({ onScrollAtBottomChange?: (atBottom: boolean) => void })`; Hooks: `useChatState`, `useStickToBottom` |
 | components/entry-view/agent-timeline.tsx | Messages + tools -> flat render items (text/thinking/tool/system/caret) | 152 | `buildItems(messages: UiMessage[], tools: Record<string, ToolExec>): TimelineItem[]`, `AgentTimelineProps` |
 | components/entry-view/message-view.tsx | One message: markdown, copy, edit/fork affordances | 236 | `MessageView(...)`; Hooks: `useChatState`, `confirm` |
-| components/exec-view/tool-call-view.tsx | Tool card: header cluster (count / elapsed / Copy / Stop) + expandable output | 413 | `ExecBlock({ tool, name, args, partialArgs, tools })`; Hooks: `useStreamingToolArgs`, `useTickingClock`, `useCopyFeedback` |
+| components/exec-view/tool-call-view.tsx | Tool card: header cluster (count / elapsed / Copy / Stop) + expandable output | 488 | `ExecBlock({ tool, name, args, partialArgs, tools })`; Hooks: `useStreamingToolArgs`, `useTickingClock`, `useCopyFeedback`, `useStickToBottom` (a running terminal call's output) |
 | components/exec-view/tool-display.ts | Shared display mapping so child rows and parent header match | 258 | `toolPreview(name: string, args: unknown): string`, `toolDuration(tool?: ToolExec, now: number, preferredMs?: string)`, `tipHead/tipTail(text, maxLines, maxChars)`, `childCalls(tool?, tools?): ToolExec[]` |
 | components/exec-view/subagent-calls/subagent-details.ts | Sole reader of the subagent payload (`args.task`/`prompt`/…, `details`) | 163 | `resolveSubagentCard(name: string, details: unknown, args: unknown): SubagentDetailsView \| null`, `subagentPrompt(args, details?): string` |
 | components/exec-view/subagent-calls/subagent-calls.tsx | Nested call list + report inside the parent card | 227 | `SubagentCalls({ calls, tools, details, report, status, complete })` |
 | shared/tool-args.ts (used here) | Tolerant parse of a still-streaming argument object, from the block's `partialArgs` buffer | 221 | `parseStreamingToolArgs(raw: string \| undefined): Record<string, unknown> \| undefined` |
 | webview/src/hooks/use-streaming-tool-args.ts | Deferred parse so a card can show arguments the runtime has not finalized | 35 | `useStreamingToolArgs(partialArgs?: string): StreamingToolArgs` — `{ args?, typing }` |
-| components/exec-view/write-stream/write-preview.ts | Windowing of a streamed file body (pure, tested) | 99 | `buildWritePreview(content?: string, maxLines?): WritePreview`, `writeLineBadge(content?: string): string` |
+| components/exec-view/stream-tail.ts | Windowing of streamed argument text (pure, tested): what a live card renders | ~90 | `buildStreamTail(text?: string, maxLines?): StreamTail`, `countStreamLines(text?: string): number`, `STREAM_TAIL_LINES` |
+| components/exec-view/write-stream/write-counts.ts | The `+N lines` badge of a write card | 11 | `writeLineBadge(content?: string): string` |
 | components/exec-view/write-stream/write-stream.tsx | Live body of a `write` call: tail window, stick-to-bottom, caret | 69 | `WriteStream({ content, streaming })` |
+| components/exec-view/command-stream/command-stream.tsx | Live command of a `bash` call (a heredoc is a whole file): same window and follow | 66 | `CommandStream({ command })` |
 | components/exec-view/tool-images/tool-images.tsx | Tiles for images a tool returned; the only place that asks the host for their bytes, and only while the card is open | ~145 | `ToolImages({ toolCallId, images, expanded })`, `needsToolImage(image, expanded): boolean` |
 | components/input-bar/input-bar/composer.tsx | Textarea, slash-command insertion + chaining, attachments, submit/steer | 398 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
@@ -115,10 +118,15 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
    needed, but it needs `acquireVsCodeApi` stubbed before the import.
 9. **In-flight arguments are client-side only.** pi finalizes a call's `arguments` at `toolcall_end`
    and never reports a partial one in `tool_execution_*`, so a live preview (the streaming `write`
-   body) comes from the `toolcall_delta` buffer: `applyAssistantEvent` accumulates `partialArgs`,
-   `shared/tool-args.ts` parses the incomplete JSON, `useStreamingToolArgs` defers that parse, and
-   `agent-timeline.tsx` hands the buffer to a card only while the reply streams and the runtime has
-   no execution entry for the call.
+   body, a `bash` command carrying a heredoc) comes from the `toolcall_delta` buffer:
+   `applyAssistantEvent` accumulates `partialArgs`, `shared/tool-args.ts` parses the incomplete JSON,
+   `useStreamingToolArgs` defers that parse, and `agent-timeline.tsx` hands the buffer to a card only
+   while the reply streams and the runtime has no execution entry for the call. Both of those bodies
+   are long, so a live card renders `buildStreamTail`'s window — not the whole text — inside a box
+   that follows it (`useStickToBottom`), and retires that window to the whole text once the call
+   stops typing: `bash` when the command is typed, `write` when the call has run. A running terminal
+   call has a second stream then, its output, which the card follows in its own scroll layer
+   (`.exec-scroll` in `tool-call-view.tsx`) and writes back to the head when the call settles.
 10. **An image card asks from state, never from a flag of its own.** Tool-result images arrive as
     references (`ToolExec.images`); the bytes are pulled only while the card is expanded, by an
     effect gated on `needsToolImage(image, expanded)`. It holds no "already asked" ref, because the
@@ -131,14 +139,14 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 |---|---|
 | Handle a new/changed runtime event in the UI | `webview/src/store.ts` (`applyRpcEvent`), `shared/blocks.ts`, then replay in `store.test.ts` |
 | Add a message/tool render style | `components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`, `exec-view/tool-display.ts`, matching `.scss` |
-| Show what a tool call is doing before it runs | `shared/tool-args.ts` (partial `toolcall_delta` text), `webview/src/hooks/use-streaming-tool-args.ts`, `components/exec-view/write-stream/`; `agent-timeline.tsx` decides which cards get `partialArgs` |
+| Show what a tool call is doing before it runs | `shared/tool-args.ts` (partial `toolcall_delta` text), `webview/src/hooks/use-streaming-tool-args.ts`, `components/exec-view/write-stream/`, `components/exec-view/command-stream/`, `components/exec-view/stream-tail.ts`; `agent-timeline.tsx` decides which cards get `partialArgs` |
 | Show an image a tool returned, or change when its bytes load | `components/exec-view/tool-images/` (`needsToolImage` is the gate), `components/exec-view/tool-call-view.tsx`, `store.ts` (`ToolExec.images`, `toolImage` case, `retainNewestImages`); host `src/webview/tool-image.ts` |
 | Add a host message type | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer |
 | Send something new to the host | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage` |
 | Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |
 | Change the context meter | `components/input-bar/ctx-meter/context-usage.ts`, `context-stats.tsx`, host `pushStats` |
 | Change approval dialogs | `components/ui/permission-prompt/` (`permission-prompt.tsx`, `ui-response.ts`), `App.tsx` mount point |
-| Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts` (`stickSlop` is the reader slack, `isOwnFollowScroll` is the jump attribution; a box with a sliding tail window wants `overflow-anchor: none`), `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |
+| Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts` (`stickSlop` is the reader slack, `isOwnFollowScroll` is the jump attribution; a box with a sliding tail window wants `overflow-anchor: none` — the card stylesheet caps and anchors every streaming box together), `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |
 | Fix a hover/tooltip that renders under something | `components/ui/flyout/popover.tsx` + the owning card's `.scss` z-index rules |
 | Add a zustand store | copy shape from `stores/confirm-store.ts` (state + imperative helper export) |
 

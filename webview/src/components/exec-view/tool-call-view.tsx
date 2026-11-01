@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   LuBot,
   LuCheck,
@@ -8,6 +8,7 @@ import {
   LuWrench,
 } from 'react-icons/lu';
 import { actions } from '../../apis/actions';
+import { useStickToBottom } from '../../hooks/use-stick-to-bottom';
 import { useCopyFeedback } from '../../hooks/use-copy-feedback';
 import { useStreamingToolArgs } from '../../hooks/use-streaming-tool-args';
 import { useTickingClock } from '../../hooks/use-ticking-clock';
@@ -38,6 +39,7 @@ import {
   type SubagentDetailsView,
 } from './subagent-calls';
 import { WriteStream, writeLineBadge } from './write-stream';
+import { CommandStream } from './command-stream';
 import { ToolImages } from './tool-images';
 import type { ToolImageRef } from '../../../../shared/protocol';
 import './exec-block-view.scss';
@@ -147,6 +149,34 @@ export function ExecBlock({
   const now = useTickingClock(live);
   const { copied, copy } = useCopyFeedback();
   const [stopRequested, setStopRequested] = useState(false);
+
+  // A terminal call is the only one whose result arrives in pieces: pi streams the output of a
+  // running `bash` on `tool_execution_update` and reports nothing at all for the other tools
+  // (`docs/pintra-fork.md`). The newest line is the point of a running command, so the card body
+  // follows it — in the same scroll layer that carries the command above it, which is why the
+  // preview phase is left to the command box's own follow. `live`, not merely `running`, because
+  // a call the runtime never reported on has no output coming and reads from its head.
+  const followOutput = name === 'bash' && live && !typing;
+  const scroller = useStickToBottom<HTMLDivElement>(
+    result.length,
+    followOutput,
+  );
+  // That layer outlives the run, so it has to be handed back: a card that had been following
+  // its output would otherwise reopen parked at the end of it, where a finished call reads from
+  // its command down.
+  const hadFollowed = useRef(false);
+  useLayoutEffect(() => {
+    const el = scroller.ref.current;
+    if (!el) return;
+    if (followOutput) {
+      hadFollowed.current = true;
+      return;
+    }
+    if (hadFollowed.current) {
+      hadFollowed.current = false;
+      el.scrollTop = 0;
+    }
+  }, [followOutput]);
 
   // pi settles the call itself (an aborted tool comes back as an error result), so
   // the flag only has to keep the button from looking pressable in the meantime.
@@ -280,7 +310,10 @@ export function ExecBlock({
           the height transition, the scroll layer keeps output scrollable. */}
       <div className="exec-content-wrap" aria-hidden={!expanded}>
         <div className="exec-content">
-          <div className="exec-scroll">
+          <div
+            className="exec-scroll"
+            ref={scroller.ref}
+            onScroll={scroller.onScroll}>
             <ToolBody
               name={name}
               args={effectiveArgs}
@@ -349,11 +382,20 @@ function ToolBody({
     );
   }
   if (name === 'bash') {
+    const command =
+      typeof args.command === 'string' ? String(args.command) : undefined;
+    // A heredoc makes this argument a whole file, and only its end is arriving, so while the
+    // model types it the card shows a followed tail window (`CommandStream`) instead of the head
+    // of a command the reader cannot reach the end of. Once the command is typed the body reads
+    // from its head again, and what moves from then on is the output — which the card follows.
     return (
       <>
-        {typeof args.command === 'string' && (
-          <pre className="exec-bash">$ {String(args.command)}</pre>
-        )}
+        {command !== undefined &&
+          (typing ? (
+            <CommandStream command={command} />
+          ) : (
+            <pre className="exec-bash">$ {command}</pre>
+          ))}
         {result && (
           <pre
             className={`exec-output exec-bash-out${isError ? ' exec-output-error' : ''}`}>

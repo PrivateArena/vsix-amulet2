@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { useStickToBottom } from '../../../hooks/use-stick-to-bottom';
-import { buildWritePreview } from './write-preview';
+import { buildStreamTail } from '../stream-tail';
 import './write-stream.scss';
 
 export interface WriteStreamProps {
@@ -25,7 +25,7 @@ export const WriteStream = memo(function WriteStream({
   content,
   streaming,
 }: WriteStreamProps) {
-  const preview = buildWritePreview(content);
+  const preview = buildStreamTail(content);
   // Follow the body while it streams, and hand the scroll back the moment the reader looks
   // at an earlier part of the file. The revision counts characters, not rendered lines: a long
   // line grows below the fold too, and the caret must not leave the screen. `streaming` holds
@@ -40,7 +40,7 @@ export const WriteStream = memo(function WriteStream({
       ref={stick.ref}
       onScroll={stick.onScroll}>
       {preview.skipped > 0 && (
-        <div className="exec-write-fold">
+        <div className="exec-stream-fold">
           {`… ${preview.skipped} earlier ${preview.skipped === 1 ? 'line' : 'lines'} …`}
         </div>
       )}
@@ -54,14 +54,14 @@ export const WriteStream = memo(function WriteStream({
         <div key={i} className="patch-line patch-line-add exec-write-line">
           {`+ ${line}`}
           {streaming && i === lastIndex && (
-            <span className="exec-write-caret" aria-hidden />
+            <span className="exec-stream-caret" aria-hidden />
           )}
         </div>
       ))}
       {preview.totalLines === 0 && (
         <div className="exec-write-empty">
           {streaming ? 'Writing content…' : 'Empty file'}
-          {streaming && <span className="exec-write-caret" aria-hidden />}
+          {streaming && <span className="exec-stream-caret" aria-hidden />}
         </div>
       )}
     </div>

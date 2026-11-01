@@ -1,0 +1,30 @@
+/*
+ * The live command of a `bash` call. Its box (height, scrolling) belongs to the card: the
+ * pending-stream rule in the card stylesheet. The rows are laid out like the finished card's
+ * `pre.exec-bash` — the same code font and line-height — so the preview does not change size
+ * when the call settles.
+ */
+.exec-cmd-stream {
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+  line-height: var(--amulet-line-code);
+  font-variation-settings:
+    'MONO' 1,
+    'CASL' 0,
+    'CRSV' 0;
+  padding: 6px 0 8px;
+}
+
+.exec-cmd-line {
+  /* `pre`, not `pre-wrap`: a shell command is read as written, and the box scrolls sideways to
+     reach the end of a long line the same way the finished card does. */
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  /* One row of the code line-height, so a blank line still occupies its row. */
+  min-height: calc(1em * var(--amulet-line-code));
+  min-width: 100%;
+  width: max-content;
+  box-sizing: border-box;
+  padding: 0 6px;
+}
