@@ -231,6 +231,66 @@ describe('reducer — streaming lifecycle (rpcEvent)', () => {
     expect(s.currentUid).toBeNull();
   });
 
+  it('stamps arrival times so the throughput readout can measure a rate', () => {
+    const usage = {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+    };
+    let s = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'message_start',
+          message: { role: 'assistant', content: [] },
+        },
+      }),
+    );
+    const startedAt = s.messages[0].startedAt;
+    expect(startedAt).toBeTypeOf('number');
+    expect(s.messages[0].firstTokenAt).toBeUndefined();
+
+    // A block boundary carries no output, so it must not count as the first token.
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'message_update',
+          usage,
+          assistantMessageEvent: { type: 'text_start', contentIndex: 0 },
+        },
+      }),
+    );
+    expect(s.messages[0].firstTokenAt).toBeUndefined();
+
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'message_update',
+          usage,
+          assistantMessageEvent: {
+            type: 'text_delta',
+            contentIndex: 0,
+            delta: 'hi',
+          },
+        },
+      }),
+    );
+    const firstTokenAt = s.messages[0].firstTokenAt;
+    expect(firstTokenAt).toBeTypeOf('number');
+
+    // The stamp is set once: later deltas keep the original time-to-first-token.
+    s = reducer(s, host({ type: 'rpcEvent', event: { type: 'agent_end' } }));
+    expect(s.messages[0].firstTokenAt).toBe(firstTokenAt);
+    expect(s.messages[0].startedAt).toBe(startedAt);
+  });
+
   it('survives message events that arrive without a payload', () => {
     // The runtime does emit these bare. Reading `.content` off the missing
     // message used to throw inside the reducer, which unmounted the whole view

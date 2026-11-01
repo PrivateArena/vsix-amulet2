@@ -38,3 +38,26 @@
     transform: translateY(0);
   }
 }
+
+/* Live token throughput: decode (D) and prefill (P) rates, quieter than the timer
+   so the elapsed duration stays the primary readout. */
+.progress-rates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  font-size: 0.85em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--amulet-tracking-wide);
+  color: var(--amulet-fg-faint);
+}
+
+.progress-rate {
+  white-space: nowrap;
+  cursor: default;
+}
+
+.progress-rate-sep {
+  opacity: 0.45;
+}

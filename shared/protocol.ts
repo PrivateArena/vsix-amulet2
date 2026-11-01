@@ -387,7 +387,13 @@ export type AssistantStreamEvent =
 
 export interface MessageUpdateEvent {
   type: 'message_update';
-  /** Cumulative usage for the turn, reported alongside each delta. */
+  /**
+   * Usage of the assistant message being streamed, reported alongside each delta. It is
+   * **per message**, not per turn: the counters reset at every `message_start`, stay
+   * all-zero through the deltas, then jump to the real figures at that message's first
+   * `*_end` — which is why the live throughput readout has to estimate what it counts
+   * (`webview/src/components/progress-bar/token-rate.ts`).
+   */
   usage?: Usage;
   assistantMessageEvent?: AssistantStreamEvent;
   /**

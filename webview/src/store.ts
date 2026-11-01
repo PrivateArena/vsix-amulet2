@@ -1,5 +1,6 @@
 import type {
   AppMessage,
+  AssistantStreamEvent,
   Attachment,
   CommandInfo,
   ContentBlock,
@@ -85,6 +86,14 @@ export interface UiMessage {
   usage?: AppMessage['usage'];
   model?: string;
   timestamp?: number;
+  /**
+   * Epoch ms at which this assistant message's `message_start` arrived, and at which
+   * its first output delta did. The wire stamps neither, so both are arrival clocks —
+   * their difference is the time-to-first-token the prefill rate is derived from
+   * (`progress-bar/token-rate.ts`).
+   */
+  startedAt?: number;
+  firstTokenAt?: number;
   attachments?: import('../../shared/protocol').Attachment[];
 }
 
@@ -142,6 +151,20 @@ function isDisplayableRole(role: string): boolean {
 }
 
 let uidCounter = 0;
+
+/**
+ * Does this delta carry model output? Block boundaries and lifecycle events do not,
+ * so only these three can mark a message's first token.
+ */
+function isOutputDelta(event: AssistantStreamEvent | undefined): boolean {
+  const type = event?.type;
+  return (
+    type === 'text_delta' ||
+    type === 'thinking_delta' ||
+    type === 'toolcall_delta'
+  );
+}
+
 function nextUid(): string {
   return `m${Date.now().toString(36)}_${uidCounter++}`;
 }
@@ -538,6 +561,7 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       }
       const ui = toUiMessage(msg);
       ui.streaming = msg.role === 'assistant';
+      if (ui.role === 'assistant') ui.startedAt = Date.now();
       if (ui.timestamp == null) ui.timestamp = Date.now();
 
       // pi emits a `message_start`/`message_end` pair for the leading system
@@ -579,10 +603,19 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
           const content = snapshot
             ? normalizeContent(snapshot.content)
             : applyAssistantEvent(m.content, e.assistantMessageEvent);
+          const hasOutput =
+            m.role === 'assistant' &&
+            (snapshot
+              ? content.length > 0
+              : isOutputDelta(e.assistantMessageEvent));
           return {
             ...m,
             content,
             usage: snapshot?.usage ?? e.usage ?? m.usage,
+            // Stamped once: the first output delta of the message fixes its time-to-first-token.
+            ...(m.firstTokenAt == null && hasOutput
+              ? { firstTokenAt: Date.now() }
+              : {}),
           };
         }),
       };
