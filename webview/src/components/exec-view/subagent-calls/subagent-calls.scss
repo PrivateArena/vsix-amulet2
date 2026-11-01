@@ -5,7 +5,9 @@
 }
 
 /* The live command list scrolls on its own so the report stays reachable
-   inside the card's own scroll area. */
+   inside the card's own scroll area. Unlike the streaming write body it keeps the browser's
+   scroll anchoring: rows are only ever appended here, and when a row above the reader expands
+   (a result opened), anchoring is what keeps their place. */
 .sub-call-list {
   display: block;
   margin: 0;

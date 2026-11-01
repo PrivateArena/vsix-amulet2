@@ -56,8 +56,8 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/exec-view/subagent-calls/subagent-calls.tsx | Nested call list + report inside the parent card | 227 | `SubagentCalls({ calls, tools, details, report, status, complete })` |
 | shared/tool-args.ts (used here) | Tolerant parse of a still-streaming argument object, from the block's `partialArgs` buffer | 221 | `parseStreamingToolArgs(raw: string \| undefined): Record<string, unknown> \| undefined` |
 | webview/src/hooks/use-streaming-tool-args.ts | Deferred parse so a card can show arguments the runtime has not finalized | 35 | `useStreamingToolArgs(partialArgs?: string): StreamingToolArgs` — `{ args?, typing }` |
-| components/exec-view/write-stream/write-preview.ts | Windowing of a streamed file body (pure, tested) | 94 | `buildWritePreview(content?: string, maxLines?): WritePreview`, `writeLineBadge(content?: string): string` |
-| components/exec-view/write-stream/write-stream.tsx | Live body of a `write` call: tail window, stick-to-bottom, caret | 63 | `WriteStream({ content, streaming })` |
+| components/exec-view/write-stream/write-preview.ts | Windowing of a streamed file body (pure, tested) | 99 | `buildWritePreview(content?: string, maxLines?): WritePreview`, `writeLineBadge(content?: string): string` |
+| components/exec-view/write-stream/write-stream.tsx | Live body of a `write` call: tail window, stick-to-bottom, caret | 69 | `WriteStream({ content, streaming })` |
 | components/exec-view/tool-images/tool-images.tsx | Tiles for images a tool returned; the only place that asks the host for their bytes, and only while the card is open | ~145 | `ToolImages({ toolCallId, images, expanded })`, `needsToolImage(image, expanded): boolean` |
 | components/input-bar/input-bar/composer.tsx | Textarea, slash-command insertion + chaining, attachments, submit/steer | 398 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
@@ -72,7 +72,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/ui/session-info-dialog/session-info.ts | `SessionStats` -> display rows, NaN-safe | 166 | `modelLabel(session: SessionState \| null): string \| null`, `SessionInfoView` |
 | webview/src/utils/find-query.ts | Case/regex query compile + match collection | ~110 | `compileFindQuery(query: string, options?: FindOptions): { pattern: RegExp \| null; error?: string }`, `findMatches(haystack, query, options?): FindHits` |
 | webview/src/utils/prompt-chain.ts | Split one composer entry into chained `/commands` (pi expands only the leading one) | 68 | `splitPromptChain(text: string, isCommand: (name: string) => boolean): string[]` |
-| webview/src/hooks/use-stick-to-bottom.ts | Follow-newest while reading nested output, hand back on scroll-up | ~102 | `useStickToBottom<T extends HTMLElement>(revision: unknown, active = true): StickToBottom<T>` |
+| webview/src/hooks/use-stick-to-bottom.ts | Follow-newest while reading nested output, hand back on scroll-up | ~170 | `useStickToBottom<T extends HTMLElement>(revision: unknown, active = true): StickToBottom<T>`, `isScrollAtBottom(sh, st, ch, slop?): boolean`, `stickSlop(rowHeight?, clientHeight?): number`, `isOwnFollowScroll(scrollTop, writtenTop): boolean` |
 | webview/src/stores/composer-store.ts | Imperative composer API (insert/focus/attachments) | 62 | `useComposerStore`, `type ComposerOp = (api: ComposerApi) => void` |
 
 ## Cross-References
@@ -138,7 +138,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |
 | Change the context meter | `components/input-bar/ctx-meter/context-usage.ts`, `context-stats.tsx`, host `pushStats` |
 | Change approval dialogs | `components/ui/permission-prompt/` (`permission-prompt.tsx`, `ui-response.ts`), `App.tsx` mount point |
-| Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts`, `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |
+| Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts` (`stickSlop` is the reader slack, `isOwnFollowScroll` is the jump attribution; a box with a sliding tail window wants `overflow-anchor: none`), `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |
 | Fix a hover/tooltip that renders under something | `components/ui/flyout/popover.tsx` + the owning card's `.scss` z-index rules |
 | Add a zustand store | copy shape from `stores/confirm-store.ts` (state + imperative helper export) |
 

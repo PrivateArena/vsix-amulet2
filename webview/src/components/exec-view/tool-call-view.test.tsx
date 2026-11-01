@@ -60,7 +60,7 @@ describe('write card while the arguments stream', () => {
       name: 'write',
       partialArgs: `{"path":"big.ts","content":"${body}"}`,
     });
-    expect(html).toContain('… 16 earlier lines …');
+    expect(html).toContain('… 24 earlier lines …');
     expect(html).toContain('line 39');
     expect(html).not.toContain('>+ line 0<');
     expect(html).toContain('+40 lines');

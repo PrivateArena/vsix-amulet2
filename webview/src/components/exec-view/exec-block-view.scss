@@ -612,10 +612,19 @@ body:not(.animations-disabled)
   border-radius: 0;
 }
 
-/* Pending write streaming height */
+/*
+ * How much file a streaming `write` shows. `min(..., 50vh)` because the scroll layer around the
+ * card body is bounded by `55vh`: a followed box taller than its ancestor would be clipped by
+ * something nothing scrolls, and the follow has no grip on an ancestor's scroll position.
+ */
 .exec-block.exec-write.pending .exec-write-stream {
-  max-height: 200px;
+  max-height: min(200px, 50vh);
   overflow-y: auto;
+  /* The follow writes `scrollTop` to keep the newest line in view. Scroll anchoring writes it
+     too — a fast delta slides several rows of the tail window off the top at once — and the
+     browser reports its own adjustment as a `scroll` event, which the follow can only judge as
+     the reader having scrolled away. */
+  overflow-anchor: none;
 }
 
 /* Output block */

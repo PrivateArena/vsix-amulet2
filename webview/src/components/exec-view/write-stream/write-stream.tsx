@@ -27,8 +27,10 @@ export const WriteStream = memo(function WriteStream({
 }: WriteStreamProps) {
   const preview = buildWritePreview(content);
   // Follow the body while it streams, and hand the scroll back the moment the reader looks
-  // at an earlier part of the file. The revision is the character count, not the line count:
-  // a long line grows below the fold too, and the caret must not leave the screen.
+  // at an earlier part of the file. The revision counts characters, not rendered lines: a long
+  // line grows below the fold too, and the caret must not leave the screen. `streaming` holds
+  // the grip off a card that only looks live: a call reloaded from history arrives running with
+  // its body already finished, and that one is meant to open at the head of the file.
   const stick = useStickToBottom<HTMLDivElement>(content.length, streaming);
   const lastIndex = preview.lines.length - 1;
 
@@ -43,9 +45,13 @@ export const WriteStream = memo(function WriteStream({
         </div>
       )}
       {preview.lines.map((line, i) => (
-        <div
-          key={preview.skipped + i}
-          className="patch-line patch-line-add exec-write-line">
+        /*
+         * Keyed by the visible row, not by the line's number in the file. The tail window slides
+         * rows off the top as others arrive below, and numbering the rows then re-keys every one
+         * of them: the whole body is torn down and rebuilt to change a window full of text, and
+         * the box's horizontal position — where the reader left the long lines — with it.
+         */
+        <div key={i} className="patch-line patch-line-add exec-write-line">
           {`+ ${line}`}
           {streaming && i === lastIndex && (
             <span className="exec-write-caret" aria-hidden />

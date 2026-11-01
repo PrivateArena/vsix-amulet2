@@ -10,8 +10,13 @@
  * Lines kept in the live preview. A file body streams in a few characters at a time and the
  * newest line is the interesting part, so the preview is a sliding tail window: bounded work
  * and bounded DOM per frame, whatever the size of the file.
+ *
+ * The window is kept near the height of the box the card gives it (about ten rows of those
+ * `200px` at the default font scale), so a reader who has lost the follow is a few rows from
+ * the newest line rather than a screen of them — and so the rows the window holds are rows that
+ * could be shown at all.
  */
-export const WRITE_PREVIEW_LINES = 24;
+export const WRITE_PREVIEW_LINES = 16;
 
 export interface WritePreview {
   /** Tail window of the streamed body, oldest line first. */
