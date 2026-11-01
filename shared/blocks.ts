@@ -11,11 +11,18 @@
  * IIFE); it imports types only.
  */
 import type {
+  AppMessage,
   AssistantStreamEvent,
   ContentBlock,
+  ImageBlock,
+  RpcEvent,
   TextBlock,
   ThinkingBlock,
   ToolCallBlock,
+  ToolExecutionEnd,
+  ToolExecutionUpdate,
+  ToolImageRef,
+  ToolResultMessage,
 } from './protocol';
 
 /** Narrow a block to a text block, or null. */
@@ -39,6 +46,159 @@ export function asToolCall(block: ContentBlock): ToolCallBlock | null {
     typeof (block as ToolCallBlock).id === 'string'
     ? (block as ToolCallBlock)
     : null;
+}
+
+/** Narrow a block to an image block, or null. */
+export function asImage(block: ContentBlock): ImageBlock | null {
+  return block.type === 'image' ? (block as ImageBlock) : null;
+}
+
+/** Decoded size of a base64 payload, measured without decoding it. */
+function base64Bytes(data: string): number {
+  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
+}
+
+/**
+ * Drop the base64 payload from image blocks, keeping everything needed to identify
+ * them.
+ *
+ * A screenshot read is megabytes of text on a wire that UI code then keeps in memory
+ * for the life of the session — and nothing in the UI needs those bytes until a reader
+ * expands the card. The host runs this before forwarding an event or a history push, so
+ * the payload crosses the boundary at most once, on request (`loadToolImage`).
+ *
+ * Non-mutating and identity-stable: an array with nothing to strip comes back as-is,
+ * because the reducer's memoization depends on that.
+ */
+export function stripImagePayloads(
+  content: ContentBlock[] | string,
+): ContentBlock[] | string {
+  if (typeof content === 'string' || !Array.isArray(content)) return content;
+  let stripped = false;
+  const next = content.map((block) => {
+    const image = asImage(block);
+    const data = image?.data;
+    if (!image || typeof data !== 'string') return block;
+    stripped = true;
+    const { data: _data, ...rest } = image;
+    return { ...rest, bytes: image.bytes ?? base64Bytes(data) };
+  });
+  return stripped ? next : content;
+}
+
+/**
+ * The images a tool returned, as renderable references (no pixels attached).
+ *
+ * `args` is the call's arguments: the path is what a card later asks the host to read,
+ * so a tool whose source is not a file yields a reference with no `path`, which the
+ * card shows as a description rather than a broken image.
+ */
+export function toolImagesOf(
+  content: unknown,
+  args?: unknown,
+): ToolImageRef[] | undefined {
+  const images = normalizeContent(content)
+    .map(asImage)
+    .filter((image): image is ImageBlock => image !== null)
+    .map((image) => ({
+      path: imageSourceOf(args),
+      mimeType: typeof image.mimeType === 'string' ? image.mimeType : 'image/*',
+      bytes:
+        image.bytes ??
+        (typeof image.data === 'string' ? base64Bytes(image.data) : 0),
+    }));
+  return images.length > 0 ? images : undefined;
+}
+
+/** Argument keys a file-reading tool may name its source with. */
+const IMAGE_SOURCE_KEYS = ['path', 'file_path', 'filePath', 'file'];
+
+function imageSourceOf(args: unknown): string | undefined {
+  if (!args || typeof args !== 'object') return undefined;
+  const record = args as Record<string, unknown>;
+  for (const key of IMAGE_SOURCE_KEYS) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Redact the image payloads of one wire event, keeping every reference field.
+ *
+ * Tool results are the only images redacted here, and they travel in four shapes: the
+ * `tool_execution_*` events, the settled `message_start`/`message_end` pair, and the run
+ * recap that `turn_end` (its tool results) and `agent_end` (its messages) carry — those
+ * two repeat, per run, what the tool events already delivered. A user message's own
+ * attachment is input to the model rather than a card's output, and it stays intact.
+ */
+export function stripEventImages(event: RpcEvent): RpcEvent {
+  const e = event as ToolExecutionEnd | ToolExecutionUpdate;
+  if (e.type === 'tool_execution_end' && e.result?.content !== undefined) {
+    const content = stripImagePayloads(e.result.content);
+    return content === e.result.content
+      ? event
+      : { ...e, result: { ...e.result, content } };
+  }
+  if (
+    e.type === 'tool_execution_update' &&
+    e.partialResult?.content !== undefined
+  ) {
+    const content = stripImagePayloads(e.partialResult.content);
+    return content === e.partialResult.content
+      ? event
+      : { ...e, partialResult: { ...e.partialResult, content } };
+  }
+  const settled = event as { message?: AppMessage };
+  if (settled.message && isToolResultMessage(settled.message)) {
+    const message = stripMessageImages(settled.message);
+    return message === settled.message
+      ? event
+      : ({ ...event, message } as RpcEvent);
+  }
+  const run = event as { toolResults?: AppMessage[]; messages?: AppMessage[] };
+  if (run.toolResults) {
+    const toolResults = stripMessageImagePayloads(run.toolResults);
+    if (toolResults !== run.toolResults) {
+      return { ...event, toolResults } as RpcEvent;
+    }
+  }
+  if (run.messages) {
+    const messages = stripMessageImagePayloads(run.messages);
+    if (messages !== run.messages) return { ...event, messages } as RpcEvent;
+  }
+  return event;
+}
+
+/**
+ * Redact the image payloads of persisted tool results in a history snapshot, so a
+ * reloaded session with a dozen screenshots does not carry their bytes into the UI.
+ */
+export function stripHistoryImagePayloads(
+  messages: AppMessage[],
+): AppMessage[] {
+  return stripMessageImagePayloads(messages);
+}
+
+/** Copy-on-change over a message list: the same array is back when nothing was stripped. */
+function stripMessageImagePayloads(messages: AppMessage[]): AppMessage[] {
+  if (!messages.some(isToolResultMessage)) return messages;
+  return messages.map((message) =>
+    isToolResultMessage(message) ? stripMessageImages(message) : message,
+  );
+}
+
+function isToolResultMessage(message: AppMessage): boolean {
+  return (message as unknown as ToolResultMessage).role === 'toolResult';
+}
+
+function stripMessageImages(message: AppMessage): AppMessage {
+  const result = message as unknown as ToolResultMessage;
+  const content = stripImagePayloads(result.content);
+  return content === result.content
+    ? message
+    : ({ ...message, content } as AppMessage);
 }
 
 /**

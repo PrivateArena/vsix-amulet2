@@ -1,4 +1,4 @@
-<!-- codegraph-file-count: 148, last-commit: 9906c564187081c7c29dc2c84afd21928a102193 -->
+<!-- codegraph-file-count: 163, last-commit: 9906c564187081c7c29dc2c84afd21928a102193 -->
 
 # Amulet v1.0.22 — TypeScript (Node host + React webview), VS Code extension
 
@@ -37,7 +37,7 @@ src/extension.ts          activate(): channel, SessionManager, surfaces, command
 src/provider.ts           PiSidebarProvider — sidebar WebviewView surface
 src/editor/panel-manager.ts  EditorChatManager — editor-tab chat surface
 src/webview/              chat-bridge.ts (host<->webview), webview-surface.ts, ui-surfaces.ts,
-                          ui-request-routing.ts, extension-ui.ts, html.ts
+                          ui-request-routing.ts, extension-ui.ts, html.ts, tool-image.ts
 src/runtime/              bootstrap.ts (binary/env/args), pi-runtime.ts (lifecycle), pi-updater.ts
 src/rpc/                  jsonl.ts, rpc-client.ts (request/response + events), rpc-process.ts (spawn/stdio)
 src/session/              session-manager.ts (runtime pool), session-store.ts (session files on disk)
@@ -63,6 +63,7 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 | src/webview/ui-surfaces.ts | Live visibility probes (VS Code flips `.visible` silently) | ~30 | `registerUiSurface(isVisible: () => boolean): () => void`, `hasVisibleUiSurface(): boolean` |
 | src/webview/extension-ui.ts | Host-side handling of `extension_ui_request` (notify/status/widget vs dialogs) | ~97 | `handleExtensionUiRequest(...)` |
 | src/webview/html.ts | CSP'd webview HTML + asset URIs | ~73 | `renderWebviewHtml(...)` |
+| src/webview/tool-image.ts | Read one tool-result image off disk, typed by its file signature | ~175 | `readToolImage(p, {cwd}): Promise<ToolImageResult>`, `resolveToolImagePath(p, cwd?): string \| null`, `isSupportedImage(filePath): Promise<boolean>` |
 | src/runtime/pi-runtime.ts | Per-cwd runtime: start/apply settings/crash status + guarded RPC facade | 336 | `class PiRuntime` — `start(sessionPath?: string): Promise<void>`, `restart()`, `onEvent(l: Listener<RpcEvent>): () => void`, `prompt(m: string, images?: unknown[])`, `switchSession(p: string): Promise<{cancelled?}>` |
 | src/runtime/bootstrap.ts | Resolve `pi` binary, PATH/env, argv, version probe | ~130 | `resolveBinaryPath(binaryPath: string): ResolvedBinary`, `buildSpawnEnv(config: PiConfig)`, `buildStartupArgs(config, sessionPath?): string[]`, `getAgentVersion(binaryPath): string` |
 | src/runtime/pi-updater.ts | Update the external `pi` CLI in place, then reload runtimes | ~130 | `updatePi(options: PiUpdateOptions): Promise<PiUpdateResult>` |
@@ -94,7 +95,8 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 ```
 webview (React)              host (Node)                                pi --mode rpc (child)
   WebviewMessage  --->  ChatBridge.handleMessage  --->  PiRuntime op
-                          (sendMessage|steer|abort|setModel|switchSession|providerLogin|pickFiles)
+                          (sendMessage|steer|abort|setModel|switchSession|providerLogin|pickFiles|
+                           loadToolImage|openToolImage)
                                                      RpcClient.send -> stdin: {type,id,...}\n
                                                        prompt|steer|abort|get_state|get_messages|
                                                        get_available_models|set_thinking_level|
@@ -105,7 +107,8 @@ webview (React)              host (Node)                                pi --mod
                                                       tool_execution_start/update/end|turn_*|agent_*}
                              <--- extension_ui_request {id,method}  -> routeUiRequest/claim -> dialog
   HostMessage  <----  ChatBridge.post  (state|history|models|thinkingLevels|stats|sessions|commands|
-                                        runtimeStatus|config|rpcEvent|extensionUiRequest|pickedFiles)
+                                        runtimeStatus|config|rpcEvent|extensionUiRequest|pickedFiles|
+                                        toolImage)
   reducer(state, {type:'host',message}) -> React
 ```
 
@@ -140,6 +143,13 @@ webview (React)              host (Node)                                pi --mod
    twin (`inspect()`-based, so declared defaults don't shadow); restart-affecting keys live in
    `affectsRestart`. Requires **pnpm 10** (`allowBuilds`). Lineage: `../vsix-amulet/extension/` is
    EULA'd — study only, never copy; Pintra is MIT.
+9. **Image payloads stop at the host.** A tool result's base64 (`read` on an image) is redacted
+   before it reaches the webview — `stripEventImages` on every forwarded event (including the
+   `turn_end`/`agent_end` recaps) and `stripHistoryImagePayloads` on every history push — and the
+   webview keeps only a `ToolImageRef`. Pixels cross on request (`loadToolImage`), from disk,
+   typed by the file's **signature** rather than by its name or by what the runtime reported.
+   A card asks only while it is expanded, and the reducer retires the oldest delivered pixels
+   past a retention budget.
 
 ## Read Triggers
 
@@ -153,6 +163,7 @@ webview (React)              host (Node)                                pi --mod
 | Fix sidebar-vs-editor-tab layout/width bugs | `src/webview/webview-surface.ts`, `src/provider.ts`, `src/editor/panel-manager.ts`, `webview/src/assets/css/*.scss` |
 | Touch approvals/dialogs from pi extensions | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/` |
 | Change the context meter | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`) |
+| Show or change what an image tool result does to the wire | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`) |
 | Add/rename a setting | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`) |
 | Verify anything end-to-end | `pnpm typecheck && pnpm test`, then F5 Extension Development Host — host↔webview bugs only appear at runtime |
 

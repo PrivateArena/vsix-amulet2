@@ -580,6 +580,17 @@ body:not(.animations-disabled)
   max-height: none;
 }
 
+/*
+ * The note that comes back with an image result — pi's own "Read image file [image/png]"
+ * plus any resize hint. It captions the tile, so it is muted prose rather than a block of
+ * code, and it sits under the image rather than above it.
+ */
+.exec-output.exec-read-note {
+  color: var(--amulet-muted);
+  font-size: var(--amulet-type-sm);
+  padding: 0 10px 10px;
+}
+
 /* Write diff border radius reset */
 .exec-block.exec-write
   > .exec-content-wrap

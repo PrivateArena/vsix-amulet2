@@ -5,7 +5,11 @@ import {
   asThinking,
   asToolCall,
   normalizeContent,
+  stripEventImages,
+  stripHistoryImagePayloads,
+  stripImagePayloads,
   textOfContent,
+  toolImagesOf,
 } from './blocks';
 
 describe('textOfContent', () => {
@@ -220,5 +224,188 @@ describe('applyAssistantEvent', () => {
       content: 'xy',
     });
     expect(asThinking(blocks[0])?.thinking).toBe('xy');
+  });
+});
+
+describe('stripImagePayloads', () => {
+  const image = { type: 'image', data: 'QUJD', mimeType: 'image/png' };
+
+  it('drops the base64 payload and records the decoded size', () => {
+    const text = { type: 'text', text: 'Read image file [image/png]' };
+    const stripped = stripImagePayloads([text, image]) as Record<string, any>[];
+    expect(stripped[0]).toBe(text);
+    expect(stripped[1]).toEqual({
+      type: 'image',
+      mimeType: 'image/png',
+      bytes: 3,
+    });
+    // The wire object is shared with every other surface, so it is never mutated.
+    expect(image.data).toBe('QUJD');
+  });
+
+  it('counts padding out of the payload', () => {
+    const stripped = stripImagePayloads([
+      { type: 'image', data: 'QQ==', mimeType: 'image/png' },
+    ]) as Record<string, any>[];
+    expect(stripped[0].bytes).toBe(1);
+  });
+
+  it('returns the array untouched when it holds no payload', () => {
+    const blocks = [
+      { type: 'text', text: 'hi' },
+      { type: 'image', mimeType: 'image/png', bytes: 12 },
+    ];
+    expect(stripImagePayloads(blocks)).toBe(blocks);
+    expect(stripImagePayloads('plain string')).toBe('plain string');
+  });
+});
+
+describe('toolImagesOf', () => {
+  const content = [
+    { type: 'text', text: 'Read image file [image/png]' },
+    { type: 'image', mimeType: 'image/png', bytes: 4096 },
+  ];
+
+  it('turns image blocks into references carrying the call source', () => {
+    expect(toolImagesOf(content, { path: 'tmp/shot.png' })).toEqual([
+      { path: 'tmp/shot.png', mimeType: 'image/png', bytes: 4096 },
+    ]);
+  });
+
+  it('measures a payload the host did not strip', () => {
+    const refs = toolImagesOf(
+      [{ type: 'image', data: 'QUJD', mimeType: 'image/png' }],
+      { file_path: '/tmp/a.png' },
+    );
+    expect(refs).toEqual([
+      { path: '/tmp/a.png', mimeType: 'image/png', bytes: 3 },
+    ]);
+  });
+
+  it('yields nothing for a text result, and no path for a call that has none', () => {
+    expect(toolImagesOf([{ type: 'text', text: 'ok' }], { path: 'a.ts' })).toBe(
+      undefined,
+    );
+    expect(toolImagesOf(undefined, undefined)).toBeUndefined();
+    expect(toolImagesOf(content, { command: 'snap' })).toEqual([
+      { path: undefined, mimeType: 'image/png', bytes: 4096 },
+    ]);
+  });
+});
+
+describe('stripEventImages', () => {
+  const end = {
+    type: 'tool_execution_end',
+    toolCallId: 't1',
+    toolName: 'read',
+    result: {
+      content: [{ type: 'image', data: 'QUJD', mimeType: 'image/png' }],
+      details: { ok: true },
+    },
+  };
+
+  it('strips a tool result and leaves the event shape alone', () => {
+    const forwarded = stripEventImages(end as never) as any;
+    expect(forwarded.result.content[0]).toEqual({
+      type: 'image',
+      mimeType: 'image/png',
+      bytes: 3,
+    });
+    expect(forwarded.result.details).toEqual({ ok: true });
+    expect((end as any).result.content[0].data).toBe('QUJD');
+  });
+
+  it('strips the settled tool-result message of a message event', () => {
+    const forwarded = stripEventImages({
+      type: 'message_end',
+      message: {
+        role: 'toolResult',
+        content: [{ type: 'image', data: 'QQ==' }],
+      },
+    } as never) as any;
+    expect(forwarded.message.content).toEqual([{ type: 'image', bytes: 1 }]);
+  });
+
+  it('passes through events with nothing to strip, by identity', () => {
+    const agentEnd = { type: 'agent_end' } as never;
+    expect(stripEventImages(agentEnd)).toBe(agentEnd);
+    const textEnd = {
+      type: 'tool_execution_end',
+      toolCallId: 't1',
+      toolName: 'bash',
+      result: { content: [{ type: 'text', text: 'ok' }] },
+    } as never;
+    expect(stripEventImages(textEnd)).toBe(textEnd);
+    // A user message's own attachment is input to the model, not a card's output.
+    const user = {
+      type: 'message_end',
+      message: { role: 'user', content: [{ type: 'image', data: 'QQ==' }] },
+    } as never;
+    expect(stripEventImages(user)).toBe(user);
+  });
+});
+
+describe('stripHistoryImagePayloads', () => {
+  it('strips persisted tool results, not the message that follows them', () => {
+    const assistant = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'done' }],
+    };
+    const result = {
+      role: 'toolResult',
+      toolCallId: 't1',
+      content: [{ type: 'image', data: 'QUJD', mimeType: 'image/png' }],
+    };
+    const out = stripHistoryImagePayloads([assistant, result] as never);
+    expect(out[0]).toBe(assistant);
+    expect(out[1]).not.toBe(result);
+    expect((out[1] as any).content).toEqual([
+      { type: 'image', mimeType: 'image/png', bytes: 3 },
+    ]);
+  });
+
+  it('returns the same array when no message is a tool result', () => {
+    const messages = [{ role: 'assistant', content: [] }] as never;
+    expect(stripHistoryImagePayloads(messages)).toBe(messages);
+  });
+});
+
+describe('stripEventImages — the run recap', () => {
+  const image = () => ({ type: 'image', data: 'QUJD', mimeType: 'image/png' });
+  const result = () => ({
+    role: 'toolResult',
+    toolCallId: 't1',
+    toolName: 'read',
+    content: [image()],
+  });
+
+  it('strips the tool results a turn_end recaps', () => {
+    const event = { type: 'turn_end', message: {}, toolResults: [result()] };
+    const forwarded = stripEventImages(event as never) as any;
+    expect(forwarded.toolResults[0].content).toEqual([
+      { type: 'image', mimeType: 'image/png', bytes: 3 },
+    ]);
+    expect(event.toolResults[0].content[0].data).toBe('QUJD');
+  });
+
+  it('strips only the tool results among the messages an agent_end recaps', () => {
+    const user = { role: 'user', content: [image()] };
+    const event = {
+      type: 'agent_end',
+      messages: [user, result()],
+      willRetry: false,
+    };
+    const forwarded = stripEventImages(event as never) as any;
+    expect(forwarded.messages[0]).toBe(user);
+    expect(forwarded.messages[1].content[0].bytes).toBe(3);
+    expect(event.messages[1].content[0].data).toBe('QUJD');
+  });
+
+  it('leaves a recap with no tool results alone, by identity', () => {
+    const event = {
+      type: 'agent_end',
+      messages: [{ role: 'assistant', content: [] }],
+    };
+    expect(stripEventImages(event as never)).toBe(event);
   });
 });

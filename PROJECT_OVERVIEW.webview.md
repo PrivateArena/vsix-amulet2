@@ -25,7 +25,7 @@ webview/src/stores/             zustand: composer-store, confirm-store, provider
                                 session-info-store, turn-nav-store
 webview/src/components/entry-list/    message-list.tsx (scroll + stick-to-bottom host)
 webview/src/components/entry-view/    agent-timeline.tsx (blocks -> rows), message-view.tsx
-webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, subagent-calls/, write-stream/
+webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, subagent-calls/, write-stream/, tool-images/
 webview/src/components/input-bar/     input-bar/composer.tsx, model-picker/, ctx-meter/,
                                       cmd-menu/, reasoning-select/
 webview/src/components/topbar/        topbar/, topbar-left/, topbar-right/, settings-menu/
@@ -58,6 +58,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | webview/src/hooks/use-streaming-tool-args.ts | Deferred parse so a card can show arguments the runtime has not finalized | 35 | `useStreamingToolArgs(partialArgs?: string): StreamingToolArgs` — `{ args?, typing }` |
 | components/exec-view/write-stream/write-preview.ts | Windowing of a streamed file body (pure, tested) | 94 | `buildWritePreview(content?: string, maxLines?): WritePreview`, `writeLineBadge(content?: string): string` |
 | components/exec-view/write-stream/write-stream.tsx | Live body of a `write` call: tail window, stick-to-bottom, caret | 63 | `WriteStream({ content, streaming })` |
+| components/exec-view/tool-images/tool-images.tsx | Tiles for images a tool returned; the only place that asks the host for their bytes, and only while the card is open | ~145 | `ToolImages({ toolCallId, images, expanded })`, `needsToolImage(image, expanded): boolean` |
 | components/input-bar/input-bar/composer.tsx | Textarea, slash-command insertion + chaining, attachments, submit/steer | 398 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
 | components/input-bar/ctx-meter/context-usage.ts | Intra-turn token estimate from streaming `usage` | 72 | `contextUsageOf(stats: SessionStats \| null, messages: UiMessage[]): ContextUsageView \| null`, `contextTokensOf(usage?: Usage): number \| null` |
@@ -118,6 +119,11 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
    `shared/tool-args.ts` parses the incomplete JSON, `useStreamingToolArgs` defers that parse, and
    `agent-timeline.tsx` hands the buffer to a card only while the reply streams and the runtime has
    no execution entry for the call.
+10. **An image card asks from state, never from a flag of its own.** Tool-result images arrive as
+    references (`ToolExec.images`); the bytes are pulled only while the card is expanded, by an
+    effect gated on `needsToolImage(image, expanded)`. It holds no "already asked" ref, because the
+    reducer may retire a `dataUrl` the reader stopped looking at (`retainNewestImages`) — a card that
+    remembered its own requests would then wait forever on a fetch nobody is making.
 
 ## Read Triggers
 
@@ -126,6 +132,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | Handle a new/changed runtime event in the UI | `webview/src/store.ts` (`applyRpcEvent`), `shared/blocks.ts`, then replay in `store.test.ts` |
 | Add a message/tool render style | `components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`, `exec-view/tool-display.ts`, matching `.scss` |
 | Show what a tool call is doing before it runs | `shared/tool-args.ts` (partial `toolcall_delta` text), `webview/src/hooks/use-streaming-tool-args.ts`, `components/exec-view/write-stream/`; `agent-timeline.tsx` decides which cards get `partialArgs` |
+| Show an image a tool returned, or change when its bytes load | `components/exec-view/tool-images/` (`needsToolImage` is the gate), `components/exec-view/tool-call-view.tsx`, `store.ts` (`ToolExec.images`, `toolImage` case, `retainNewestImages`); host `src/webview/tool-image.ts` |
 | Add a host message type | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer |
 | Send something new to the host | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage` |
 | Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |

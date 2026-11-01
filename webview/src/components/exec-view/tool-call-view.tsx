@@ -38,6 +38,8 @@ import {
   type SubagentDetailsView,
 } from './subagent-calls';
 import { WriteStream, writeLineBadge } from './write-stream';
+import { ToolImages } from './tool-images';
+import type { ToolImageRef } from '../../../../shared/protocol';
 import './exec-block-view.scss';
 
 interface ToolCallViewProps {
@@ -107,6 +109,10 @@ export function ExecBlock({
   // A subagent card is identified by the `details` payload the tool reports, not by
   // its name, so a renamed or third-party subagent tool still renders correctly.
   const subagent = resolveSubagentCard(name, tool?.details, effectiveArgs);
+  // Images the call returned, still only as references: the tiles fetch their bytes when
+  // (and only when) the reader opens the card.
+  const images = tool?.images;
+  const toolCallId = tool?.toolCallId ?? '';
   // The task is what identifies a subagent call, and until now it had no home in the
   // card at all: the header shows one line of it, the tooltip and the copy button the
   // whole text.
@@ -200,7 +206,7 @@ export function ExecBlock({
 
   return (
     <div
-      className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}${name === 'write' ? ' exec-write' : ''}`}
+      className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}${name === 'write' ? ' exec-write' : ''}${images?.length ? ' exec-has-image' : ''}`}
       {...(expanded ? ({ open: true } as Record<string, unknown>) : {})}>
       <div className="exec-header">
         {/* The disclosure is the summary, not the whole row: the row also carries the
@@ -283,6 +289,9 @@ export function ExecBlock({
               isError={isError}
               view={view}
               typing={typing}
+              images={images}
+              toolCallId={toolCallId}
+              expanded={expanded}
             />
           </div>
         </div>
@@ -300,6 +309,11 @@ interface BodyProps {
   view: NestedView;
   /** True while the model is still typing the arguments of this call. */
   typing: boolean;
+  /** Images from the result, without their bytes. */
+  images?: ToolImageRef[];
+  toolCallId: string;
+  /** The card's disclosure state, which decides whether the bytes get fetched. */
+  expanded: boolean;
 }
 
 function ToolBody({
@@ -310,19 +324,28 @@ function ToolBody({
   isError,
   view,
   typing,
+  images,
+  toolCallId,
+  expanded,
 }: BodyProps) {
+  const imageTiles = images?.length ? (
+    <ToolImages toolCallId={toolCallId} images={images} expanded={expanded} />
+  ) : null;
   // Any tool that ran other tools gets the same nested list, subagent or not.
   if (view.subagent || view.nested.length > 0) {
     return (
-      <SubagentCalls
-        calls={view.nested}
-        tools={view.tools}
-        details={view.subagent ?? {}}
-        report={view.report}
-        status={status}
-        complete={view.nestedComplete}
-        outputsStored={view.outputsStored}
-      />
+      <>
+        {imageTiles}
+        <SubagentCalls
+          calls={view.nested}
+          tools={view.tools}
+          details={view.subagent ?? {}}
+          report={view.report}
+          status={status}
+          complete={view.nestedComplete}
+          outputsStored={view.outputsStored}
+        />
+      </>
     );
   }
   if (name === 'bash') {
@@ -362,6 +385,16 @@ function ToolBody({
     );
   }
   if (name === 'read') {
+    if (images?.length && !isError) {
+      // The image *is* the result; pi's note ("Read image file [image/png]", plus any
+      // resize hint) stays underneath it as the caption.
+      return (
+        <>
+          {imageTiles}
+          {result && <pre className="exec-output exec-read-note">{result}</pre>}
+        </>
+      );
+    }
     if (result && !isError) {
       return (
         <CodeBlock
@@ -398,6 +431,7 @@ function ToolBody({
   }
   return (
     <>
+      {imageTiles}
       {Object.keys(args).length > 1 && (
         <pre className="exec-args">{JSON.stringify(args, null, 2)}</pre>
       )}

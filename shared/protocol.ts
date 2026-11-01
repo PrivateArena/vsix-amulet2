@@ -76,10 +76,27 @@ export interface ToolCallBlock {
   partialArgs?: string;
   streamIndex?: number;
 }
+/**
+ * An image content block, as pi returns one from `read` (plus any attachment-style
+ * tool). `data` is the base64 payload pi sends to the model; the extension host
+ * strips it before forwarding (see `stripImagePayloads` in `shared/blocks.ts`), so a
+ * webview normally sees only the reference fields and fetches pixels on demand
+ * (`loadToolImage`).
+ */
+export interface ImageBlock {
+  type: 'image';
+  /** Base64 payload, present on the raw wire only. */
+  data?: string;
+  mimeType: string;
+  /** Decoded byte count of `data`, measured when the payload is stripped. */
+  bytes?: number;
+}
+
 export type ContentBlock =
   | TextBlock
   | ThinkingBlock
   | ToolCallBlock
+  | ImageBlock
   | { type: string; [k: string]: unknown };
 
 export interface Usage {
@@ -113,6 +130,33 @@ export interface Attachment {
   dataUrl?: string;
   /** File size in bytes. */
   size: number;
+}
+
+/**
+ * One image a tool returned, with the payload deliberately left out: the card that
+ * shows it asks the host for the bytes only when the reader expands it.
+ */
+export interface ToolImageRef {
+  /**
+   * The file the tool read, as the model wrote it in its arguments (may be relative
+   * to the runtime cwd). Absent when the call has no path — a generated image, a
+   * remote tool — which leaves the card nothing to load.
+   */
+  path?: string;
+  mimeType: string;
+  /** Decoded size of what the tool returned, in bytes. */
+  bytes: number;
+  /** Set once the host has delivered the pixels (see the `toolImage` host message). */
+  dataUrl?: string;
+  /** Size of the file actually rendered, when the host read it from disk. */
+  size?: number;
+  /**
+   * When `dataUrl` arrived, so the webview can retire the oldest pixels first. Set by
+   * the reducer alone — the host never fills it.
+   */
+  loadedAt?: number;
+  /** Why the host could not supply the image (missing, too large, unsupported). */
+  error?: string;
 }
 
 export interface AppMessage {
@@ -597,6 +641,20 @@ export type WebviewMessage =
   | { type: 'updatePi' }
   | { type: 'openSettings' }
   | { type: 'pickFiles' }
+  /**
+   * Ask the host for the bytes of one image a tool returned, keyed by call and position
+   * in its result. Sent only while the requesting card is expanded — a collapsed card
+   * never pulls an image across. The type is not asked for: the host reads the file's own
+   * signature, so a path cannot be dressed up as something it is not.
+   */
+  | {
+      type: 'loadToolImage';
+      toolCallId: string;
+      index: number;
+      path: string;
+    }
+  /** Open the file behind a tool image in the VS Code viewer (full size). */
+  | { type: 'openToolImage'; toolCallId: string; path: string }
   | { type: 'openExternal'; url: string }
   | { type: 'copyText'; text: string }
   | { type: 'requestAuthStatus' }
@@ -618,6 +676,20 @@ export type HostMessage =
   | { type: 'focusInput' }
   | { type: 'insertText'; text: string }
   | { type: 'pickedFiles'; files: Attachment[] }
+  /**
+   * Answer to `loadToolImage`, keyed by the call and position that asked for it. `error`
+   * replaces `dataUrl` when the file is gone, unreadable or not a renderable image.
+   */
+  | {
+      type: 'toolImage';
+      toolCallId: string;
+      index: number;
+      path: string;
+      mimeType?: string;
+      dataUrl?: string;
+      size?: number;
+      error?: string;
+    }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'stats'; stats: SessionStats }
   | { type: 'commands'; commands: CommandInfo[] }

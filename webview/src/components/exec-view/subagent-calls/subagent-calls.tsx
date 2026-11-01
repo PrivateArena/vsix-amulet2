@@ -17,6 +17,7 @@ import {
   toolRowPreview,
 } from '../tool-display';
 import { subagentMetaLine, type SubagentDetailsView } from './subagent-details';
+import { ToolImages } from '../tool-images';
 import './subagent-calls.scss';
 
 export interface SubagentCallsProps {
@@ -131,7 +132,9 @@ function NestedCallRow({
   const fullText = toolFullText(tool.toolName, tool.args);
   const duration = toolDuration(tool, now);
   const label = TOOL_LABELS[tool.toolName] ?? tool.toolName;
-  const expandable = !!tool.resultText || children.length > 0;
+  const images = tool.images;
+  const expandable =
+    !!tool.resultText || !!images?.length || children.length > 0;
   const hasTip = !!(fullText || preview || tool.resultText);
 
   return (
@@ -184,6 +187,15 @@ function NestedCallRow({
           {tool.resultText}
         </pre>
       )}
+      {/* The row is this call's disclosure, so it gates the read the same way the card
+          does: nothing is fetched for a nested call nobody opened. */}
+      {open && images?.length ? (
+        <ToolImages
+          toolCallId={tool.toolCallId}
+          images={images}
+          expanded={open}
+        />
+      ) : null}
       {children.length > 0 && (
         <ul className="sub-call-list sub-call-nested">
           {children.map((child) => (

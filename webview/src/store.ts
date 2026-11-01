@@ -18,6 +18,7 @@ import type {
   ToolExecutionEnd,
   ToolExecutionStart,
   ToolExecutionUpdate,
+  ToolImageRef,
   ToolResultMessage,
 } from '../../shared/protocol';
 import {
@@ -25,6 +26,7 @@ import {
   asToolCall,
   normalizeContent,
   textOfContent,
+  toolImagesOf,
 } from '../../shared/blocks';
 import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
 
@@ -52,6 +54,12 @@ export interface ToolExec {
   startedAt?: number;
   /** The tool's own `details` payload (subagent progress card, report, …). */
   details?: unknown;
+  /**
+   * Images the tool returned, as references only: their bytes stay on disk until a
+   * reader expands the card (see `loadToolImage`). Undefined for the overwhelming
+   * majority of calls.
+   */
+  images?: ToolImageRef[];
   /**
    * Set when pi dropped this nested call's arguments from its record to stay under
    * the size budget — the byte count it omitted, for the row's preview.
@@ -184,6 +192,7 @@ function seedToolsFromHistory(
       isError: !!result.isError,
       durationMs: result.durationMs,
       details: result.details,
+      images: toolImagesOf(result.content, tools[id]?.args),
       resultBlocks: normalizeContent(result.content),
       resultText: textOfContent(result.content),
     };
@@ -249,6 +258,142 @@ function withParentLink(
   return entry.parentToolCallId
     ? linkChild(tools, entry.parentToolCallId, entry.toolCallId)
     : tools;
+}
+
+/**
+ * What the webview keeps decoded, at most: the images a reader looked at recently, not a
+ * whole session's worth. A reference dropped here re-reads on its next expansion — which
+ * is why the tiles ask from state rather than from a flag of their own.
+ */
+const MAX_RETAINED_IMAGE_BYTES = 24 * 1024 * 1024;
+const MAX_RETAINED_IMAGES = 8;
+
+/**
+ * Carry a card's delivered pixels (or its failure) across the refs a later event reports
+ * for the same call. pi reports a result more than once, and the end event rebuilding the
+ * list would otherwise blank a tile that had already loaded.
+ */
+function mergeToolImages(
+  next: ToolImageRef[] | undefined,
+  previous: ToolImageRef[] | undefined,
+): ToolImageRef[] | undefined {
+  if (!next) return previous;
+  if (!previous) return next;
+  return next.map((image, index) => {
+    const was = previous[index];
+    if (!was || was.path !== image.path) return image;
+    if (!was.dataUrl && !was.error) return image;
+    return {
+      ...image,
+      dataUrl: was.dataUrl,
+      size: was.size,
+      error: was.error,
+      loadedAt: was.loadedAt,
+    };
+  });
+}
+
+/**
+ * Drop the oldest delivered pixels until the session is back inside the retention budget.
+ */
+function retainNewestImages(
+  tools: Record<string, ToolExec>,
+): Record<string, ToolExec> {
+  type Loaded = { toolId: string; index: number; bytes: number; at: number };
+  const loaded: Loaded[] = [];
+  for (const [toolId, tool] of Object.entries(tools)) {
+    tool.images?.forEach((image, index) => {
+      if (image.dataUrl) {
+        loaded.push({
+          toolId,
+          index,
+          bytes: image.dataUrl.length,
+          at: image.loadedAt ?? 0,
+        });
+      }
+    });
+  }
+  let total = loaded.reduce((bytes, entry) => bytes + entry.bytes, 0);
+  if (
+    loaded.length <= MAX_RETAINED_IMAGES &&
+    total <= MAX_RETAINED_IMAGE_BYTES
+  ) {
+    return tools;
+  }
+  // Oldest first; the image that just arrived is the newest, so it is never the victim.
+  loaded.sort((a, b) => a.at - b.at);
+  const victims = new Map<string, number[]>();
+  let dropped = 0;
+  for (const entry of loaded) {
+    if (
+      loaded.length - dropped <= MAX_RETAINED_IMAGES &&
+      total <= MAX_RETAINED_IMAGE_BYTES
+    ) {
+      break;
+    }
+    total -= entry.bytes;
+    dropped += 1;
+    const list = victims.get(entry.toolId);
+    if (list) list.push(entry.index);
+    else victims.set(entry.toolId, [entry.index]);
+  }
+  if (!victims.size) return tools;
+  const next = { ...tools };
+  for (const [toolId, indexes] of victims) {
+    const tool = next[toolId];
+    const images = (tool.images ?? []).slice();
+    for (const index of indexes) {
+      const image = images[index];
+      if (!image) continue;
+      images[index] = {
+        ...image,
+        dataUrl: undefined,
+        loadedAt: undefined,
+      };
+    }
+    next[toolId] = { ...tool, images };
+  }
+  return next;
+}
+
+/**
+ * Attach the pixels the host read to the reference a card asked for.
+ *
+ * Returns the state untouched when nothing matches: the answer can land after the session
+ * that asked for it was replaced, and a card that never asked must not gain one.
+ */
+function applyToolImageResult(
+  state: ChatState,
+  message: Extract<HostMessage, { type: 'toolImage' }>,
+): ChatState {
+  const tool = state.tools[message.toolCallId];
+  const images = tool?.images;
+  if (!tool || !images?.length) return state;
+  const image = images[message.index];
+  // Keyed by position, because a result may hold two images of the same file; the path
+  // still has to agree, or the answer belongs to a call that has moved on.
+  if (!image || image.path !== message.path) return state;
+  const dataUrl = message.dataUrl ?? image.dataUrl;
+  const error = message.error ?? image.error;
+  if (dataUrl === image.dataUrl && error === image.error) return state;
+  const next = images.slice();
+  next[message.index] = {
+    ...image,
+    dataUrl,
+    error,
+    // The host read the file itself, so its type beats what the runtime reported for a
+    // payload that is no longer on the wire.
+    mimeType: message.mimeType ?? image.mimeType,
+    size: message.size ?? image.size,
+    loadedAt: dataUrl ? Date.now() : image.loadedAt,
+  };
+  return {
+    ...state,
+    tools: retainNewestImages({
+      ...state.tools,
+      [message.toolCallId]: { ...tool, images: next },
+    }),
+  };
 }
 
 export type Action =
@@ -342,6 +487,8 @@ export function reducer(state: ChatState, action: Action): ChatState {
       return { ...state, stats: message.stats };
     case 'commands':
       return { ...state, commands: message.commands };
+    case 'toolImage':
+      return applyToolImageResult(state, message);
     case 'rpcEvent':
       return applyRpcEvent(state, message.event);
     // focusInput / insertText / enterForkMode / pickedFiles are handled in the
@@ -489,6 +636,12 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         startedAt: existing?.startedAt ?? Date.now(),
         parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
         details: e.partialResult?.details ?? existing?.details,
+        // A progress heartbeat rebuilds the entry, so anything this card already learned
+        // about the call's images — including delivered pixels — has to be carried across.
+        images: mergeToolImages(
+          toolImagesOf(e.partialResult?.content, e.args ?? existing?.args),
+          existing?.images,
+        ),
         // A progress heartbeat rebuilds the entry, so the list of calls this tool
         // made — and pi's truncation flag — have to be carried across explicitly.
         childIds: existing?.childIds,
@@ -508,6 +661,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
     case 'tool_execution_end': {
       const e = event as ToolExecutionEnd;
       const existing = state.tools[e.toolCallId];
+      // The result is authoritative: whatever images it does not report are gone. What it
+      // repeats keeps the pixels a card already read.
+      const resultImages = toolImagesOf(e.result?.content, existing?.args);
       const entry: ToolExec = {
         toolCallId: e.toolCallId,
         toolName: e.toolName,
@@ -524,6 +680,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
             : Math.max(0, Date.now() - existing.startedAt)),
         parentToolCallId: e.parentToolCallId ?? existing?.parentToolCallId,
         details: e.result?.details ?? existing?.details,
+        images: resultImages
+          ? mergeToolImages(resultImages, existing?.images)
+          : undefined,
         // The live list is already complete for the UI; keep it across the end event.
         childIds: existing?.childIds,
         nestedComplete: existing?.nestedComplete,

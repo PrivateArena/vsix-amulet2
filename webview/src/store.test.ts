@@ -972,3 +972,328 @@ describe('reducer — nested (subagent) tool calls', () => {
     );
   });
 });
+
+/** The result pi sends back for `read` of an image, already payload-stripped by the host. */
+const imageResult = () => ({
+  type: 'tool_execution_end',
+  toolCallId: 'r1',
+  toolName: 'read',
+  durationMs: 12,
+  result: {
+    content: [
+      { type: 'text', text: 'Read image file [image/png]' },
+      { type: 'image', mimeType: 'image/png', bytes: 4096 },
+    ],
+  },
+});
+
+describe('reducer — tool images', () => {
+  const withImage = () => {
+    const s = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_start',
+          toolCallId: 'r1',
+          toolName: 'read',
+          args: { path: 'tmp/shot.png' },
+        } as never,
+      }),
+    );
+    return reducer(
+      s,
+      host({ type: 'rpcEvent', event: imageResult() as never }),
+    );
+  };
+
+  it('keeps an image result as a reference, with the call path attached', () => {
+    const s = withImage();
+    expect(s.tools.r1).toMatchObject({
+      status: 'done',
+      resultText: 'Read image file [image/png]',
+    });
+    // No bytes in state: the card has to ask for them, and only when it is open.
+    expect(s.tools.r1.images).toEqual([
+      { path: 'tmp/shot.png', mimeType: 'image/png', bytes: 4096 },
+    ]);
+  });
+
+  it('attaches delivered pixels to the reference that asked for them', () => {
+    let s = withImage();
+    s = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r1',
+        index: 0,
+        path: 'tmp/shot.png',
+        mimeType: 'image/webp',
+        dataUrl: 'data:image/png;base64,QUJD',
+        size: 3,
+      }),
+    );
+    expect(s.tools.r1.images?.[0]).toMatchObject({
+      path: 'tmp/shot.png',
+      // What the host read wins over what the runtime claimed for a payload it dropped.
+      mimeType: 'image/webp',
+      bytes: 4096,
+      dataUrl: 'data:image/png;base64,QUJD',
+      size: 3,
+    });
+    // Stamped for the retention budget, which retires the oldest pixels first.
+    expect(typeof s.tools.r1.images?.[0].loadedAt).toBe('number');
+  });
+
+  it('records why an image could not be read', () => {
+    let s = withImage();
+    s = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r1',
+        index: 0,
+        path: 'tmp/shot.png',
+        error: 'no file at tmp/shot.png',
+      }),
+    );
+    expect(s.tools.r1.images?.[0].error).toBe('no file at tmp/shot.png');
+    expect(s.tools.r1.images?.[0].dataUrl).toBeUndefined();
+  });
+
+  it('ignores an answer for a call or a path that never asked', () => {
+    const s = withImage();
+    const stray = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'gone',
+        index: 0,
+        path: 'tmp/shot.png',
+        dataUrl: 'data:image/png;base64,QUJD',
+      }),
+    );
+    expect(stray).toBe(s);
+    const wrongPath = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r1',
+        index: 0,
+        path: 'tmp/other.png',
+        dataUrl: 'data:image/png;base64,QUJD',
+      }),
+    );
+    expect(wrongPath).toBe(s);
+  });
+
+  it('rebuilds the reference from a reloaded history', () => {
+    const s = reducer(
+      initialState,
+      host({
+        type: 'history',
+        messages: [
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'toolCall',
+                id: 'r1',
+                name: 'read',
+                arguments: { path: 'tmp/shot.png' },
+              },
+            ],
+          },
+          {
+            role: 'toolResult',
+            toolCallId: 'r1',
+            toolName: 'read',
+            content: [{ type: 'image', mimeType: 'image/png', bytes: 4096 }],
+          },
+        ] as never,
+      }),
+    );
+    expect(s.tools.r1.images).toEqual([
+      { path: 'tmp/shot.png', mimeType: 'image/png', bytes: 4096 },
+    ]);
+  });
+
+  it('keeps delivered pixels through the event that repeats the result', () => {
+    let s = withImage();
+    s = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r1',
+        index: 0,
+        path: 'tmp/shot.png',
+        dataUrl: 'data:image/png;base64,QUJD',
+        size: 3,
+      }),
+    );
+    // pi reports the same result again (a heartbeat, or the end event after the pixels
+    // landed early): rebuilding the refs from scratch would blank a loaded tile.
+    s = reducer(s, host({ type: 'rpcEvent', event: imageResult() as never }));
+    expect(s.tools.r1.images?.[0].dataUrl).toBe('data:image/png;base64,QUJD');
+  });
+
+  it('answers the position that asked, not the first reference with the same path', () => {
+    const twoImages = {
+      type: 'tool_execution_end',
+      toolCallId: 'r2',
+      toolName: 'read',
+      result: {
+        content: [
+          { type: 'image', mimeType: 'image/png', bytes: 10 },
+          { type: 'image', mimeType: 'image/png', bytes: 10 },
+        ],
+      },
+    };
+    let s = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_start',
+          toolCallId: 'r2',
+          toolName: 'read',
+          args: { path: 'tmp/both.png' },
+        } as never,
+      }),
+    );
+    s = reducer(s, host({ type: 'rpcEvent', event: twoImages as never }));
+    expect(s.tools.r2.images).toHaveLength(2);
+    s = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r2',
+        index: 1,
+        path: 'tmp/both.png',
+        dataUrl: 'data:image/png;base64,QUJD',
+        size: 3,
+      }),
+    );
+    expect(s.tools.r2.images?.[0].dataUrl).toBeUndefined();
+    expect(s.tools.r2.images?.[1].dataUrl).toBe('data:image/png;base64,QUJD');
+
+    // Both tiles of one result are readable, and one retirement counts as two images.
+    s = reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: 'r2',
+        index: 0,
+        path: 'tmp/both.png',
+        dataUrl: 'data:image/png;base64,AAEC',
+        size: 3,
+      }),
+    );
+    expect(s.tools.r2.images?.map((image) => image.dataUrl)).toEqual([
+      'data:image/png;base64,AAEC',
+      'data:image/png;base64,QUJD',
+    ]);
+  });
+
+  it('retires the oldest delivered pixels once too many are held', () => {
+    const pixels = 'data:image/png;base64,' + 'A'.repeat(2048);
+    let s = initialState;
+    for (let i = 0; i < 10; i++) {
+      const id = `r${i}`;
+      s = reducer(
+        s,
+        host({
+          type: 'rpcEvent',
+          event: {
+            type: 'tool_execution_start',
+            toolCallId: id,
+            toolName: 'read',
+            args: { path: `tmp/${id}.png` },
+          } as never,
+        }),
+      );
+      s = reducer(
+        s,
+        host({
+          type: 'rpcEvent',
+          event: {
+            type: 'tool_execution_end',
+            toolCallId: id,
+            toolName: 'read',
+            result: {
+              content: [{ type: 'image', mimeType: 'image/png', bytes: 10 }],
+            },
+          } as never,
+        }),
+      );
+      s = reducer(
+        s,
+        host({
+          type: 'toolImage',
+          toolCallId: id,
+          index: 0,
+          path: `tmp/${id}.png`,
+          dataUrl: pixels,
+          size: 3,
+        }),
+      );
+    }
+    const held = Object.values(s.tools).flatMap((tool) =>
+      (tool.images ?? []).filter((image) => image.dataUrl),
+    );
+    // Eight retained images, the newest eight: a session opened card by card keeps its
+    // memory flat instead of accumulating every screenshot the reader ever clicked.
+    expect(held).toHaveLength(8);
+    expect(s.tools.r0.images?.[0].dataUrl).toBeUndefined();
+    expect(s.tools.r9.images?.[0].dataUrl).toBe(pixels);
+    // A retired reference stays readable — the card re-reads it when it is opened again.
+    expect(s.tools.r0.images?.[0].path).toBe('tmp/r0.png');
+  });
+
+  it('counts the bytes it holds, not only the images', () => {
+    // Two oversized screenshots are already past the budget, whatever their count.
+    const huge = 'data:image/png;base64,' + 'A'.repeat(13 * 1024 * 1024);
+    let s = initialState;
+    for (const id of ['big1', 'big2']) {
+      s = reducer(
+        s,
+        host({
+          type: 'rpcEvent',
+          event: {
+            type: 'tool_execution_start',
+            toolCallId: id,
+            toolName: 'read',
+            args: { path: `${id}.png` },
+          } as never,
+        }),
+      );
+      s = reducer(
+        s,
+        host({
+          type: 'rpcEvent',
+          event: {
+            type: 'tool_execution_end',
+            toolCallId: id,
+            toolName: 'read',
+            result: {
+              content: [{ type: 'image', mimeType: 'image/png', bytes: 10 }],
+            },
+          } as never,
+        }),
+      );
+      s = reducer(
+        s,
+        host({
+          type: 'toolImage',
+          toolCallId: id,
+          index: 0,
+          path: `${id}.png`,
+          dataUrl: huge,
+          size: 3,
+        }),
+      );
+    }
+    expect(s.tools.big1.images?.[0].dataUrl).toBeUndefined();
+    expect(s.tools.big2.images?.[0].dataUrl).toBe(huge);
+  });
+});

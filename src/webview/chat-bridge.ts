@@ -9,12 +9,17 @@ import type {
   ExtensionUiRequest,
   HostMessage,
   ProviderLoginRequest,
+  RpcEvent,
   SessionStats,
   ThinkingLevel,
   WebviewMessage,
 } from '../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
 import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
+import {
+  stripEventImages,
+  stripHistoryImagePayloads,
+} from '../../shared/blocks';
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
   EXPAND_THINKING_KEY,
@@ -30,6 +35,11 @@ import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
 import { listSessions, sessionsDirForCwd } from '../session/session-store';
 import { handleExtensionUiRequest } from './extension-ui';
+import {
+  isSupportedImage,
+  readToolImage,
+  resolveToolImagePath,
+} from './tool-image';
 import {
   claimUiRequest,
   releaseUiRequest,
@@ -70,6 +80,12 @@ export class ChatBridge implements vscode.Disposable {
   private consumedOpenFresh = false;
   /** True while a `pi update` child process is running (the menu is re-entrant). */
   private piUpdateInFlight = false;
+  /**
+   * Tool-image reads in flight, keyed by call id, position and path. A card asks again
+   * whenever state says it has no pixels, so the duplicates are expected — React mounts the
+   * webview tree twice in development, and two surfaces read the same file.
+   */
+  private readonly imageReads = new Set<string>();
   /** extension_ui_request ids we've handed to the webview and are awaiting a reply for. */
   private readonly forwardedUi = new Set<string>();
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
@@ -136,7 +152,12 @@ export class ChatBridge implements vscode.Disposable {
   }
 
   private onRuntimeEvent(event: { type: string }): void {
-    this.post({ type: 'rpcEvent', event: event as any });
+    // Image payloads are the one part of a tool result no renderer can show, and the
+    // one part big enough to matter: redact them, then hand the reference over.
+    this.post({
+      type: 'rpcEvent',
+      event: stripEventImages(event as RpcEvent) as any,
+    });
     // Refresh derived data when a turn completes or the session changes. A run is
     // many turns (one LLM call plus its tool results), so `turn_end` is what keeps
     // the context meter moving inside a long run; the reply is derived from
@@ -156,6 +177,18 @@ export class ChatBridge implements vscode.Disposable {
     }
   }
 
+  /**
+   * Post a history snapshot with the image payloads out of its tool results. A session
+   * that read a dozen screenshots persists their bytes in full, and the UI can only ever
+   * show one it was asked for — see {@link stripHistoryImagePayloads}.
+   */
+  private postHistory(messages: AppMessage[]): void {
+    this.post({
+      type: 'history',
+      messages: stripHistoryImagePayloads(messages),
+    });
+  }
+
   private async pushSnapshot(): Promise<void> {
     const runtime = this.runtime;
     if (!runtime?.isReady) return;
@@ -166,7 +199,7 @@ export class ChatBridge implements vscode.Disposable {
         runtime.getState(),
       ]);
       this.post({ type: 'models', models });
-      this.post({ type: 'history', messages: messages as AppMessage[] });
+      this.postHistory(messages as AppMessage[]);
       this.post({ type: 'state', state });
       await Promise.all([
         this.pushThinkingLevels(),
@@ -346,6 +379,16 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'pickFiles':
           await this.pickFiles();
+          return;
+        case 'loadToolImage':
+          await this.loadToolImage(
+            message.toolCallId,
+            message.index,
+            message.path,
+          );
+          return;
+        case 'openToolImage':
+          await this.openToolImage(message.path);
           return;
         case 'openExternal': {
           // SECURITY: the URL originates from assistant markdown output
@@ -749,7 +792,7 @@ export class ChatBridge implements vscode.Disposable {
     if (result.cancelled) return;
     // Refresh history to reflect the truncated branch, then send the edited text.
     const messages = await runtime.getMessages();
-    this.post({ type: 'history', messages: messages as AppMessage[] });
+    this.postHistory(messages as AppMessage[]);
     // A fork starts a new session, which re-resolves the model and its levels.
     void this.pushThinkingLevels();
     await runtime.prompt(text);
@@ -1072,6 +1115,74 @@ export class ChatBridge implements vscode.Disposable {
     if (attachments.length > 0) {
       this.post({ type: 'pickedFiles', files: attachments });
     }
+  }
+
+  // --- Tool images ---------------------------------------------------------
+
+  /**
+   * Read one image a tool returned, for a card that is actually showing it.
+   *
+   * {@link onRuntimeEvent} strips these payloads off the wire before the webview ever sees
+   * them, so the bytes only move when a reader opens the card — and they come from the file
+   * the call named, not from a copy the host would have to keep alive for the session.
+   */
+  private async loadToolImage(
+    toolCallId: string,
+    index: number,
+    filePath: string,
+  ): Promise<void> {
+    const key = `${toolCallId}\u0000${index}\u0000${filePath}`;
+    if (this.imageReads.has(key)) return;
+    this.imageReads.add(key);
+    const answer = (
+      patch:
+        { dataUrl: string; size: number; mimeType: string } | { error: string },
+    ) => {
+      if (this.disposed) return;
+      this.post({
+        type: 'toolImage',
+        toolCallId,
+        index,
+        path: filePath,
+        ...patch,
+      });
+    };
+    try {
+      const result = await readToolImage(filePath, {
+        cwd: this.runtime?.cwd ?? this.sessions.activeCwd(),
+      });
+      if (result.ok) {
+        answer({
+          mimeType: result.mimeType,
+          dataUrl: result.dataUrl,
+          size: result.size,
+        });
+        return;
+      }
+      this.log.warn(`Tool image unavailable (${filePath}): ${result.error}`);
+      answer({ error: result.error });
+    } catch (err) {
+      // Without this answer the tile would wait forever on a request nobody is making.
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.warn(`Tool image read failed (${filePath}): ${message}`);
+      answer({ error: message });
+    } finally {
+      this.imageReads.delete(key);
+    }
+  }
+
+  /**
+   * Show a tool image full size in the workbench's own viewer. Checked against the file's
+   * own signature, so a tool result cannot steer the webview into opening arbitrary paths.
+   */
+  private async openToolImage(filePath: string): Promise<void> {
+    const cwd = this.runtime?.cwd ?? this.sessions.activeCwd();
+    const resolved = resolveToolImagePath(filePath, cwd);
+    if (!resolved || !(await isSupportedImage(resolved))) return;
+    void vscode.commands.executeCommand(
+      'vscode.open',
+      vscode.Uri.file(resolved),
+    );
   }
 
   // --- Extension UI dialogs ------------------------------------------------

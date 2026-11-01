@@ -170,3 +170,78 @@ describe('card while a call is still being typed', () => {
     expect(html).not.toContain('Copy the path');
   });
 });
+
+const IMAGE_REF = {
+  path: '/tmp/zen-cap/screenshot.png',
+  mimeType: 'image/png',
+  bytes: 4096,
+};
+
+describe('read card for an image', () => {
+  const imageTool = (patch: Partial<ToolExec> = {}): ToolExec => ({
+    toolCallId: 'r1',
+    toolName: 'read',
+    args: { path: IMAGE_REF.path },
+    status: 'done',
+    durationMs: 12,
+    resultText: 'Read image file [image/png]',
+    images: [IMAGE_REF],
+    ...patch,
+  });
+
+  it('shows a waiting tile rather than an image while the bytes stay on disk', () => {
+    const html = card({ name: 'read', tool: imageTool() });
+    expect(html).toContain('exec-image-state');
+    expect(html).toContain('screenshot.png');
+    expect(html).not.toContain('<img');
+    // pi's own note survives as the caption, not as a code block.
+    expect(html).toContain('exec-read-note');
+    expect(html).toContain('Read image file [image/png]');
+  });
+
+  it('renders the delivered pixels and marks the card as one holding an image', () => {
+    const html = card({
+      name: 'read',
+      tool: imageTool({
+        images: [
+          { ...IMAGE_REF, dataUrl: 'data:image/png;base64,QUJD', size: 3 },
+        ],
+      }),
+    });
+    expect(html).toContain('src="data:image/png;base64,QUJD"');
+    expect(html).toContain('exec-has-image');
+    expect(html).toContain('exec-image-zoom');
+    expect(html).not.toContain('exec-image-state');
+  });
+
+  it('says why the host could not read the file', () => {
+    const html = card({
+      name: 'read',
+      tool: imageTool({
+        images: [
+          { ...IMAGE_REF, error: 'no file at /tmp/zen-cap/screenshot.png' },
+        ],
+      }),
+    });
+    expect(html).toContain('exec-image-state');
+    expect(html).toContain('no file at');
+    expect(html).not.toContain('<img');
+  });
+
+  it('describes an image that never came from a file', () => {
+    const html = card({
+      name: 'read',
+      tool: imageTool({ images: [{ ...IMAGE_REF, path: undefined }] }),
+    });
+    expect(html).toContain('no file to read');
+  });
+
+  it('keeps a failed read as the error text it is', () => {
+    const html = card({
+      name: 'read',
+      tool: imageTool({ status: 'error', isError: true, resultText: 'ENOENT' }),
+    });
+    expect(html).toContain('exec-output-error');
+    expect(html).toContain('ENOENT');
+  });
+});

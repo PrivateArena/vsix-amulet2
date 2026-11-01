@@ -1,0 +1,112 @@
+/*
+ * Images a tool returned, inside an expanded card.
+ *
+ * The card's own scroll box owns the body height, so the tile is capped here: a
+ * screenshot should fit the card without a scroll, and full size is one click away.
+ */
+.exec-images {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.exec-image {
+  margin: 0;
+  max-width: 100%;
+}
+
+.exec-image-frame {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-surface-elevated);
+  line-height: 0;
+}
+
+.exec-image-img {
+  display: block;
+  max-width: 100%;
+  /* The card's scroll box is capped at 340px: the tile leaves room for its own caption. */
+  max-height: min(15rem, 38vh);
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+/* Full-size view: the corner control, revealed when the frame is looked at. */
+.exec-image-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--amulet-radius-sm);
+  background: color-mix(in srgb, var(--amulet-bg) 72%, transparent);
+  color: var(--amulet-fg);
+  cursor: zoom-in;
+  opacity: 0;
+  transition: opacity var(--amulet-transition-fast) var(--amulet-ease-out);
+}
+
+.exec-image-frame:hover .exec-image-zoom,
+.exec-image-frame:focus-within .exec-image-zoom {
+  opacity: 1;
+}
+
+.exec-image-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+  min-width: 0;
+}
+
+.exec-image-name {
+  color: var(--amulet-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exec-image-meta {
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-fg-faint);
+}
+
+/* Before the bytes arrive, and when they never will: the card's other states are text. */
+.exec-image-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-surface-subtle);
+  color: var(--amulet-muted);
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-sm);
+}
+
+.exec-image-state-icon {
+  flex: none;
+}
+
+.exec-image-state.is-error {
+  border-color: color-mix(in srgb, var(--amulet-error) 45%, transparent);
+  color: var(--amulet-error);
+}
+
+.exec-image-state-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

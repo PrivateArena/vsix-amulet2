@@ -23,6 +23,15 @@ export const actions = {
     followUps?: string[],
   ) => postMessage({ type: 'sendMessage', text, attachments, followUps }),
   pickFiles: () => postMessage({ type: 'pickFiles' }),
+  /**
+   * Fetch the bytes behind one image a tool returned, and open it full size. Both are
+   * keyed by the path the call named; the host resolves it against the runtime's cwd and
+   * types it by the file's own signature.
+   */
+  loadToolImage: (toolCallId: string, index: number, path: string) =>
+    postMessage({ type: 'loadToolImage', toolCallId, index, path }),
+  openToolImage: (toolCallId: string, path: string) =>
+    postMessage({ type: 'openToolImage', toolCallId, path }),
   steer: (text: string, followUps?: string[]) =>
     postMessage({ type: 'steer', text, followUps }),
   abort: () => postMessage({ type: 'abort' }),
