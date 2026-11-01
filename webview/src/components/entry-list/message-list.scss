@@ -5,7 +5,7 @@
   scrollbar-gutter: stable;
   width: 100%;
   min-width: 0;
-  max-width: 900px;
+  max-width: unset;
   box-sizing: border-box;
   margin: 0 auto;
   /* `--chat-composer-h` is published by the composer (it floats over the log),
