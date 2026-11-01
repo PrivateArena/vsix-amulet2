@@ -75,6 +75,10 @@ function buildItems(
 
       const call = asToolCall(block);
       if (call) {
+        // `partialArgs` is this client's stream buffer: it exists only between
+        // `toolcall_start` and `toolcall_end`, so passing it while the reply is still
+        // streaming and the runtime has no execution entry yet is what hands the card the
+        // arguments in flight — and nothing else keeps a caret lit after the message ends.
         const tool = tools[call.id];
         items.push({
           key: call.id ?? `${m.uid}:${i}`,
@@ -85,6 +89,7 @@ function buildItems(
               tool={tool}
               name={call.name}
               args={call.arguments}
+              partialArgs={!tool && m.streaming ? call.partialArgs : undefined}
               tools={tools}
             />
           ),

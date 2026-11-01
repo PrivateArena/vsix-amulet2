@@ -141,6 +141,7 @@ body.spacing-compact .exec-block.exec-joined-prev {
 .exec-header .exec-write-line,
 .exec-header .exec-args,
 .exec-header .tool-duration,
+.exec-header .exec-write-counts,
 .exec-header .exec-edit-counts,
 .exec-header .exec-edit-view {
   display: inline-flex;
@@ -273,6 +274,16 @@ body.spacing-compact .exec-block.exec-joined-prev {
 
 .exec-header .tool-duration {
   color: var(--amulet-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * How much file a `write` card holds. It is the one figure that moves while the model is
+ * still typing the body, so it doubles as the proof that the stream is reaching the card.
+ */
+.exec-header .exec-write-counts {
+  color: var(--amulet-success);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

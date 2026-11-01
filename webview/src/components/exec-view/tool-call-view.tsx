@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LuBot,
   LuCheck,
@@ -9,6 +9,7 @@ import {
 } from 'react-icons/lu';
 import { actions } from '../../apis/actions';
 import { useCopyFeedback } from '../../hooks/use-copy-feedback';
+import { useStreamingToolArgs } from '../../hooks/use-streaming-tool-args';
 import { useTickingClock } from '../../hooks/use-ticking-clock';
 import type { ToolExec, ToolStatus } from '../../store';
 import { PatchView } from '../patch-view';
@@ -36,12 +37,20 @@ import {
   subagentPrompt,
   type SubagentDetailsView,
 } from './subagent-calls';
+import { WriteStream, writeLineBadge } from './write-stream';
 import './exec-block-view.scss';
 
 interface ToolCallViewProps {
-  tool: ToolExec | undefined;
+  /** The runtime's record of this call; absent while the model is still producing it. */
+  tool?: ToolExec;
   name: string;
   args?: unknown;
+  /**
+   * Raw argument text of a call the model is still producing (see
+   * `useStreamingToolArgs`). The runtime has not started executing it yet, so a card with
+   * one is a preview rather than a live call.
+   */
+  partialArgs?: string;
   /**
    * The session's whole tool map. A card needs it to look up the calls this tool
    * made through `ctx.executeTool()` — subagent commands, codemode calls.
@@ -78,8 +87,18 @@ interface NestedView {
   outputsStored: boolean;
 }
 
-export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
-  const effectiveArgs = asRecord(tool?.args ?? args);
+export function ExecBlock({
+  tool,
+  name,
+  args,
+  partialArgs,
+  tools,
+}: ToolCallViewProps) {
+  // While the model is still typing the call, the arguments on screen are the ones
+  // recovered from the streamed JSON buffer, and `typing` is the matching state of that
+  // same frame. Once the runtime reports the call, its parsed arguments take over.
+  const { args: streamedArgs, typing } = useStreamingToolArgs(partialArgs);
+  const effectiveArgs = asRecord(tool?.args ?? args ?? streamedArgs);
   const status: ToolStatus = tool?.status ?? 'running';
   const running = status === 'running';
   const result = tool?.resultText ?? '';
@@ -139,9 +158,27 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   // Elapsed time on every card, counting live while the call runs (from its own
   // `startedAt`, or from the subagent's `elapsedMs` progress field when it has one).
   const duration = toolDuration(tool, now, subagent?.elapsedMs);
+  const writeContent =
+    name === 'write' && typeof effectiveArgs.content === 'string'
+      ? effectiveArgs.content
+      : '';
+  // A write is the one call whose argument is a whole artefact, so the card counts it: the
+  // figure grows while the body streams and then describes the file. Nothing is claimed
+  // about a call that failed. Counted in a memo — the streamed body is re-parsed per
+  // rendered frame, and a whole-file line count has no business running on the renders that
+  // add nothing to it.
+  const hasSubagent = subagent != null;
+  const writeCount = useMemo(
+    () =>
+      name === 'write' && !hasSubagent && !isError
+        ? writeLineBadge(writeContent)
+        : '',
+    [name, hasSubagent, isError, writeContent],
+  );
   // The untruncated command, path or task: the header ellipsizes it, so this is the
-  // only way to hand a long value to a shell elsewhere.
-  const copyText = prompt || toolFullText(name, effectiveArgs);
+  // only way to hand a long value to a shell elsewhere. While the model is still typing
+  // the arguments there is nothing worth copying out of them yet.
+  const copyText = typing ? '' : prompt || toolFullText(name, effectiveArgs);
   const copyHint =
     subagent && prompt
       ? 'prompt'
@@ -163,7 +200,7 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
 
   return (
     <div
-      className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}`}
+      className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}${name === 'write' ? ' exec-write' : ''}`}
       {...(expanded ? ({ open: true } as Record<string, unknown>) : {})}>
       <div className="exec-header">
         {/* The disclosure is the summary, not the whole row: the row also carries the
@@ -189,8 +226,11 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
             )}
           </button>
         </Tooltip>
-        {(duration || copyText || live) && (
+        {(duration || copyText || live || writeCount) && (
           <span className="exec-actions">
+            {writeCount && (
+              <span className="exec-write-counts">{writeCount}</span>
+            )}
             {duration && <span className="tool-duration">{duration}</span>}
             {copyText && (
               <Tooltip
@@ -235,7 +275,15 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
       <div className="exec-content-wrap" aria-hidden={!expanded}>
         <div className="exec-content">
           <div className="exec-scroll">
-            {renderBody(name, effectiveArgs, result, status, isError, view)}
+            <ToolBody
+              name={name}
+              args={effectiveArgs}
+              result={result}
+              status={status}
+              isError={isError}
+              view={view}
+              typing={typing}
+            />
           </div>
         </div>
       </div>
@@ -243,14 +291,26 @@ export function ExecBlock({ tool, name, args, tools }: ToolCallViewProps) {
   );
 }
 
-function renderBody(
-  name: string,
-  args: Record<string, unknown>,
-  result: string,
-  status: ToolStatus,
-  isError: boolean,
-  view: NestedView,
-) {
+interface BodyProps {
+  name: string;
+  args: Record<string, unknown>;
+  result: string;
+  status: ToolStatus;
+  isError: boolean;
+  view: NestedView;
+  /** True while the model is still typing the arguments of this call. */
+  typing: boolean;
+}
+
+function ToolBody({
+  name,
+  args,
+  result,
+  status,
+  isError,
+  view,
+  typing,
+}: BodyProps) {
   // Any tool that ran other tools gets the same nested list, subagent or not.
   if (view.subagent || view.nested.length > 0) {
     return (
@@ -278,17 +338,22 @@ function renderBody(
           </pre>
         )}
         {!result && status === 'running' && (
-          <div className="exec-running">Running…</div>
+          <div className="exec-running">{typing ? 'Typing…' : 'Running…'}</div>
         )}
       </>
     );
   }
   if (name === 'edit') {
-    const edits = extractEdits(args);
+    // While the model is still typing the replacement, the last edit is by definition
+    // unfinished, and a truncated `oldText` is not a deletion. pi defers its own edit
+    // preview to `argsComplete` for the same reason: there is no honest diff yet.
+    if (typing) {
+      return <div className="exec-running">Writing replacement…</div>;
+    }
     return (
       <>
         <div className="exec-edit">
-          <PatchView edits={edits} />
+          <PatchView edits={extractEdits(args)} />
         </div>
         {isError && result && (
           <pre className="exec-output exec-output-error">{result}</pre>
@@ -310,10 +375,16 @@ function renderBody(
       return <pre className="exec-output exec-output-error">{result}</pre>;
     }
     return status === 'running' ? (
-      <div className="exec-running">Reading…</div>
+      <div className="exec-running">{typing ? 'Typing…' : 'Reading…'}</div>
     ) : null;
   }
   if (name === 'write' && typeof args.content === 'string') {
+    // A running write is the stream itself: pi reports nothing while the tool runs, so the
+    // call's own arguments are all of the file there is — shown as the additions-only body
+    // the finished card will show, newest line kept in view.
+    if (status === 'running') {
+      return <WriteStream content={args.content} streaming={typing} />;
+    }
     return (
       <>
         <div className="exec-write">
@@ -335,7 +406,7 @@ function renderBody(
           {result}
         </pre>
       ) : status === 'running' ? (
-        <div className="exec-running">Running…</div>
+        <div className="exec-running">{typing ? 'Typing…' : 'Running…'}</div>
       ) : null}
     </>
   );

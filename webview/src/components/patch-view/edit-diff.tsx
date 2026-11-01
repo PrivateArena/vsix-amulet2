@@ -9,8 +9,8 @@ function diffLines(
   oldText: string,
   newText: string,
 ): { context: string[]; removed: string[]; added: string[] } {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
+  const oldLines = linesOf(oldText);
+  const newLines = linesOf(newText);
   let start = 0;
   while (
     start < oldLines.length &&
@@ -35,10 +35,27 @@ function diffLines(
   };
 }
 
+/**
+ * A text as display lines. An empty text is an absent file, not a file with one blank
+ * line — which is what a `write` (no previous content) and an empty edit side both mean.
+ * A closing line ending terminates the last line rather than adding an empty row, so a
+ * whole file counts the same here as it does in the streaming write preview.
+ */
+function linesOf(text: string): string[] {
+  if (text === '') return [];
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
 function DiffBlock({ oldText, newText }: Edit) {
   const { context, removed, added } = diffLines(oldText, newText);
+  // A whole-file addition is a new file, not a change to one: it gets the softer palette
+  // and the square corners a `write` card expects.
+  const additionsOnly = oldText === '';
   return (
-    <pre className="patch-container">
+    <pre
+      className={`patch-container${additionsOnly ? ' patch-additions-only exec-write-highlight' : ''}`}>
       {context.map((l, i) => (
         <div key={`c${i}`} className="patch-line patch-line-context">
           {' '}

@@ -4,6 +4,8 @@ import type {
   Attachment,
   HostMessage,
 } from '../../shared/protocol';
+import { asToolCall } from '../../shared/blocks';
+import { parseStreamingToolArgs } from '../../shared/tool-args';
 import { initialState, reducer } from './store';
 
 const host = (message: HostMessage) => ({ type: 'host' as const, message });
@@ -618,6 +620,123 @@ describe('reducer — pi 1.4.0 wire shapes', () => {
     expect(s.tools.t1.resultText).toBe('output text');
   });
 });
+describe('reducer — a streamed write call', () => {
+  // `pi --mode rpc` finalizes a call's arguments at `toolcall_end` and never reports a
+  // partial write, so the card's live preview depends entirely on the deltas the reducer
+  // folds into the block. Recorded shape, one delta per streamed JSON fragment.
+  const event = (e: unknown) => host({ type: 'rpcEvent', event: e as never });
+  const fragments = [
+    '{"path":"notes/a.md","content":"# Tit',
+    'le\\n\\nbody',
+    '"}',
+  ];
+  const finalCall = {
+    type: 'toolCall',
+    id: 'w1',
+    name: 'write',
+    arguments: { path: 'notes/a.md', content: '# Title\n\nbody' },
+  };
+
+  it('buffers the argument text, then hands the card to the runtime', () => {
+    let s = reducer(
+      initialState,
+      event({
+        type: 'message_start',
+        message: { role: 'assistant', content: [] },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'message_update',
+        assistantMessageEvent: {
+          type: 'toolcall_start',
+          contentIndex: 0,
+          id: 'w1',
+          toolName: 'write',
+        },
+      }),
+    );
+
+    const streamed = s.messages[0].content.map(asToolCall)[0];
+    expect(streamed).toMatchObject({ id: 'w1', name: 'write' });
+    expect(s.tools).toEqual({});
+
+    let buffer = '';
+    for (const delta of fragments) {
+      buffer += delta;
+      s = reducer(
+        s,
+        event({
+          type: 'message_update',
+          assistantMessageEvent: {
+            type: 'toolcall_delta',
+            contentIndex: 0,
+            delta,
+          },
+        }),
+      );
+      expect(asToolCall(s.messages[0].content[0])?.partialArgs).toBe(buffer);
+    }
+
+    // Mid-stream the call is displayable but not yet valid: the card reads the buffer.
+    const partial = asToolCall(s.messages[0].content[0]);
+    expect(partial?.arguments).toBeUndefined();
+    expect(parseStreamingToolArgs(partial?.partialArgs)).toEqual({
+      path: 'notes/a.md',
+      content: '# Title\n\nbody',
+    });
+
+    s = reducer(
+      s,
+      event({
+        type: 'message_update',
+        assistantMessageEvent: {
+          type: 'toolcall_end',
+          contentIndex: 0,
+          toolCall: finalCall,
+        },
+      }),
+    );
+    expect(asToolCall(s.messages[0].content[0])).toEqual(finalCall);
+
+    s = reducer(
+      s,
+      event({
+        type: 'message_end',
+        message: { role: 'assistant', content: [finalCall] },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_start',
+        toolCallId: 'w1',
+        toolName: 'write',
+        args: finalCall.arguments,
+      }),
+    );
+    expect(s.tools.w1).toMatchObject({ status: 'running', toolName: 'write' });
+
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: 'w1',
+        toolName: 'write',
+        durationMs: 4,
+        result: {
+          content: [{ type: 'text', text: 'Successfully wrote to notes/a.md' }],
+        },
+      }),
+    );
+    expect(s.tools.w1).toMatchObject({
+      status: 'done',
+      resultText: 'Successfully wrote to notes/a.md',
+    });
+  });
+});
+
 describe('reducer — nested (subagent) tool calls', () => {
   // Recorded from `pi --mode rpc` with a real subagent run (scripts/rpc-probe.mjs).
   // A tool that calls `ctx.executeTool()` emits ordinary `tool_execution_*` events

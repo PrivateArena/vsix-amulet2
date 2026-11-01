@@ -25,7 +25,7 @@ webview/src/stores/             zustand: composer-store, confirm-store, provider
                                 session-info-store, turn-nav-store
 webview/src/components/entry-list/    message-list.tsx (scroll + stick-to-bottom host)
 webview/src/components/entry-view/    agent-timeline.tsx (blocks -> rows), message-view.tsx
-webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, subagent-calls/
+webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, subagent-calls/, write-stream/
 webview/src/components/input-bar/     input-bar/composer.tsx, model-picker/, ctx-meter/,
                                       cmd-menu/, reasoning-select/
 webview/src/components/topbar/        topbar/, topbar-left/, topbar-right/, settings-menu/
@@ -48,12 +48,16 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | webview/src/apis/actions.ts | Named senders so components never hand-build messages | 79 | `actions` — `{ sendMessage, steer, abort, setModel, switchSession, compact, updatePi, ... }` |
 | shared/blocks.ts (used here) | Content normalization + delta folding, applied at every store write | 214 | `normalizeContent(content: unknown): ContentBlock[]`, `applyAssistantEvent(blocks, event?): ContentBlock[]` |
 | components/entry-list/message-list.tsx | Transcript scroller, streaming caret, load/scroll behaviour | ~180 | `EntryList({ onScrollAtBottomChange?: (atBottom: boolean) => void })`; Hooks: `useChatState`, `useStickToBottom` |
-| components/entry-view/agent-timeline.tsx | Messages + tools -> flat render items (text/thinking/tool/system/caret) | 147 | `buildItems(messages: UiMessage[], tools: Record<string, ToolExec>): TimelineItem[]`, `AgentTimelineProps` |
+| components/entry-view/agent-timeline.tsx | Messages + tools -> flat render items (text/thinking/tool/system/caret) | 152 | `buildItems(messages: UiMessage[], tools: Record<string, ToolExec>): TimelineItem[]`, `AgentTimelineProps` |
 | components/entry-view/message-view.tsx | One message: markdown, copy, edit/fork affordances | 236 | `MessageView(...)`; Hooks: `useChatState`, `confirm` |
-| components/exec-view/tool-call-view.tsx | Tool card: header cluster (elapsed / Copy / Stop) + expandable output | 342 | `ToolCallView(...)`; Hooks: `useChatState`, `useTickingClock` |
+| components/exec-view/tool-call-view.tsx | Tool card: header cluster (count / elapsed / Copy / Stop) + expandable output | 413 | `ExecBlock({ tool, name, args, partialArgs, tools })`; Hooks: `useStreamingToolArgs`, `useTickingClock`, `useCopyFeedback` |
 | components/exec-view/tool-display.ts | Shared display mapping so child rows and parent header match | 258 | `toolPreview(name: string, args: unknown): string`, `toolDuration(tool?: ToolExec, now: number, preferredMs?: string)`, `tipHead/tipTail(text, maxLines, maxChars)`, `childCalls(tool?, tools?): ToolExec[]` |
 | components/exec-view/subagent-calls/subagent-details.ts | Sole reader of the subagent payload (`args.task`/`prompt`/…, `details`) | 163 | `resolveSubagentCard(name: string, details: unknown, args: unknown): SubagentDetailsView \| null`, `subagentPrompt(args, details?): string` |
 | components/exec-view/subagent-calls/subagent-calls.tsx | Nested call list + report inside the parent card | 227 | `SubagentCalls({ calls, tools, details, report, status, complete })` |
+| shared/tool-args.ts (used here) | Tolerant parse of a still-streaming argument object, from the block's `partialArgs` buffer | 221 | `parseStreamingToolArgs(raw: string \| undefined): Record<string, unknown> \| undefined` |
+| webview/src/hooks/use-streaming-tool-args.ts | Deferred parse so a card can show arguments the runtime has not finalized | 35 | `useStreamingToolArgs(partialArgs?: string): StreamingToolArgs` — `{ args?, typing }` |
+| components/exec-view/write-stream/write-preview.ts | Windowing of a streamed file body (pure, tested) | 94 | `buildWritePreview(content?: string, maxLines?): WritePreview`, `writeLineBadge(content?: string): string` |
+| components/exec-view/write-stream/write-stream.tsx | Live body of a `write` call: tail window, stick-to-bottom, caret | 63 | `WriteStream({ content, streaming })` |
 | components/input-bar/input-bar/composer.tsx | Textarea, slash-command insertion + chaining, attachments, submit/steer | 398 | `Composer(...)`; Hooks: `useComposerStore`, `useSlashCommands` |
 | components/input-bar/model-picker/model-dropdown.tsx | Model list from the host (`models` HostMessage), provider grouping | 481 | `ModelDropdown(...)`; Hooks: `useChatState`, `useClickOutside` |
 | components/input-bar/ctx-meter/context-usage.ts | Intra-turn token estimate from streaming `usage` | 72 | `contextUsageOf(stats: SessionStats \| null, messages: UiMessage[]): ContextUsageView \| null`, `contextTokensOf(usage?: Usage): number \| null` |
@@ -76,6 +80,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 |---|---|---|
 | webview/src/store.ts | `contexts/chat-context.tsx`; every chat component; calls `shared/blocks.ts` | Single reducer is the only writer of chat state |
 | shared/blocks.ts | `store.ts`, `agent-timeline.tsx`, `session-store.ts` (host) | Keeps renderers safe against raw wire shapes |
+| shared/tool-args.ts | `hooks/use-streaming-tool-args.ts` → `exec-view/tool-call-view.tsx` | The only reader of a call's in-flight argument text |
 | webview/src/apis/vscode.ts | `app-shell.tsx`, `apis/actions.ts` | Only host boundary in the bundle |
 | components/exec-view/tool-display.ts | `subagent-calls/subagent-details.ts`, `tool-call-view.tsx` | Shared label/duration/preview mapping for parent + child rows |
 | components/entry-view/agent-timeline.tsx | `message-list.tsx`, blocks helpers | Where a bad content shape becomes a crash if not normalized |
@@ -105,6 +110,14 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
    reducer also clears `pendingUi` whenever `runtimeStatus !== 'ready'`.
 8. **Tests are pure-logic + capture replay:** `store.test.ts` replays real `pi 1.4.0` wire captures
    (incl. nested tool calls) through `reducer`; visual/behavioural changes still need an F5 pass.
+   `components/exec-view/tool-call-view.test.tsx` renders cards through `react-dom/server` — no DOM
+   needed, but it needs `acquireVsCodeApi` stubbed before the import.
+9. **In-flight arguments are client-side only.** pi finalizes a call's `arguments` at `toolcall_end`
+   and never reports a partial one in `tool_execution_*`, so a live preview (the streaming `write`
+   body) comes from the `toolcall_delta` buffer: `applyAssistantEvent` accumulates `partialArgs`,
+   `shared/tool-args.ts` parses the incomplete JSON, `useStreamingToolArgs` defers that parse, and
+   `agent-timeline.tsx` hands the buffer to a card only while the reply streams and the runtime has
+   no execution entry for the call.
 
 ## Read Triggers
 
@@ -112,6 +125,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 |---|---|
 | Handle a new/changed runtime event in the UI | `webview/src/store.ts` (`applyRpcEvent`), `shared/blocks.ts`, then replay in `store.test.ts` |
 | Add a message/tool render style | `components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`, `exec-view/tool-display.ts`, matching `.scss` |
+| Show what a tool call is doing before it runs | `shared/tool-args.ts` (partial `toolcall_delta` text), `webview/src/hooks/use-streaming-tool-args.ts`, `components/exec-view/write-stream/`; `agent-timeline.tsx` decides which cards get `partialArgs` |
 | Add a host message type | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer |
 | Send something new to the host | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage` |
 | Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |

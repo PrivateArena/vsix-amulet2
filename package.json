@@ -2,7 +2,7 @@
   "name": "amulet",
   "displayName": "Amulet — Pi Agent for VS Code",
   "description": "AI coding agent for VS Code, powered by the pi runtime.",
-  "version": "1.0.24",
+  "version": "1.0.27",
   "publisher": "gunir",
   "private": true,
   "icon": "media/icon.png",
@@ -112,7 +112,7 @@
         "command": "amulet.openChatInEditor",
         "title": "Open Chat in Editor Tab",
         "category": "Amulet",
-        "icon": "$(comment-discussion)"
+        "icon": "media/icon.svg"
       },
       {
         "command": "amulet.editMessage",
