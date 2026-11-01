@@ -97,7 +97,8 @@ body.spacing-compact .exec-block.exec-joined-prev {
   position: relative;
   /* Above `.exec-content` (z-index 1): a hover surface opened from the header is a DOM
      child of it, and `.flyout` cannot lift itself out of this sibling relationship — at
-     an equal z-index the card body would paint over the prompt tooltip. */
+     an equal z-index the card body would paint over the prompt tooltip. A surface opened
+     from the body wins the other way: see `.exec-content:has(.flyout)`. */
   z-index: 3;
   cursor: pointer;
   pointer-events: auto;
@@ -463,6 +464,14 @@ body.animations-disabled .exec-chevron svg {
   position: relative;
   z-index: 1;
   outline: none;
+}
+
+/* Reciprocal of the `.exec-header` stacking rule: the body is a positioned sibling of
+   the summary bar, so a `.flyout` opened from a nested call cannot lift itself out of
+   that relationship either — it would slide under the header it is overlapping. Only
+   while a surface is open, so the header keeps its precedence the rest of the time. */
+.exec-content:has(.flyout) {
+  z-index: 5;
 }
 
 .exec-content:focus,
