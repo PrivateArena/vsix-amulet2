@@ -77,27 +77,3 @@
   font-size: 0.94em;
   color: var(--amulet-muted);
 }
-
-.notice-msg {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--amulet-space-sm) var(--amulet-space-md);
-  margin: calc(var(--amulet-space-sm) * var(--amulet-spacing-mult)) 0;
-  font-size: 0.85em;
-  background: var(--amulet-info-bg);
-  color: var(--amulet-fg);
-  border-radius: var(--amulet-radius-sm);
-}
-
-.notice-msg.compact-msg {
-  background: var(--amulet-surface-subtle);
-  border: 1px solid var(--amulet-border-subtle);
-  border-left: 2px solid var(--amulet-accent-line);
-  border-radius: var(--amulet-radius-sm);
-  margin: calc(4px * var(--amulet-spacing-mult)) 0;
-}
-
-.notice-msg.compact-msg .pi-icon {
-  color: var(--amulet-muted);
-}

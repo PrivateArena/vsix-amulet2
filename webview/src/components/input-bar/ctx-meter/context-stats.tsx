@@ -20,7 +20,7 @@ function valueToneClass(pct: number): string {
 }
 
 export function ContextMeter() {
-  const { stats, messages, streaming, compacting } = useChatState();
+  const { stats, messages, streaming, compaction } = useChatState();
   const confirm = useConfirm();
 
   const usage = contextUsageOf(stats, messages);
@@ -41,7 +41,7 @@ export function ContextMeter() {
   const offset = CIRCUMFERENCE * (1 - pct / 100);
   const input = stats.tokens.input ?? 0;
   const output = stats.tokens.output ?? 0;
-  const compactDisabled = streaming || compacting;
+  const compactDisabled = streaming || !!compaction;
 
   return (
     <div className="ctx-meter-wrap">

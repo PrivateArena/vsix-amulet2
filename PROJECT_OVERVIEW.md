@@ -156,6 +156,19 @@ webview (React)              host (Node)                                pi --mod
    typed by the file's **signature** rather than by its name or by what the runtime reported.
    A card asks only while it is expanded, and the reducer retires the oldest delivered pixels
    past a retention budget.
+10. **Compaction is event-owned, never command-owned.** pi answers `{"type":"compact"}` only after
+    its summarisation call resolves (minutes), so `RpcClient` lifts the response budget for
+    `compact`/`fork` (`LONG_RUNNING_COMMANDS`); the 30s default is what used to surface as
+    _"Timeout waiting for response to \"compact\""_ on a compaction that then succeeded. The
+    transcript card comes off `compaction_start`/`compaction_end` (`webview/src/store.ts` →
+    `compaction` run + a `role: 'compaction'` message rendered by `entry-list/compaction-card/`),
+    which is also the only signal for the runtime's own threshold/overflow compaction. On reload the
+    same card is rebuilt from pi's persisted `role: "compactionSummary"` history message. The
+    summary text itself **cannot** stream: `completeSummarization` awaits a detached provider call
+    whose deltas never reach an rpc client — the live card therefore shows elapsed time,
+    `summarization_retry_*` and a cancel (`abort` cancels a compaction), not a token count.
+    The meter has the same gap: `contextUsage.tokens` is null right after a compaction, so
+    `contextUsageOf` falls back to the newest boundary's `estimatedTokensAfter`.
 
 ## Read Triggers
 
@@ -169,6 +182,7 @@ webview (React)              host (Node)                                pi --mod
 | Fix sidebar-vs-editor-tab layout/width bugs                     | `src/webview/webview-surface.ts`, `src/provider.ts`, `src/editor/panel-manager.ts`, `webview/src/assets/css/*.scss`                                                                                                 |
 | Touch approvals/dialogs from pi extensions                      | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/`; the Amulet output channel logs every routing decision as `[ui] …` |
 | Change the context meter                                        | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`)                                                                                                           |
+| Change compaction (progress, card, timeout, cancel)             | `src/rpc/rpc-client.ts` (`LONG_RUNNING_COMMANDS`), `src/webview/chat-bridge.ts` (`runCompact`), `webview/src/store.ts` (`compaction*`), `webview/src/components/entry-list/compaction-card/`                        |
 | Show or change what an image tool result does to the wire       | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`)                                                                    |
 | Add/rename a setting                                            | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`)                                                                                                                         |
 | Verify anything end-to-end                                      | `pnpm typecheck && pnpm test`, then F5 Extension Development Host — host↔webview bugs only appear at runtime                                                                                                        |

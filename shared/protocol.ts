@@ -300,6 +300,25 @@ export interface NestedToolCalls {
 }
 
 /**
+ * pi's projection of a persisted `compaction` entry, and what `get_messages` returns in
+ * its place: everything before the boundary is pruned from the list, so this message *is*
+ * the boundary a reloaded transcript has to render. There is no live counterpart — the
+ * summary text itself only ever crosses the wire in `compaction_end`.
+ */
+export interface CompactionSummaryMessage {
+  role: 'compactionSummary';
+  summary: string;
+  tokensBefore: number;
+  timestamp?: number;
+}
+
+/**
+ * One line of a history snapshot: a chat message, or one of the non-chat roles pi
+ * interleaves with them (`toolResult` is handled by the reader, not by this union).
+ */
+export type HistoryMessage = AppMessage | CompactionSummaryMessage;
+
+/**
  * Persisted `role: "toolResult"` message. Never rendered directly (it is not a
  * displayable role), but it carries tool results, `details` and `nestedCalls`, so
  * history reload reconstructs the tool state from it.
@@ -423,8 +442,11 @@ export type RpcEvent =
   | ToolExecutionStart
   | ToolExecutionUpdate
   | ToolExecutionEnd
-  | { type: 'compaction_start' }
-  | { type: 'compaction_end'; [k: string]: unknown }
+  | CompactionStartEvent
+  | CompactionEndEvent
+  | SummarizationRetryScheduled
+  | SummarizationRetryAttemptStart
+  | SummarizationRetryFinished
   | { type: 'auto_retry_start'; [k: string]: unknown }
   | { type: 'auto_retry_end'; [k: string]: unknown }
   | { type: 'model_select'; [k: string]: unknown }
@@ -433,6 +455,71 @@ export type RpcEvent =
   | { type: 'session_shutdown'; [k: string]: unknown }
   | { type: 'extension_error'; [k: string]: unknown }
   | { type: string; [k: string]: unknown };
+
+/**
+ * Why a compaction ran. `manual` is the `compact` command (our button, pi's `/compact`);
+ * `threshold` and `overflow` are the runtime's own automatic paths, which reach the same
+ * event pair, so the UI learns about compaction from the stream and not from its own command.
+ */
+export type CompactionReason = 'manual' | 'threshold' | 'overflow';
+
+/** The summarisation outcome pi returns from `compact` and attaches to `compaction_end`. */
+export interface CompactionResult {
+  /** The full summary text, including the appended read/modified file lists. */
+  summary: string;
+  firstKeptEntryId?: string;
+  tokensBefore: number;
+  /**
+   * Heuristic estimate over the rebuilt context, not a provider count. It is the only
+   * post-compaction figure available until a fresh assistant response reports usage.
+   */
+  estimatedTokensAfter?: number;
+  /** Usage of the summarisation call(s); custom compaction handlers may omit it. */
+  usage?: Usage;
+  details?: { readFiles?: string[]; modifiedFiles?: string[] };
+}
+
+export interface CompactionStartEvent {
+  type: 'compaction_start';
+  /** Absent on pi builds that predate the `reason` field. */
+  reason?: CompactionReason;
+}
+
+/**
+ * End of one compaction. Note the asymmetry the UI has to handle: `result` is absent on the
+ * wire when the summary failed (JSON drops `undefined`), cancellation is reported by
+ * `aborted: true` with no `errorMessage`, and there is no `cancelled` field at all.
+ */
+export interface CompactionEndEvent {
+  type: 'compaction_end';
+  reason?: CompactionReason;
+  result?: CompactionResult;
+  aborted?: boolean;
+  /** True when the runtime will retry the turn on the freshly compacted context. */
+  willRetry?: boolean;
+  errorMessage?: string;
+}
+
+/** The summariser hit a provider error and is waiting out a retry backoff. */
+export interface SummarizationRetryScheduled {
+  type: 'summarization_retry_scheduled';
+  attempt?: number;
+  maxAttempts?: number;
+  delayMs?: number;
+  errorMessage?: string;
+}
+
+/** A retry of the summarisation call is running. */
+export interface SummarizationRetryAttemptStart {
+  type: 'summarization_retry_attempt_start';
+  source?: string;
+  reason?: CompactionReason;
+}
+
+/** The retry loop is over (success or the calls gave up) — compaction itself may still run. */
+export interface SummarizationRetryFinished {
+  type: 'summarization_retry_finished';
+}
 
 /** Extension-UI request emitted by pi extensions (dialogs, notifications, etc). */
 export interface ExtensionUiRequest {
@@ -508,9 +595,10 @@ export interface SessionStats {
    * must treat it as optional.
    */
   contextUsage?: {
-    tokens: number;
+    /** Null immediately after a compaction, until a fresh assistant response reports usage. */
+    tokens: number | null;
     contextWindow: number;
-    percent: number;
+    percent: number | null;
   };
 }
 
@@ -711,7 +799,7 @@ export type HostMessage =
   | { type: 'models'; models: ModelInfo[] }
   /** Levels the current model supports, per `get_available_thinking_levels`. */
   | { type: 'thinkingLevels'; levels: ThinkingLevel[] }
-  | { type: 'history'; messages: AppMessage[] }
+  | { type: 'history'; messages: HistoryMessage[] }
   | { type: 'config'; config: WebviewConfig }
   | { type: 'focusInput' }
   | { type: 'insertText'; text: string }

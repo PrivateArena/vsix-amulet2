@@ -33,11 +33,11 @@ function n(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function count(value: number | undefined): string {
+function count(value: number | null | undefined): string {
   return numbers.format(n(value));
 }
 
-function share(part: number | undefined, whole: number): string {
+function share(part: number | null | undefined, whole: number): string {
   if (!(whole > 0)) return '0.0%';
   return `${((n(part) / whole) * 100).toFixed(1)}%`;
 }
@@ -127,7 +127,8 @@ function buildSections(
     const cost = n(stats.cost);
     if (cost > 0) usage.push({ label: 'Cost', value: `$${cost.toFixed(3)}` });
     const context = stats.contextUsage;
-    if (context && n(context.contextWindow) > 0) {
+    // Null immediately after a compaction, until the next assistant response reports usage.
+    if (context && n(context.contextWindow) > 0 && context.tokens != null) {
       usage.push({
         label: 'Context',
         value: `${count(context.tokens)} / ${count(context.contextWindow)} (${share(context.tokens, context.contextWindow)})`,

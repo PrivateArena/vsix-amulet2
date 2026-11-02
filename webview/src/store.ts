@@ -3,8 +3,12 @@ import type {
   AssistantStreamEvent,
   Attachment,
   CommandInfo,
+  CompactionEndEvent,
+  CompactionReason,
+  CompactionStartEvent,
   ContentBlock,
   ExtensionUiRequest,
+  HistoryMessage,
   HostMessage,
   MessageEndEvent,
   MessageStartEvent,
@@ -21,6 +25,7 @@ import type {
   ToolExecutionUpdate,
   ToolImageRef,
   ToolResultMessage,
+  Usage,
 } from '../../shared/protocol';
 import {
   applyAssistantEvent,
@@ -78,9 +83,53 @@ export interface ToolExec {
   nestedFromRecord?: boolean;
 }
 
+/**
+ * A compaction the runtime is running right now, as far as the wire lets us know it:
+ * pi emits `compaction_start`, then nothing at all until `compaction_end` — the summary
+ * itself is generated on a detached provider call whose deltas never reach an rpc client.
+ * So the live card has a clock and the retry events, and no progress percentage.
+ */
+export interface CompactionRun {
+  /** Null when the source is `get_state.isCompacting`, which reports no reason. */
+  reason: CompactionReason | null;
+  /** Arrival clock of `compaction_start` — the event carries no timestamp. */
+  startedAt: number;
+  /** Set while the summariser waits out a provider-error backoff. */
+  retry?: { attempt?: number; maxAttempts?: number; errorMessage?: string };
+}
+
+/**
+ * The settled outcome of one compaction, rendered as a transcript card. Built from
+ * `compaction_end` while the session lives, and from pi's persisted `compactionSummary`
+ * message on reload — which is why all but `outcome`, `summary` and `tokensBefore` are optional.
+ */
+export interface CompactionInfo {
+  outcome: 'done' | 'aborted' | 'failed';
+  reason: CompactionReason | null;
+  /** Absent for a card rebuilt from history, and for an end event with no matching start. */
+  startedAt?: number;
+  endedAt: number;
+  durationMs?: number;
+  summary?: string;
+  tokensBefore?: number;
+  /** pi's own heuristic estimate of the rebuilt context, never a provider count. */
+  tokensAfter?: number;
+  usage?: Usage;
+  readFiles?: string[];
+  modifiedFiles?: string[];
+  /** Why the summary failed; absent when the human cancelled it. */
+  error?: string;
+  /** The runtime is retrying the turn on the freshly compacted context. */
+  willRetry?: boolean;
+}
+
 export interface UiMessage {
   uid: string;
-  role: 'user' | 'assistant' | 'system';
+  /**
+   * `compaction` is the transcript's context-window boundary: no content, and it is
+   * rendered on its own rather than inside a turn timeline.
+   */
+  role: 'user' | 'assistant' | 'system' | 'compaction';
   content: ContentBlock[];
   streaming: boolean;
   usage?: AppMessage['usage'];
@@ -95,6 +144,8 @@ export interface UiMessage {
   startedAt?: number;
   firstTokenAt?: number;
   attachments?: import('../../shared/protocol').Attachment[];
+  /** Set for `role === 'compaction'`: what one compaction cost and produced. */
+  compaction?: CompactionInfo;
 }
 
 export interface ChatState {
@@ -104,7 +155,8 @@ export interface ChatState {
   messages: UiMessage[];
   tools: Record<string, ToolExec>;
   streaming: boolean;
-  compacting: boolean;
+  /** The compaction the runtime is running right now, or null. */
+  compaction: CompactionRun | null;
   thinkingLevel: ThinkingLevel | null;
   /** Levels the runtime offers for the current model (pi is the source of truth). */
   thinkingLevels: ThinkingLevel[];
@@ -130,7 +182,7 @@ export const initialState: ChatState = {
   messages: [],
   tools: {},
   streaming: false,
-  compacting: false,
+  compaction: null,
   thinkingLevel: null,
   thinkingLevels: [...FALLBACK_THINKING_LEVELS],
   expandThinking: false,
@@ -146,8 +198,12 @@ export const initialState: ChatState = {
 };
 
 const DISPLAYABLE_ROLES = new Set(['user', 'assistant', 'system']);
-function isDisplayableRole(role: string): boolean {
-  return DISPLAYABLE_ROLES.has(role);
+/** pi's persisted compaction boundary, which the transcript renders as its own card. */
+const COMPACTION_ROLE = 'compactionSummary';
+
+/** History roles the transcript renders: chat bubbles, plus pi's persisted context boundary. */
+function isDisplayableHistoryRole(role: string): boolean {
+  return DISPLAYABLE_ROLES.has(role) || role === COMPACTION_ROLE;
 }
 
 let uidCounter = 0;
@@ -169,6 +225,11 @@ function nextUid(): string {
   return `m${Date.now().toString(36)}_${uidCounter++}`;
 }
 
+/** A count from pi's deliberately loose event payloads, or the fallback. */
+function numberOr(value: unknown, fallback?: number): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 function toUiMessage(m: AppMessage): UiMessage {
   return {
     uid: nextUid(),
@@ -182,11 +243,37 @@ function toUiMessage(m: AppMessage): UiMessage {
   };
 }
 
+/**
+ * One history line → a transcript entry. pi persists a compaction as a
+ * `role: "compactionSummary"` message carrying no content, so it becomes the durable
+ * boundary card instead of a bubble; everything else is an ordinary message.
+ */
+function toUiHistoryMessage(m: HistoryMessage): UiMessage {
+  if (m.role !== COMPACTION_ROLE) return toUiMessage(m);
+  return {
+    uid: nextUid(),
+    role: 'compaction',
+    content: [],
+    streaming: false,
+    timestamp: m.timestamp,
+    compaction: {
+      outcome: 'done',
+      // The persisted entry records no reason, and the live run is long gone.
+      reason: null,
+      endedAt: m.timestamp ?? Date.now(),
+      summary: m.summary,
+      tokensBefore: m.tokensBefore,
+    },
+  };
+}
+
 function seedToolsFromHistory(
-  messages: AppMessage[],
+  messages: HistoryMessage[],
 ): Record<string, ToolExec> {
   const tools: Record<string, ToolExec> = {};
   for (const m of messages) {
+    // A compaction boundary carries no content, so it can hold no tool call either.
+    if (!('content' in m)) continue;
     for (const block of normalizeContent(m.content)) {
       const call = asToolCall(block);
       if (call)
@@ -281,6 +368,36 @@ function withParentLink(
   return entry.parentToolCallId
     ? linkChild(tools, entry.parentToolCallId, entry.toolCallId)
     : tools;
+}
+
+/**
+ * Resolve one `compaction_end` into the transcript card it leaves behind.
+ *
+ * `run` is the live counter this card replaces; it is missing when the surface opened on a
+ * compaction already in flight (or when pi ends one it never announced — the exhausted
+ * overflow-retry budget does exactly that), and then the card has no duration to report.
+ */
+function compactionInfoOf(
+  end: CompactionEndEvent,
+  run: CompactionRun | null,
+): CompactionInfo {
+  const result = end.result;
+  const endedAt = Date.now();
+  return {
+    outcome: result ? 'done' : end.aborted ? 'aborted' : 'failed',
+    reason: end.reason ?? run?.reason ?? null,
+    startedAt: run?.startedAt,
+    endedAt,
+    durationMs: run == null ? undefined : Math.max(0, endedAt - run.startedAt),
+    summary: result?.summary,
+    tokensBefore: result?.tokensBefore,
+    tokensAfter: result?.estimatedTokensAfter,
+    usage: result?.usage,
+    readFiles: result?.details?.readFiles,
+    modifiedFiles: result?.details?.modifiedFiles,
+    error: end.errorMessage,
+    willRetry: end.willRetry,
+  };
 }
 
 /**
@@ -470,15 +587,19 @@ export function reducer(state: ChatState, action: Action): ChatState {
         ...state,
         session: message.state,
         streaming: message.state.isStreaming,
-        compacting: message.state.isCompacting,
+        // `isCompacting` also covers a branch summary and reports no reason; keep a live run
+        // (with its start time) when the two sources describe the same thing.
+        compaction: message.state.isCompacting
+          ? (state.compaction ?? { reason: null, startedAt: Date.now() })
+          : null,
         // `undefined` means nothing has been applied to the session: the runtime is
         // running on the model/pi default, which the picker shows as "Disabled".
         thinkingLevel: message.state.thinkingLevel ?? null,
       };
     case 'history': {
       const newMessages = message.messages
-        .filter((m) => isDisplayableRole(m.role))
-        .map(toUiMessage)
+        .filter((m) => isDisplayableHistoryRole(m.role))
+        .map(toUiHistoryMessage)
         // Same rule as `message_start`: pi persists the leading system message
         // with its body in `sections`, so it carries no displayable blocks.
         .filter((m) => !(m.role === 'system' && m.content.length === 0));
@@ -499,6 +620,9 @@ export function reducer(state: ChatState, action: Action): ChatState {
         tools: seedToolsFromHistory(message.messages),
         currentUid: null,
         streaming: false,
+        // A snapshot is a different session (or a restarted runtime): a run this surface
+        // was showing is not coming back.
+        compaction: null,
         userAttachments,
       };
     }
@@ -542,7 +666,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       // RpcEvent ends in an open `{ type: string }` member, so `case` doesn't
       // narrow — cast to the specific event to get its optional `message` back.
       const msg = (event as MessageStartEvent).message;
-      if (!msg || !isDisplayableRole(msg.role)) {
+      if (!msg || !DISPLAYABLE_ROLES.has(msg.role)) {
+        // Deliberately the narrow role set, not `isDisplayableHistoryRole`: only history carries
+        // a compaction boundary, and a streamed one must not become an empty chat bubble.
         // A settled tool result carries pi's authoritative record of the calls that
         // tool made and whether pi truncated it (count/size limits). The live list
         // is already complete for the UI, so only the flag is harvested here.
@@ -737,9 +863,65 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       };
     }
     case 'compaction_start':
-      return { ...state, compacting: true };
-    case 'compaction_end':
-      return { ...state, compacting: false };
+      // The only reliable signal that a compaction is running: pi answers `compact` after the
+      // summarisation call, so nothing here is awaited — and this also fires for the
+      // runtime's own threshold/overflow compaction, which no host command ever sees.
+      return {
+        ...state,
+        compaction: {
+          reason: (event as CompactionStartEvent).reason ?? null,
+          startedAt: Date.now(),
+        },
+      };
+    case 'compaction_end': {
+      const info = compactionInfoOf(
+        event as CompactionEndEvent,
+        state.compaction,
+      );
+      return {
+        ...state,
+        compaction: null,
+        // The boundary belongs in the transcript it just shortened — and on reload the same
+        // card comes out of pi's persisted `compactionSummary` history entry.
+        messages: [
+          ...state.messages,
+          {
+            uid: nextUid(),
+            role: 'compaction',
+            content: [],
+            streaming: false,
+            timestamp: info.endedAt,
+            compaction: info,
+          },
+        ],
+      };
+    }
+    case 'summarization_retry_scheduled':
+      if (!state.compaction) return state;
+      return {
+        ...state,
+        compaction: {
+          ...state.compaction,
+          retry: {
+            attempt: numberOr(event.attempt),
+            maxAttempts: numberOr(event.maxAttempts),
+            errorMessage:
+              typeof event.errorMessage === 'string'
+                ? event.errorMessage
+                : undefined,
+          },
+        },
+      };
+    case 'summarization_retry_attempt_start':
+    case 'summarization_retry_finished':
+      if (!state.compaction?.retry) return state;
+      return {
+        ...state,
+        compaction: {
+          ...state.compaction,
+          retry: undefined,
+        },
+      };
     case 'thinking_level_changed': {
       // Authoritative from the runtime: also covers `cycle_thinking_level` and
       // extension-driven changes, which never round-trip through a host command.

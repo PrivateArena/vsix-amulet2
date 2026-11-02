@@ -6,6 +6,7 @@ import { ChatFind, scrollRangesIntoView } from '../chat-find';
 import { LogoIcon } from '../logo-icon';
 import { LogoText } from '../logo-text';
 import { ProgressBar } from '../progress-bar';
+import { CompactionCard, CompactionProgress } from './compaction-card';
 import { useTranscriptMenu } from './transcript-menu';
 import type { UiMessage } from '../../store';
 import './message-list.scss';
@@ -13,25 +14,34 @@ import './message-list.scss';
 /** Extension version injected into the page shell as `data-ext-version`. */
 const APP_VERSION = document.body.dataset.extVersion ?? '';
 
+/** One renderable block of the transcript. */
+type TranscriptBlock =
+  | { kind: 'turn'; key: string; items: UiMessage[] }
+  | { kind: 'compaction'; key: string; info: UiMessage['compaction'] };
+
 /**
  * Group the flat message stream into turns: each user message starts a turn that
  * owns the assistant/tool/system messages that follow it. Wrapping each turn keeps
  * a prompt and its reply together as one scrollable block — and gives the topbar
  * navigator a stable jump target per turn (`data-turn`). Messages before the first
- * user turn form a leading, header-less group.
+ * user turn form a leading, header-less group. A compaction closes the turn it lands
+ * in and renders on its own: it is a context boundary, not part of anybody's reply.
  */
-function groupIntoTurns(
-  messages: UiMessage[],
-): { key: string; items: UiMessage[] }[] {
-  const turns: { key: string; items: UiMessage[] }[] = [];
+function groupTranscript(messages: UiMessage[]): TranscriptBlock[] {
+  const blocks: TranscriptBlock[] = [];
   for (const m of messages) {
-    if (m.role === 'user' || turns.length === 0) {
-      turns.push({ key: m.uid, items: [m] });
+    if (m.role === 'compaction') {
+      blocks.push({ kind: 'compaction', key: m.uid, info: m.compaction });
+      continue;
+    }
+    const last = blocks[blocks.length - 1];
+    if (m.role === 'user' || !last || last.kind === 'compaction') {
+      blocks.push({ kind: 'turn', key: m.uid, items: [m] });
     } else {
-      turns[turns.length - 1].items.push(m);
+      last.items.push(m);
     }
   }
-  return turns;
+  return blocks;
 }
 
 export function EntryList({
@@ -39,7 +49,7 @@ export function EntryList({
 }: {
   onScrollAtBottomChange?: (atBottom: boolean) => void;
 }) {
-  const { messages, tools, status, streaming, compacting } = useChatState();
+  const { messages, tools, status, streaming, compaction } = useChatState();
   const ready = status.phase === 'ready';
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -70,7 +80,7 @@ export function EntryList({
     const el = listRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
     syncActiveTurn();
-  }, [messages, tools, streaming, compacting, syncActiveTurn]);
+  }, [messages, tools, streaming, compaction, syncActiveTurn]);
 
   // Publish the scroll handle the topbar navigator jumps through.
   useEffect(
@@ -141,17 +151,22 @@ export function EntryList({
             </div>
           </div>
         )}
-        {groupIntoTurns(messages).map((turn) => {
+        {groupTranscript(messages).map((block) => {
+          if (block.kind === 'compaction') {
+            return block.info ? (
+              <CompactionCard key={block.key} info={block.info} />
+            ) : null;
+          }
           // A turn is [user?, ...agent/system]; the user message stays a bubble
           // while the reply that follows renders as one continuous timeline.
-          const hasUser = turn.items[0]?.role === 'user';
-          const userMsg = hasUser ? turn.items[0] : null;
-          const agentMsgs = hasUser ? turn.items.slice(1) : turn.items;
+          const hasUser = block.items[0]?.role === 'user';
+          const userMsg = hasUser ? block.items[0] : null;
+          const agentMsgs = hasUser ? block.items.slice(1) : block.items;
           return (
             <div
               className="turn"
-              key={turn.key}
-              data-turn={turn.items[0]?.role === 'user' ? turn.key : undefined}>
+              key={block.key}
+              data-turn={hasUser ? block.key : undefined}>
               {userMsg && (
                 <EntryView key={userMsg.uid} message={userMsg} tools={tools} />
               )}
@@ -161,10 +176,8 @@ export function EntryList({
             </div>
           );
         })}
-        {streaming && !compacting && <ProgressBar />}
-        {compacting && (
-          <div className="notice-msg compact-msg">Compacting context…</div>
-        )}
+        {streaming && !compaction && <ProgressBar />}
+        {compaction && <CompactionProgress run={compaction} />}
       </div>
       {menu.node}
       <ChatFind containerRef={listRef} onReveal={revealMatches} />

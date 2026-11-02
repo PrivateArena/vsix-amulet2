@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   AppMessage,
   Attachment,
   HostMessage,
+  SessionState,
 } from '../../shared/protocol';
 import { asToolCall } from '../../shared/blocks';
 import { parseStreamingToolArgs } from '../../shared/tool-args';
@@ -17,6 +18,18 @@ const att = (id: string): Attachment => ({
   data: '',
   size: 10,
 });
+
+/** A minimal `get_state` answer; a test overrides the one field it is about. */
+const SESSION_STATE: SessionState = {
+  model: null,
+  isStreaming: false,
+  isCompacting: false,
+  steeringMode: '',
+  followUpMode: '',
+  autoCompactionEnabled: false,
+  messageCount: 0,
+  pendingMessageCount: 0,
+};
 
 describe('reducer — host state messages', () => {
   it('leaves state untouched (same ref) for messages with no reducer case', () => {
@@ -75,8 +88,44 @@ describe('reducer — host state messages', () => {
       }),
     );
     expect(next.streaming).toBe(true);
-    expect(next.compacting).toBe(false);
+    expect(next.compaction).toBeNull();
     expect(next.thinkingLevel).toBe('low');
+  });
+
+  it('holds a compaction with no start event behind it, and drops it when state clears', () => {
+    // `isCompacting` also covers a branch summary and carries no reason or start time, so a
+    // surface that opens mid-compaction has nothing better than "unknown, started now".
+    const running = reducer(
+      initialState,
+      host({ type: 'state', state: { ...SESSION_STATE, isCompacting: true } }),
+    );
+    expect(running.compaction).toMatchObject({ reason: null });
+    expect(
+      reducer(
+        running,
+        host({
+          type: 'state',
+          state: { ...SESSION_STATE, isCompacting: false },
+        }),
+      ).compaction,
+    ).toBeNull();
+    // A live run keeps its own start time rather than being re-stamped by a state push.
+    const started = reducer(
+      initialState,
+      host({
+        type: 'rpcEvent',
+        event: { type: 'compaction_start', reason: 'manual' },
+      }),
+    );
+    expect(
+      reducer(
+        started,
+        host({
+          type: 'state',
+          state: { ...SESSION_STATE, isCompacting: true },
+        }),
+      ).compaction,
+    ).toBe(started.compaction);
   });
 
   it('keeps thinkingLevel null when the runtime has none applied', () => {
@@ -1371,5 +1420,185 @@ describe('reducer — tool images', () => {
     }
     expect(s.tools.big1.images?.[0].dataUrl).toBeUndefined();
     expect(s.tools.big2.images?.[0].dataUrl).toBe(huge);
+  });
+});
+
+describe('reducer — compaction', () => {
+  const event = (e: Record<string, unknown>) =>
+    host({ type: 'rpcEvent', event: e as never });
+
+  const start = (reason?: string) =>
+    reducer(
+      initialState,
+      event({ type: 'compaction_start', ...(reason ? { reason } : {}) }),
+    );
+
+  it('opens a run on compaction_start, then clears it and appends the boundary card', () => {
+    const running = start('manual');
+    expect(running.compaction?.reason).toBe('manual');
+    expect(running.compaction?.retry).toBeUndefined();
+
+    const done = reducer(
+      running,
+      event({
+        type: 'compaction_end',
+        reason: 'manual',
+        aborted: false,
+        willRetry: false,
+        result: {
+          summary: 'Built the thing.\n\n---\n\n**Read files:**\n- a.ts',
+          firstKeptEntryId: 'e9',
+          tokensBefore: 150_000,
+          estimatedTokensAfter: 32_000,
+          usage: { input: 120_000, output: 2_000 },
+          details: { readFiles: ['a.ts'], modifiedFiles: ['b.ts'] },
+        },
+      }),
+    );
+
+    expect(done.compaction).toBeNull();
+    const card = done.messages.at(-1);
+    expect(card?.role).toBe('compaction');
+    expect(card?.content).toEqual([]);
+    expect(card?.compaction).toMatchObject({
+      outcome: 'done',
+      reason: 'manual',
+      tokensBefore: 150_000,
+      tokensAfter: 32_000,
+      readFiles: ['a.ts'],
+      modifiedFiles: ['b.ts'],
+    });
+  });
+
+  it('measures the run off its own clock, since the wire stamps nothing', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const running = start('threshold');
+      vi.advanceTimersByTime(95_000);
+      const done = reducer(
+        running,
+        event({ type: 'compaction_end', result: {} }),
+      );
+      expect(done.messages.at(-1)?.compaction).toMatchObject({
+        reason: 'threshold',
+        durationMs: 95_000,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a cancelled compaction as a card, not as a lost event', () => {
+    // pi omits both `result` and `errorMessage` when the human aborted the run.
+    const done = reducer(
+      start(),
+      event({ type: 'compaction_end', aborted: true }),
+    );
+    expect(done.compaction).toBeNull();
+    expect(done.messages.at(-1)?.compaction).toMatchObject({
+      outcome: 'aborted',
+      summary: undefined,
+      error: undefined,
+    });
+  });
+
+  it('handles an end event with no start behind it', () => {
+    // pi emits exactly that for an exhausted overflow-retry budget.
+    const done = reducer(
+      initialState,
+      event({
+        type: 'compaction_end',
+        reason: 'overflow',
+        aborted: false,
+        willRetry: false,
+        errorMessage: 'Context overflow recovery failed after one attempt',
+      }),
+    );
+    expect(done.messages.at(-1)?.compaction).toMatchObject({
+      outcome: 'failed',
+      reason: 'overflow',
+      durationMs: undefined,
+      error: 'Context overflow recovery failed after one attempt',
+    });
+  });
+
+  it('replays the bytes pi 1.5.0 sends for a compaction with nothing to do', () => {
+    // Verbatim from `tmp/rpc-events-compaction.jsonl` (`scripts/rpc-probe.mjs`): `compaction_end`
+    // precedes the failing response and carries what pi prefixed onto the same message — it is
+    // the only report the non-dispatching surfaces ever get.
+    let s = reducer(
+      initialState,
+      event({ type: 'compaction_start', reason: 'manual' }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: 'compaction_end',
+        reason: 'manual',
+        aborted: false,
+        willRetry: false,
+        errorMessage:
+          'Compaction failed: Nothing to compact (session too small)',
+      }),
+    );
+    expect(s.compaction).toBeNull();
+    expect(s.messages.at(-1)?.compaction).toMatchObject({
+      outcome: 'failed',
+      reason: 'manual',
+      error: 'Compaction failed: Nothing to compact (session too small)',
+    });
+  });
+
+  it('tracks the summariser retry only while a compaction is running', () => {
+    const retry = event({
+      type: 'summarization_retry_scheduled',
+      attempt: 2,
+      maxAttempts: 3,
+      delayMs: 4000,
+      errorMessage: '529 overloaded',
+    });
+    expect(reducer(initialState, retry)).toBe(initialState);
+
+    const running = reducer(start(), retry);
+    expect(running.compaction?.retry).toEqual({
+      attempt: 2,
+      maxAttempts: 3,
+      errorMessage: '529 overloaded',
+    });
+    expect(
+      reducer(running, event({ type: 'summarization_retry_finished' }))
+        .compaction?.retry,
+    ).toBeUndefined();
+  });
+
+  it("renders pi's persisted compactionSummary history entry as the same card", () => {
+    const next = reducer(
+      initialState,
+      host({
+        type: 'history',
+        messages: [
+          { role: 'user', content: 'earlier' },
+          {
+            role: 'compactionSummary',
+            summary: 'Everything before this was summarized.',
+            tokensBefore: 148_000,
+            timestamp: 1_700_000_000_000,
+          },
+          { role: 'user', content: 'after' },
+        ] as never,
+      }),
+    );
+
+    expect(next.messages.map((m) => m.role)).toEqual([
+      'user',
+      'compaction',
+      'user',
+    ]);
+    expect(next.messages[1].compaction).toMatchObject({
+      outcome: 'done',
+      summary: 'Everything before this was summarized.',
+      tokensBefore: 148_000,
+    });
   });
 });

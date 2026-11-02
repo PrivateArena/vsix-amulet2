@@ -48,6 +48,20 @@ describe('contextTokensOf', () => {
   });
 });
 
+const compaction = (tokensAfter: number | undefined): UiMessage => ({
+  uid: 'c1',
+  role: 'compaction',
+  content: [],
+  streaming: false,
+  compaction: {
+    outcome: 'done',
+    reason: 'manual',
+    endedAt: 0,
+    tokensBefore: 150_000,
+    tokensAfter,
+  },
+});
+
 describe('contextUsageOf', () => {
   it('needs a context window to say anything', () => {
     expect(contextUsageOf(null, [])).toBeNull();
@@ -64,6 +78,32 @@ describe('contextUsageOf', () => {
     expect(
       contextUsageOf({ ...stats(), contextUsage: undefined }, []),
     ).toBeNull();
+  });
+
+  it('falls back to the compaction estimate while usage is unreported', () => {
+    // `contextUsage.tokens` is null right after a compaction, until the next assistant
+    // response — without the estimate the meter disappears exactly when the reader wants to
+    // watch the context drop.
+    const cleared = stats({
+      tokens: null,
+      contextWindow: 200_000,
+      percent: null,
+    });
+    expect(contextUsageOf(cleared, [compaction(32_000)])).toEqual({
+      tokens: 32_000,
+      contextWindow: 200_000,
+      percent: 16,
+      live: false,
+    });
+    // A card with no estimate leaves the meter off, as before.
+    expect(contextUsageOf(cleared, [compaction(undefined)])).toBeNull();
+    // The runtime's own reading wins again as soon as it has one.
+    expect(
+      contextUsageOf(
+        stats({ tokens: 40_000, contextWindow: 200_000, percent: 20 }),
+        [compaction(32_000)],
+      )?.tokens,
+    ).toBe(40_000);
   });
 
   it('reports the runtime figure when the agent is idle', () => {

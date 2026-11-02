@@ -14,6 +14,7 @@ import type {
   AppMessage,
   AssistantStreamEvent,
   ContentBlock,
+  HistoryMessage,
   ImageBlock,
   RpcEvent,
   TextBlock,
@@ -176,29 +177,32 @@ export function stripEventImages(event: RpcEvent): RpcEvent {
  * reloaded session with a dozen screenshots does not carry their bytes into the UI.
  */
 export function stripHistoryImagePayloads(
-  messages: AppMessage[],
-): AppMessage[] {
+  messages: HistoryMessage[],
+): HistoryMessage[] {
   return stripMessageImagePayloads(messages);
 }
 
-/** Copy-on-change over a message list: the same array is back when nothing was stripped. */
-function stripMessageImagePayloads(messages: AppMessage[]): AppMessage[] {
+/**
+ * Copy-on-change over a message list: the same array is back when nothing was stripped.
+ * Typed by role only, so the non-chat pi roles (`compactionSummary`) pass through untouched.
+ */
+function stripMessageImagePayloads<T extends { role: string }>(
+  messages: T[],
+): T[] {
   if (!messages.some(isToolResultMessage)) return messages;
   return messages.map((message) =>
     isToolResultMessage(message) ? stripMessageImages(message) : message,
   );
 }
 
-function isToolResultMessage(message: AppMessage): boolean {
+function isToolResultMessage(message: { role: string }): boolean {
   return (message as unknown as ToolResultMessage).role === 'toolResult';
 }
 
-function stripMessageImages(message: AppMessage): AppMessage {
+function stripMessageImages<T extends { role: string }>(message: T): T {
   const result = message as unknown as ToolResultMessage;
   const content = stripImagePayloads(result.content);
-  return content === result.content
-    ? message
-    : ({ ...message, content } as AppMessage);
+  return content === result.content ? message : ({ ...message, content } as T);
 }
 
 /**

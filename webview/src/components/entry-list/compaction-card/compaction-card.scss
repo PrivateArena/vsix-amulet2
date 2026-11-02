@@ -1,0 +1,199 @@
+/* Context-boundary card: the settled record of one compaction, plus the live run that
+   produces it. Both stay as quiet as a "Thought" line — the transcript, not the event,
+   is what the reader is here for. */
+
+.compaction-card,
+.compaction-progress {
+  align-items: flex-start;
+  border-radius: var(--amulet-radius-sm);
+  display: flex;
+  flex-direction: column;
+  margin: calc(var(--amulet-space-sm) * var(--amulet-spacing-mult)) 0;
+}
+
+/* --- live run ------------------------------------------------------------- */
+
+.compaction-progress {
+  color: var(--amulet-muted);
+  column-gap: 7px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  font-size: 0.86em;
+  font-weight: 500;
+  padding: 3px 4px;
+}
+
+.compaction-dots {
+  color: var(--amulet-accent);
+}
+
+/* Elapsed time is the only progress a compaction can show, so it reads like the turn timer. */
+.compaction-time {
+  color: var(--amulet-fg-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--amulet-tracking-wide);
+}
+
+/* What the wait is spent on, and pi's own error text when a summary call had to be retried. */
+.compaction-hint {
+  color: var(--amulet-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.compaction-hint.is-retry {
+  color: var(--amulet-warning);
+}
+
+.compaction-cancel {
+  margin-left: auto;
+}
+
+/* --- settled boundary ----------------------------------------------------- */
+
+.compaction-head {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--amulet-radius-sm);
+  color: var(--amulet-muted);
+  column-gap: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86em;
+  font-weight: 500;
+  padding: 3px 8px 3px 4px;
+  text-align: left;
+  transition:
+    background var(--amulet-transition-fast),
+    color var(--amulet-transition-fast);
+  user-select: none;
+}
+
+.compaction-head:hover {
+  background: color-mix(
+    in srgb,
+    var(--amulet-thinking-surface) 40%,
+    transparent
+  );
+  color: var(--amulet-fg);
+}
+
+.compaction-head:disabled {
+  cursor: default;
+}
+
+.compaction-head:disabled:hover {
+  background: transparent;
+}
+
+.compaction-head:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--amulet-focus-ring) 46%, transparent);
+  outline-offset: 1px;
+}
+
+.compaction-chevron {
+  flex-shrink: 0;
+  height: 13px;
+  transition: transform var(--amulet-transition-fast);
+  width: 13px;
+}
+
+.compaction-card.is-expanded .compaction-chevron {
+  transform: rotate(90deg);
+}
+
+.compaction-head:disabled .compaction-chevron {
+  opacity: 0.35;
+}
+
+.compaction-glyph {
+  color: var(--amulet-accent);
+  flex-shrink: 0;
+}
+
+.compaction-title {
+  color: color-mix(in srgb, var(--amulet-muted) 45%, var(--amulet-fg));
+  font-weight: 600;
+}
+
+/* Numbers are the point of the card, so they stay readable at a glance. */
+.compaction-meta {
+  color: var(--amulet-fg-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--amulet-tracking-wide);
+}
+
+.compaction-card.is-failed .compaction-glyph,
+.compaction-card.is-failed .compaction-title {
+  color: var(--amulet-error);
+}
+
+/* A cancelled compaction is not a failure — the reader chose it. */
+.compaction-card.is-aborted .compaction-glyph {
+  color: var(--amulet-warning);
+}
+
+.compaction-error {
+  border-left: 2px solid var(--amulet-error);
+  color: var(--amulet-fg);
+  font-size: var(--amulet-font-size);
+  line-height: 1.45;
+  margin: 4px 0 0 5px;
+  overflow-wrap: anywhere;
+  padding: 4px 12px;
+  white-space: pre-wrap;
+}
+
+.compaction-body {
+  animation: compaction-fade 0.2s var(--amulet-ease-out) both;
+  border-left: 2px solid var(--amulet-accent-line);
+  color: color-mix(in srgb, var(--amulet-muted) 88%, var(--amulet-fg));
+  font-size: var(--amulet-font-size);
+  line-height: 1.5;
+  margin: 4px 0 0 5px;
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 12px;
+}
+
+.compaction-files {
+  column-gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85em;
+  gap: 2px 12px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.compaction-files li {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.compaction-file-kind {
+  color: var(--amulet-fg-faint);
+  text-transform: uppercase;
+}
+
+.compaction-files code {
+  overflow-wrap: anywhere;
+}
+
+@keyframes compaction-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

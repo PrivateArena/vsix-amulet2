@@ -5,6 +5,7 @@ import type {
   ModelInfo,
   PromptStreamingBehavior,
   RpcCommand,
+  RpcCommandType,
   RpcEvent,
   RpcResponse,
   SessionState,
@@ -28,6 +29,24 @@ export interface RpcClientOptions extends RpcProcessOptions {
   /** Per-request response timeout in ms (default 30s). */
   requestTimeoutMs?: number;
 }
+
+/**
+ * Commands whose response only lands once the runtime has finished a whole LLM call, so the
+ * generic 30s budget would expire long before a legitimate run does:
+ *
+ * - `compact` awaits `session.compact()`, i.e. the summarisation call over the full context,
+ *   plus the entry write and context rebuild. Minutes on a large window.
+ * - `fork` awaits the branch summary of the abandoned path the same way.
+ *
+ * `prompt` is deliberately absent: it answers at preflight and reports the run over events.
+ */
+const LONG_RUNNING_COMMANDS: ReadonlySet<RpcCommandType> = new Set([
+  'compact',
+  'fork',
+]);
+
+/** Ceiling for {@link LONG_RUNNING_COMMANDS} — a wedged child must still fail loudly. */
+const LONG_REQUEST_TIMEOUT_MS = 15 * 60_000;
 
 /**
  * Typed client over a `pi --mode rpc` process.
@@ -106,6 +125,13 @@ export class RpcClient {
     }
   }
 
+  /** The response budget for one command: long for the ones that carry an LLM call. */
+  private timeoutFor(command: RpcCommand): number {
+    return LONG_RUNNING_COMMANDS.has(command.type)
+      ? Math.max(this.requestTimeoutMs, LONG_REQUEST_TIMEOUT_MS)
+      : this.requestTimeoutMs;
+  }
+
   /** Send a command and await its correlated response. */
   send(command: RpcCommand): Promise<RpcResponse> {
     if (this.exitError) {
@@ -121,10 +147,10 @@ export class RpcClient {
         this.pending.delete(id);
         reject(
           new Error(
-            `Timeout waiting for response to "${command.type}". ${this.tailStderr()}`,
+            `Timeout waiting for response to "${command.type}" after ${Math.round(this.timeoutFor(command) / 1000)}s. ${this.tailStderr()}`,
           ),
         );
-      }, this.requestTimeoutMs);
+      }, this.timeoutFor(command));
       this.pending.set(id, { resolve, reject, timer });
       try {
         this.proc.write(request);

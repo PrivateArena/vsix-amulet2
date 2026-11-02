@@ -3,10 +3,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type {
-  AppMessage,
   Attachment,
   CommandInfo,
+  CompactionEndEvent,
+  CompactionStartEvent,
   ExtensionUiRequest,
+  HistoryMessage,
   HostMessage,
   ProviderLoginRequest,
   RpcEvent,
@@ -104,6 +106,15 @@ export class ChatBridge implements vscode.Disposable {
   private readonly imageReads = new Set<string>();
   /** extension_ui_request ids this surface is showing and are still awaiting a reply. */
   private readonly forwardedUi = new Set<string>();
+  /**
+   * Count of `compaction_end` events this bridge has forwarded. A compaction that failed *after*
+   * starting always emitted one — and that event is what every surface's transcript card came from —
+   * so `runCompact` compares this counter around its own command instead of keeping the last event
+   * (whose payload carries the whole summary).
+   */
+  private compactionEnds = 0;
+  /** True while a `compact` command awaits its (post-summarisation) response. */
+  private compactInFlight = false;
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
   private readonly unregisterSurface: () => void;
 
@@ -210,6 +221,26 @@ export class ChatBridge implements vscode.Disposable {
     ) {
       void this.pushStats();
     }
+    // Compaction is the runtime's own decision as often as it is ours, and `get_session_stats`
+    // reports no context usage until the next assistant reply — so log both ends of the span.
+    if (event.type === 'compaction_start') {
+      this.log.info(
+        `Compaction started (reason: ${(event as CompactionStartEvent).reason ?? 'unknown'}).`,
+      );
+    }
+    if (event.type === 'compaction_end') {
+      const end = event as CompactionEndEvent;
+      this.compactionEnds++;
+      const freed =
+        end.result && typeof end.result.estimatedTokensAfter === 'number'
+          ? ` ${end.result.tokensBefore} -> ~${end.result.estimatedTokensAfter} tokens`
+          : '';
+      this.log.info(
+        end.result
+          ? `Compaction done (${end.reason ?? 'unknown'}),${freed}`
+          : `Compaction ${end.aborted ? 'cancelled' : `failed: ${end.errorMessage ?? 'unknown error'}`}`,
+      );
+    }
     // pi has no model-changed wire event, so a level change is our only hint that
     // the model (and with it the capability list) may have moved underneath us.
     if (event.type === 'thinking_level_changed') {
@@ -223,7 +254,7 @@ export class ChatBridge implements vscode.Disposable {
    * that read a dozen screenshots persists their bytes in full, and the UI can only ever
    * show one it was asked for — see {@link stripHistoryImagePayloads}.
    */
-  private postHistory(messages: AppMessage[]): void {
+  private postHistory(messages: HistoryMessage[]): void {
     this.post({
       type: 'history',
       messages: stripHistoryImagePayloads(messages),
@@ -240,7 +271,7 @@ export class ChatBridge implements vscode.Disposable {
         runtime.getState(),
       ]);
       this.post({ type: 'models', models });
-      this.postHistory(messages as AppMessage[]);
+      this.postHistory(messages as HistoryMessage[]);
       this.post({ type: 'state', state });
       await Promise.all([
         this.pushThinkingLevels(),
@@ -324,9 +355,7 @@ export class ChatBridge implements vscode.Disposable {
           await this.pushState();
           return;
         case 'compact':
-          await runtime?.compact();
-          await this.pushState();
-          await this.pushStats();
+          await this.runCompact();
           return;
         case 'requestModels': {
           const models = await runtime?.getAvailableModels();
@@ -508,6 +537,53 @@ export class ChatBridge implements vscode.Disposable {
   // --- Derived data pushes -------------------------------------------------
 
   /**
+   * Compact the context on the webview's behalf.
+   *
+   * The response only lands after pi's summarisation call finishes — minutes on a full window,
+   * which is why {@link LONG_RUNNING_COMMANDS} lifts the response budget for it. The outcome is
+   * *not* posted from here: `compaction_end` reaches every surface over the event stream, which
+   * is also the only route for the runtime's own threshold/overflow compaction.
+   */
+  private async runCompact(): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime) return;
+    // pi's first act in `compact()` is `abort()`, and the response only lands after the summary,
+    // so a second press arrives while the runtime still reports itself as not compacting. It
+    // would cancel the compaction the user is waiting on.
+    if (this.compactInFlight) {
+      this.log.info('Compaction already running; ignoring a second request.');
+      return;
+    }
+    this.compactInFlight = true;
+    const startedAt = Date.now();
+    const endsBefore = this.compactionEnds;
+    try {
+      await runtime.compact();
+      this.log.info(
+        `Compaction finished in ${Math.round((Date.now() - startedAt) / 1000)}s.`,
+      );
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      // Every failure of a compaction that actually started also emits `compaction_end` —
+      // "Already compacted" and "Nothing to compact (session too small)" included — and that is
+      // what puts the card in every surface's transcript. Only a command that never got one
+      // (dead child, wedged transport, exhausted response budget) has no report to lean on.
+      if (this.compactionEnds > endsBefore) {
+        this.log.info(`Compaction did not produce a summary: ${text}`);
+      } else {
+        this.log.error(`Compaction failed: ${text}`);
+        void vscode.window.showErrorMessage(`Amulet: ${text}`);
+      }
+    } finally {
+      this.compactInFlight = false;
+    }
+    // Always re-read: `isCompacting` is what clears the live card should an end event ever be
+    // lost, and the context meter needs the post-compaction stats.
+    await this.pushState();
+    await this.pushStats();
+  }
+
+  /**
    * Send the tail of a chained slash-prompt message (`followUps`). Every part
    * starts with its own `/command`, which is what lets one composer entry carry
    * several prompts: the runtime only expands the *leading* command of a message.
@@ -681,9 +757,13 @@ export class ChatBridge implements vscode.Disposable {
       return;
     }
     const result = await runtime.switchSession(resolved);
-    if (!result.cancelled) {
-      await this.pushSnapshot();
+    if (result.cancelled) {
+      // Nothing was loaded, but a cancelled switch can have taken a branch summary with it —
+      // and `isCompacting` is the only thing that clears a card built from that flag.
+      await this.pushState();
+      return;
     }
+    await this.pushSnapshot();
   }
 
   /** Whether the given session file is the one the runtime currently has loaded. */
@@ -878,10 +958,15 @@ export class ChatBridge implements vscode.Disposable {
     const runtime = this.runtime;
     if (!runtime?.isReady) return;
     const result = await runtime.fork(entryId);
-    if (result.cancelled) return;
+    if (result.cancelled) {
+      // See `switchSession`: a fork cancelled during its branch summary leaves no history push
+      // behind, and its `isCompacting`-derived card would otherwise keep counting.
+      await this.pushState();
+      return;
+    }
     // Refresh history to reflect the truncated branch, then send the edited text.
     const messages = await runtime.getMessages();
-    this.postHistory(messages as AppMessage[]);
+    this.postHistory(messages as HistoryMessage[]);
     // A fork starts a new session, which re-resolves the model and its levels.
     void this.pushThinkingLevels();
     await runtime.prompt(text);

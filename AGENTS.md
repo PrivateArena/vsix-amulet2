@@ -116,4 +116,13 @@ Extension settings live under the `amulet.*` namespace (declared in [`package.js
   the cursor, no items) must leave the `contextmenu` event alone so the native menu still appears, and the
   selection is snapshotted at right-click time because clicking a menu item destroys it.
 - The webview cannot access the microphone, filesystem, or Node APIs directly — everything goes through the host bridge.
+- Compaction reports itself over **events**, not over the command that started it: pi answers `compact`
+  only when the summarisation LLM call resolves (minutes on a large window), so the RPC client gives
+  `compact`/`fork` a longer response budget (`LONG_RUNNING_COMMANDS`) and the UI drives progress and
+  result off `compaction_start` / `compaction_end` / `summarization_retry_*`. The summary text never
+  crosses the wire while it is being written, so a live compaction shows elapsed time and a cancel
+  (`abort` cancels one), not a stream. A `compaction_end` always follows a `compaction_start` —
+  failures arrive as `aborted: true` or `errorMessage`, never as a missing event — and
+  `contextUsage.tokens` is `null` until the next assistant response, so the context meter falls back
+  to the newest boundary's `estimatedTokensAfter`.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.
