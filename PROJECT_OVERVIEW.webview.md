@@ -75,6 +75,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | components/ui/session-info-dialog/session-info.ts | `SessionStats` -> display rows, NaN-safe | 166 | `modelLabel(session: SessionState \| null): string \| null`, `SessionInfoView` |
 | webview/src/utils/find-query.ts | Case/regex query compile + match collection | ~110 | `compileFindQuery(query: string, options?: FindOptions): { pattern: RegExp \| null; error?: string }`, `findMatches(haystack, query, options?): FindHits` |
 | webview/src/utils/prompt-chain.ts | Split one composer entry into chained `/commands` (pi expands only the leading one) | 68 | `splitPromptChain(text: string, isCommand: (name: string) => boolean): string[]` |
+| webview/src/utils/slash-command.ts | `/token` parsing + skill (`skill:`) namespace handling for the cmd menu | 78 | `parseSlashToken(value: string): SlashTokenMatch \| null`, `matchesSlashQuery(name, query): boolean`, `invocationOf(name): string`, `SKILL_COMMAND_PREFIX` |
 | webview/src/hooks/use-stick-to-bottom.ts | Follow-newest while reading nested output, hand back on scroll-up | ~170 | `useStickToBottom<T extends HTMLElement>(revision: unknown, active = true): StickToBottom<T>`, `isScrollAtBottom(sh, st, ch, slop?): boolean`, `stickSlop(rowHeight?, clientHeight?): number`, `isOwnFollowScroll(scrollTop, writtenTop): boolean` |
 | webview/src/stores/composer-store.ts | Imperative composer API (insert/focus/attachments) | 62 | `useComposerStore`, `type ComposerOp = (api: ComposerApi) => void` |
 
@@ -143,7 +144,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | Show an image a tool returned, or change when its bytes load | `components/exec-view/tool-images/` (`needsToolImage` is the gate), `components/exec-view/tool-call-view.tsx`, `store.ts` (`ToolExec.images`, `toolImage` case, `retainNewestImages`); host `src/webview/tool-image.ts` |
 | Add a host message type | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer |
 | Send something new to the host | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage` |
-| Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts` |
+| Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts`, `utils/slash-command.ts` |
 | Change the context meter | `components/input-bar/ctx-meter/context-usage.ts`, `context-stats.tsx`, host `pushStats` |
 | Change approval dialogs | `components/ui/permission-prompt/` (`permission-prompt.tsx`, `ui-response.ts`), `App.tsx` mount point |
 | Fix scroll/stick/viewport jitter | `hooks/use-stick-to-bottom.ts` (`stickSlop` is the reader slack, `isOwnFollowScroll` is the jump attribution; a box with a sliding tail window wants `overflow-anchor: none` — the card stylesheet caps and anchors every streaming box together), `components/entry-list/message-list.tsx`, `stores/turn-nav-store.ts` |

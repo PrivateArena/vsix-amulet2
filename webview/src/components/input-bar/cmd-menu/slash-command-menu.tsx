@@ -3,11 +3,19 @@ import { createPortal } from 'react-dom';
 import { LuCornerDownLeft } from 'react-icons/lu';
 import type { CommandInfo } from '../../../../../shared/protocol';
 import { fuzzyHighlight } from '../../../utils/fuzzy-highlight';
+import {
+  highlightQuery,
+  SKILL_COMMAND_PREFIX,
+} from '../../../utils/slash-command';
 import './slash-command-menu.scss';
 
 export interface SlashCommand extends CommandInfo {
   /** `name` with any leading slashes stripped, ready to display/insert. */
   clean: string;
+  /** Skill command (`skill:<name>`) rather than a prompt or extension command. */
+  isSkill: boolean;
+  /** Name shown after the `/` (and after the namespace for skills). */
+  label: string;
 }
 
 interface SlashCommandMenuProps {
@@ -105,13 +113,21 @@ export function CommandMenu({
             <span className="cmd-item-body">
               <span className="cmd-item-name">
                 <span className="cmd-item-slash">/</span>
-                {fuzzyHighlight(cmd.clean, query).nodes}
+                {cmd.isSkill && (
+                  <span className="cmd-item-namespace">
+                    {SKILL_COMMAND_PREFIX}
+                  </span>
+                )}
+                {
+                  fuzzyHighlight(cmd.label, highlightQuery(cmd.isSkill, query))
+                    .nodes
+                }
               </span>
               {cmd.description && (
                 <span className="cmd-item-desc">{cmd.description}</span>
               )}
             </span>
-            {cmd.source && (
+            {cmd.source && !cmd.isSkill && (
               <span className="cmd-item-source">{cmd.source}</span>
             )}
           </div>

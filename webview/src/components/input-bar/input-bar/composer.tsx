@@ -17,6 +17,7 @@ import { useSlashCommands } from '../../../hooks/use-slash-commands';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
 import { splitPromptChain } from '../../../utils/prompt-chain';
+import { commandName, invocationOf } from '../../../utils/slash-command';
 import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useComposerStore } from '../../../stores/composer-store';
@@ -146,7 +147,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
       const names = new Set<string>();
       for (const cmd of commands) {
         if (cmd.source === 'extension') continue;
-        names.add(cmd.name.replace(/^\/+/, ''));
+        names.add(commandName(cmd.name));
       }
       return names;
     }, [commands]);
@@ -179,8 +180,9 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     /**
      * Drop the in-progress `/token` and put the invocation in its place, leaving
      * the caret after `/name ` so arguments — or another `/command` — can follow.
-     * Only the commands this UI executes itself skip the composer entirely, and
-     * even those lose just their own token: the rest of the draft survives.
+     * A skill keeps pi's namespace (`/skill:name`), which is what its expander
+     * matches on. Only the commands this UI executes itself skip the composer
+     * entirely, and even those lose just their own token: the rest survives.
      */
     const applySlashCommand = (
       command: SlashCommand,
@@ -202,7 +204,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
           setInput(restOfDraft());
           return;
       }
-      const inserted = `/${command.clean} `;
+      const inserted = `${invocationOf(command.name)} `;
       pendingCaret.current = token.start + inserted.length;
       setCaret(pendingCaret.current);
       setInput(input.slice(0, token.start) + inserted + input.slice(token.end));

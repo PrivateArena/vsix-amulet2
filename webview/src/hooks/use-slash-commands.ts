@@ -1,6 +1,14 @@
 import { useCallback, useMemo, useRef } from 'react';
 import type { CommandInfo } from '../../../shared/protocol';
 import type { SlashCommand } from '../components/input-bar/cmd-menu/slash-command-menu';
+import {
+  commandName,
+  isSkillCommandName,
+  matchesSlashQuery,
+  parseSlashToken,
+  skillNameOf,
+  type SlashTokenRange,
+} from '../utils/slash-command';
 import { useListNavigation } from './use-list-navigation';
 
 /** Built-in commands available even if the runtime doesn't provide any. */
@@ -39,10 +47,7 @@ interface UseSlashCommandsOptions {
 }
 
 /** Range of the in-progress `/token` inside the textarea value. */
-export interface SlashTokenRange {
-  start: number;
-  end: number;
-}
+export type { SlashTokenRange } from '../utils/slash-command';
 
 interface UseSlashCommandsReturn {
   /** Whether the slash command menu is currently visible. */
@@ -75,17 +80,8 @@ export function useSlashCommands({
   onSelect,
   caret,
 }: UseSlashCommandsOptions): UseSlashCommandsReturn {
-  // Detect slash command: the value ends with `/something`
-  const match = useMemo(() => {
-    // Match a slash token at the end of the input
-    const re = /(?:^|\s)\/([^\s/]*)$/;
-    const m = value.match(re);
-    if (!m) return null;
-    // The token itself runs from its slash to the end of the value; the leading
-    // whitespace the regex matched is not part of it.
-    const query = m[1];
-    return { query, start: value.length - query.length - 1, end: value.length };
-  }, [value]);
+  // Detect slash command: the value ends with `/something` (or `/skill:something`)
+  const match = useMemo(() => parseSlashToken(value), [value]);
 
   const query = match?.query ?? '';
   // Merge runtime commands with the built-ins the webview handles itself
@@ -93,9 +89,9 @@ export function useSlashCommands({
   // supplies its own list. Runtime entries win on name collisions.
   const availableCommands = useMemo<CommandInfo[]>(() => {
     if (commands.length === 0) return BUILTIN_COMMANDS;
-    const seen = new Set(commands.map((c) => c.name.replace(/^\/+/, '')));
+    const seen = new Set(commands.map((c) => commandName(c.name)));
     const extras = BUILTIN_COMMANDS.filter(
-      (c) => !seen.has(c.name.replace(/^\/+/, '')),
+      (c) => !seen.has(commandName(c.name)),
     );
     return [...commands, ...extras];
   }, [commands]);
@@ -109,20 +105,28 @@ export function useSlashCommands({
     if (!visible) return [];
     const q = query.toLowerCase();
     return availableCommands
-      .filter((cmd) => {
-        const name = cmd.name.replace(/^\/+/, '');
-        return name.toLowerCase().includes(q);
+      .filter((cmd) => matchesSlashQuery(cmd.name, q))
+      .map((cmd) => {
+        const clean = commandName(cmd.name);
+        const isSkill = isSkillCommandName(cmd.name);
+        return {
+          ...cmd,
+          clean,
+          isSkill,
+          // A skill leads with its namespace, so the label is just its name.
+          label: isSkill ? skillNameOf(cmd.name) : clean,
+        };
       })
-      .map((cmd) => ({
-        ...cmd,
-        clean: cmd.name.replace(/^\/+/, ''),
-      }))
       .sort((a, b) => {
-        // Exact prefix match first, then alphabetical
-        const aStartsWith = a.clean.toLowerCase().startsWith(q);
-        const bStartsWith = b.clean.toLowerCase().startsWith(q);
-        if (aStartsWith && !bStartsWith) return -1;
-        if (!aStartsWith && bStartsWith) return 1;
+        // Prefix match first — against the namespace-qualified name, or against a
+        // skill's bare name when the user typed that instead — then alphabetical.
+        const rank = (c: SlashCommand) =>
+          c.clean.toLowerCase().startsWith(q) ||
+          c.label.toLowerCase().startsWith(q)
+            ? 0
+            : 1;
+        const diff = rank(a) - rank(b);
+        if (diff) return diff;
         return a.clean.localeCompare(b.clean);
       });
   }, [availableCommands, query, visible]);
