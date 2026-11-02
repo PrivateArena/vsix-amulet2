@@ -35,6 +35,7 @@ import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
 import { listSessions, sessionsDirForCwd } from '../session/session-store';
 import { handleExtensionUiRequest } from './extension-ui';
+import { listProjectFiles } from './project-files';
 import {
   isSupportedImage,
   readToolImage,
@@ -344,6 +345,9 @@ export class ChatBridge implements vscode.Disposable {
         case 'requestCommands':
           await this.pushCommands();
           return;
+        case 'requestProjectFiles':
+          await this.pushProjectFiles(message.requestId, message.force);
+          return;
         case 'requestSessions':
           await this.pushSessions();
           return;
@@ -609,6 +613,39 @@ export class ChatBridge implements vscode.Disposable {
       });
     } catch {
       /* ignore */
+    }
+  }
+
+  /**
+   * Answer one `@`-mention listing. Independent of the runtime by design: the paths come
+   * from VS Code's file search over the working directory the runtime spawns in, so the
+   * composer completes while the runtime is still starting (or after it crashed).
+   */
+  private async pushProjectFiles(
+    requestId: number,
+    force?: boolean,
+  ): Promise<void> {
+    // Resolved twice on purpose: the failure path must still say which directory it tried.
+    const cwd = () => this.runtime?.cwd ?? this.sessions.activeCwd();
+    try {
+      const listing = await listProjectFiles(cwd(), force);
+      this.post({
+        type: 'projectFiles',
+        result: { requestId, cwd: cwd(), ...listing },
+      });
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      this.log.warn(`Project file listing failed for ${cwd()}: ${text}`);
+      this.post({
+        type: 'projectFiles',
+        result: {
+          requestId,
+          cwd: cwd(),
+          paths: [],
+          truncated: false,
+          error: text,
+        },
+      });
     }
   }
 

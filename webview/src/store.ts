@@ -520,8 +520,8 @@ export function reducer(state: ChatState, action: Action): ChatState {
       return applyToolImageResult(state, message);
     case 'rpcEvent':
       return applyRpcEvent(state, message.event);
-    // focusInput / insertText / enterForkMode / pickedFiles are handled in the
-    // Shell before reaching the reducer; anything else is a no-op here.
+    // focusInput / insertText / enterForkMode / pickedFiles / projectFiles are handled in
+    // the Shell before reaching the reducer; anything else is a no-op here.
     default:
       return state;
   }

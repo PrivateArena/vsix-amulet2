@@ -23,10 +23,10 @@ PiRuntime -> event listeners -> ChatBridge (one per webview surface) -> postMess
 
 ## Scope Map
 
-| Scope               | Files | Overview File                | One-line purpose                                      |
-| ------------------- | ----- | ---------------------------- | ----------------------------------------------------- |
-| `src/`+`shared/`+root | 32  | (this file)                  | Host: spawn/bridge pi, surfaces, settings, packaging  |
-| `webview/`          | 116   | PROJECT_OVERVIEW.webview.md  | React chat bundle: reducer, streaming render, tool UI |
+| Scope                 | Files | Overview File               | One-line purpose                                      |
+| --------------------- | ----- | --------------------------- | ----------------------------------------------------- |
+| `src/`+`shared/`+root | 32    | (this file)                 | Host: spawn/bridge pi, surfaces, settings, packaging  |
+| `webview/`            | 116   | PROJECT_OVERVIEW.webview.md | React chat bundle: reducer, streaming render, tool UI |
 
 ## File Tree
 
@@ -37,7 +37,8 @@ src/extension.ts          activate(): channel, SessionManager, surfaces, command
 src/provider.ts           PiSidebarProvider — sidebar WebviewView surface
 src/editor/panel-manager.ts  EditorChatManager — editor-tab chat surface
 src/webview/              chat-bridge.ts (host<->webview), webview-surface.ts, ui-surfaces.ts,
-                          ui-request-routing.ts, extension-ui.ts, html.ts, tool-image.ts
+                          ui-request-routing.ts, extension-ui.ts, html.ts, tool-image.ts,
+                          project-files.ts + project-paths.ts (`@`-mention file listing)
 src/runtime/              bootstrap.ts (binary/env/args), pi-runtime.ts (lifecycle), pi-updater.ts
 src/rpc/                  jsonl.ts, rpc-client.ts (request/response + events), rpc-process.ts (spawn/stdio)
 src/session/              session-manager.ts (runtime pool), session-store.ts (session files on disk)
@@ -52,43 +53,44 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 
 ## Component Roles
 
-| File / Module | Role | LOC | Key Exports (signatures) |
-|---|---|---|---|
-| src/extension.ts | Activation: output channel, pool, both surfaces, commands, config watcher | ~98 | `activate(context: vscode.ExtensionContext): void`, `createLogger(channel: vscode.LogOutputChannel): Logger` |
-| src/provider.ts | Sidebar surface; owns one ChatBridge | ~113 | `class PiSidebarProvider implements vscode.WebviewViewProvider` — `resolveWebviewView(view): void`, `dispatch(message: WebviewMessage): Promise<void>`, `reconnect(): Promise<void>` |
-| src/editor/panel-manager.ts | Editor-tab chat panel (same surface factory) | ~54 | `class EditorChatManager implements vscode.Disposable` — `open(): vscode.WebviewPanel` |
-| src/webview/webview-surface.ts | Shared surface factory: HTML, bridge wiring, bundle watch | ~104 | `createWebviewSurface(webview, extensionUri, sessions, log, appVersion, options): WebviewSurface` |
-| src/webview/chat-bridge.ts | **The bridge**: host<->webview messages, RPC fan-in, session/fork/auth/attachments | 1141 | `class ChatBridge` — `connect(): Promise<void>`, `handleMessage(m: WebviewMessage): Promise<void>`, `pushStats()`, `pushSnapshot()`, `onUiRequest(req: ExtensionUiRequest)` |
-| src/webview/ui-request-routing.ts | Lifecycle of one pi dialog: owner, paint ack, native fallback, one answer | ~150 | `beginUiRequest(req, deps): boolean`, `armUiRequest(id, shown): void`, `ackUiRequest(id, visible): boolean`, `answerUiRequest(id, res): boolean` |
-| src/webview/ui-surfaces.ts | Live webview surfaces + dialog fan-out | ~75 | `registerUiSurface(surface: UiSurface): () => void`, `showUiRequest(req, runtime): number`, `dismissUiRequest(id): void`, `countSurfacesShowing(id): number` |
-| src/webview/extension-ui.ts | Host-side handling of `extension_ui_request` (notify/status/widget vs dialogs) | ~97 | `handleExtensionUiRequest(...)` |
-| src/webview/html.ts | CSP'd webview HTML + asset URIs | ~73 | `renderWebviewHtml(...)` |
-| src/webview/tool-image.ts | Read one tool-result image off disk, typed by its file signature | ~175 | `readToolImage(p, {cwd}): Promise<ToolImageResult>`, `resolveToolImagePath(p, cwd?): string \| null`, `isSupportedImage(filePath): Promise<boolean>` |
-| src/runtime/pi-runtime.ts | Per-cwd runtime: start/apply settings/crash status + guarded RPC facade | 336 | `class PiRuntime` — `start(sessionPath?: string): Promise<void>`, `restart()`, `onEvent(l: Listener<RpcEvent>): () => void`, `prompt(m: string, images?: unknown[])`, `switchSession(p: string): Promise<{cancelled?}>` |
-| src/runtime/bootstrap.ts | Resolve `pi` binary, PATH/env, argv, version probe | ~130 | `resolveBinaryPath(binaryPath: string): ResolvedBinary`, `buildSpawnEnv(config: PiConfig)`, `buildStartupArgs(config, sessionPath?): string[]`, `getAgentVersion(binaryPath): string` |
-| src/runtime/pi-updater.ts | Update the external `pi` CLI in place, then reload runtimes | ~130 | `updatePi(options: PiUpdateOptions): Promise<PiUpdateResult>` |
-| src/rpc/rpc-client.ts | id-correlated request/response over stdio + event/UI dispatch | 299 | `class RpcClient` — `send(command: RpcCommand): Promise<RpcResponse>`, `call<T>(command): Promise<T>`, `respondToExtensionUi(r: ExtensionUiResponse): void` |
-| src/rpc/rpc-process.ts | Spawn/kill child, stdout/stderr plumbing | ~158 | `class RpcProcess extends EventEmitter` — `start(): void`, `write(obj: unknown): void`, `stop(timeoutMs = 1500): Promise<void>` |
-| src/rpc/jsonl.ts | Line framing (partial-chunk safe) | ~31 | `attachJsonlLineReader(stream: Readable, onLine: (line: string) => void): () => void` |
-| src/session/session-manager.ts | Runtime pool per workspace folder + restart-all | ~60 | `getRuntime(cwd: string): PiRuntime`, `getActiveRuntime(): PiRuntime`, `restartAll(): Promise<void>` |
-| src/session/session-store.ts | Read pi's on-disk session files (list/name metadata) | ~122 | `listSessions(agentDir, cwd, currentPath?): SessionInfo[]`, `buildSessionInfo(filePath): SessionInfo \| null` |
-| src/config.ts | `amulet.*` reads with read-only `pintra.*` fallback; restart-key diff | ~104 | `readConfig(): PiConfig`, `webviewConfig(): WebviewConfig`, `affectsRestart(e): boolean`, `isExplicitlySet(cfg, key): boolean` |
-| src/commands.ts | Palette commands -> runtime ops + surface reveals | ~119 | `registerCommands(context, sessions, provider, editorManager, log): void` |
-| src/auth-store.ts | Provider credentials in `agentDir/auth.json` | ~61 | `readAuthStatus(agentDir): AuthStatus`, `writeAuthEntry(agentDir, providerId, entry): string` |
-| shared/protocol.ts | All four message unions + wire payload shapes | 620 | `type RpcCommand`, `type RpcEvent`, `type WebviewMessage`, `type HostMessage`, `interface SessionStats`, `interface NestedToolCalls`, `interface ExtensionUiRequest` |
-| shared/blocks.ts | Wire content -> typed blocks; folds streaming deltas | 214 | `normalizeContent(content: unknown): ContentBlock[]`, `applyAssistantEvent(blocks: ContentBlock[], event?: AssistantStreamEvent): ContentBlock[]` |
-| scripts/rpc-probe.mjs | Reproduce runtime bugs outside VS Code; appends `tmp/rpc-events.jsonl` | ~67 | CLI: `node scripts/rpc-probe.mjs "<prompt>"` (`PROBE_COMMANDS` env for extra commands) |
+| File / Module                     | Role                                                                                             | LOC  | Key Exports (signatures)                                                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| src/extension.ts                  | Activation: output channel, pool, both surfaces, commands, config watcher                        | ~98  | `activate(context: vscode.ExtensionContext): void`, `createLogger(channel: vscode.LogOutputChannel): Logger`                                                                                                            |
+| src/provider.ts                   | Sidebar surface; owns one ChatBridge                                                             | ~113 | `class PiSidebarProvider implements vscode.WebviewViewProvider` — `resolveWebviewView(view): void`, `dispatch(message: WebviewMessage): Promise<void>`, `reconnect(): Promise<void>`                                    |
+| src/editor/panel-manager.ts       | Editor-tab chat panel (same surface factory)                                                     | ~54  | `class EditorChatManager implements vscode.Disposable` — `open(): vscode.WebviewPanel`                                                                                                                                  |
+| src/webview/webview-surface.ts    | Shared surface factory: HTML, bridge wiring, bundle watch                                        | ~104 | `createWebviewSurface(webview, extensionUri, sessions, log, appVersion, options): WebviewSurface`                                                                                                                       |
+| src/webview/chat-bridge.ts        | **The bridge**: host<->webview messages, RPC fan-in, session/fork/auth/attachments               | 1141 | `class ChatBridge` — `connect(): Promise<void>`, `handleMessage(m: WebviewMessage): Promise<void>`, `pushStats()`, `pushSnapshot()`, `onUiRequest(req: ExtensionUiRequest)`                                             |
+| src/webview/ui-request-routing.ts | Lifecycle of one pi dialog: owner, paint ack, native fallback, one answer                        | ~150 | `beginUiRequest(req, deps): boolean`, `armUiRequest(id, shown): void`, `ackUiRequest(id, visible): boolean`, `answerUiRequest(id, res): boolean`                                                                        |
+| src/webview/ui-surfaces.ts        | Live webview surfaces + dialog fan-out                                                           | ~75  | `registerUiSurface(surface: UiSurface): () => void`, `showUiRequest(req, runtime): number`, `dismissUiRequest(id): void`, `countSurfacesShowing(id): number`                                                            |
+| src/webview/extension-ui.ts       | Host-side handling of `extension_ui_request` (notify/status/widget vs dialogs)                   | ~97  | `handleExtensionUiRequest(...)`                                                                                                                                                                                         |
+| src/webview/html.ts               | CSP'd webview HTML + asset URIs                                                                  | ~73  | `renderWebviewHtml(...)`                                                                                                                                                                                                |
+| src/webview/tool-image.ts         | Read one tool-result image off disk, typed by its file signature                                 | ~175 | `readToolImage(p, {cwd}): Promise<ToolImageResult>`, `resolveToolImagePath(p, cwd?): string \| null`, `isSupportedImage(filePath): Promise<boolean>`                                                                    |
+| src/webview/project-files.ts      | Listing behind `@`-mentions: VS Code file search inside the open workspace, cached per directory | ~190 | `listProjectFiles(cwd: string, force?: boolean): Promise<{paths: string[]; truncated: boolean}>`                                                                                                                        |
+| src/runtime/pi-runtime.ts         | Per-cwd runtime: start/apply settings/crash status + guarded RPC facade                          | 336  | `class PiRuntime` — `start(sessionPath?: string): Promise<void>`, `restart()`, `onEvent(l: Listener<RpcEvent>): () => void`, `prompt(m: string, images?: unknown[])`, `switchSession(p: string): Promise<{cancelled?}>` |
+| src/runtime/bootstrap.ts          | Resolve `pi` binary, PATH/env, argv, version probe                                               | ~130 | `resolveBinaryPath(binaryPath: string): ResolvedBinary`, `buildSpawnEnv(config: PiConfig)`, `buildStartupArgs(config, sessionPath?): string[]`, `getAgentVersion(binaryPath): string`                                   |
+| src/runtime/pi-updater.ts         | Update the external `pi` CLI in place, then reload runtimes                                      | ~130 | `updatePi(options: PiUpdateOptions): Promise<PiUpdateResult>`                                                                                                                                                           |
+| src/rpc/rpc-client.ts             | id-correlated request/response over stdio + event/UI dispatch                                    | 299  | `class RpcClient` — `send(command: RpcCommand): Promise<RpcResponse>`, `call<T>(command): Promise<T>`, `respondToExtensionUi(r: ExtensionUiResponse): void`                                                             |
+| src/rpc/rpc-process.ts            | Spawn/kill child, stdout/stderr plumbing                                                         | ~158 | `class RpcProcess extends EventEmitter` — `start(): void`, `write(obj: unknown): void`, `stop(timeoutMs = 1500): Promise<void>`                                                                                         |
+| src/rpc/jsonl.ts                  | Line framing (partial-chunk safe)                                                                | ~31  | `attachJsonlLineReader(stream: Readable, onLine: (line: string) => void): () => void`                                                                                                                                   |
+| src/session/session-manager.ts    | Runtime pool per workspace folder + restart-all                                                  | ~60  | `getRuntime(cwd: string): PiRuntime`, `getActiveRuntime(): PiRuntime`, `restartAll(): Promise<void>`                                                                                                                    |
+| src/session/session-store.ts      | Read pi's on-disk session files (list/name metadata)                                             | ~122 | `listSessions(agentDir, cwd, currentPath?): SessionInfo[]`, `buildSessionInfo(filePath): SessionInfo \| null`                                                                                                           |
+| src/config.ts                     | `amulet.*` reads with read-only `pintra.*` fallback; restart-key diff                            | ~104 | `readConfig(): PiConfig`, `webviewConfig(): WebviewConfig`, `affectsRestart(e): boolean`, `isExplicitlySet(cfg, key): boolean`                                                                                          |
+| src/commands.ts                   | Palette commands -> runtime ops + surface reveals                                                | ~119 | `registerCommands(context, sessions, provider, editorManager, log): void`                                                                                                                                               |
+| src/auth-store.ts                 | Provider credentials in `agentDir/auth.json`                                                     | ~61  | `readAuthStatus(agentDir): AuthStatus`, `writeAuthEntry(agentDir, providerId, entry): string`                                                                                                                           |
+| shared/protocol.ts                | All four message unions + wire payload shapes                                                    | 620  | `type RpcCommand`, `type RpcEvent`, `type WebviewMessage`, `type HostMessage`, `interface SessionStats`, `interface NestedToolCalls`, `interface ExtensionUiRequest`                                                    |
+| shared/blocks.ts                  | Wire content -> typed blocks; folds streaming deltas                                             | 214  | `normalizeContent(content: unknown): ContentBlock[]`, `applyAssistantEvent(blocks: ContentBlock[], event?: AssistantStreamEvent): ContentBlock[]`                                                                       |
+| scripts/rpc-probe.mjs             | Reproduce runtime bugs outside VS Code; appends `tmp/rpc-events.jsonl`                           | ~67  | CLI: `node scripts/rpc-probe.mjs "<prompt>"` (`PROBE_COMMANDS` env for extra commands)                                                                                                                                  |
 
 ## Cross-References
 
-| File | Called by / calls | Why it's central |
-|---|---|---|
-| src/webview/chat-bridge.ts | `provider.ts` (`connect`/`dispatch`), `pi-runtime.ts`, `rpc-client.ts`, `config.ts`, `auth-store.ts`, `bootstrap.ts` | Every host↔webview behaviour (76 refs, largest file) |
-| src/runtime/pi-runtime.ts | `session-manager.ts`, `chat-bridge.ts`; calls `rpc-client.ts`, `bootstrap.ts` | Sole gateway to the child process; owns restart/crash status |
-| src/rpc/rpc-client.ts | `pi-runtime.doStart`, `chat-bridge`; calls `rpc-process.ts` | Request/response correlation + event fan-out point |
-| src/provider.ts | `extension.activate`; calls `webview-surface.createWebviewSurface`, bridge | Sidebar entry point into the bridge |
-| shared/blocks.ts | `webview/src/store.ts` (`applyRpcEvent`, `toUiMessage`, `seedToolsFromHistory`), `agent-timeline.tsx`, `session-store.ts` | Normalization that keeps the render layer alive |
-| webview/src/store.ts | `contexts/chat-context.tsx`, all chat components | One reducer for the whole UI (see webview overview) |
+| File                       | Called by / calls                                                                                                         | Why it's central                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| src/webview/chat-bridge.ts | `provider.ts` (`connect`/`dispatch`), `pi-runtime.ts`, `rpc-client.ts`, `config.ts`, `auth-store.ts`, `bootstrap.ts`      | Every host↔webview behaviour (76 refs, largest file)         |
+| src/runtime/pi-runtime.ts  | `session-manager.ts`, `chat-bridge.ts`; calls `rpc-client.ts`, `bootstrap.ts`                                             | Sole gateway to the child process; owns restart/crash status |
+| src/rpc/rpc-client.ts      | `pi-runtime.doStart`, `chat-bridge`; calls `rpc-process.ts`                                                               | Request/response correlation + event fan-out point           |
+| src/provider.ts            | `extension.activate`; calls `webview-surface.createWebviewSurface`, bridge                                                | Sidebar entry point into the bridge                          |
+| shared/blocks.ts           | `webview/src/store.ts` (`applyRpcEvent`, `toUiMessage`, `seedToolsFromHistory`), `agent-timeline.tsx`, `session-store.ts` | Normalization that keeps the render layer alive              |
+| webview/src/store.ts       | `contexts/chat-context.tsx`, all chat components                                                                          | One reducer for the whole UI (see webview overview)          |
 
 ## Data Flow
 
@@ -96,7 +98,7 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 webview (React)              host (Node)                                pi --mode rpc (child)
   WebviewMessage  --->  ChatBridge.handleMessage  --->  PiRuntime op
                           (sendMessage|steer|abort|setModel|switchSession|providerLogin|pickFiles|
-                           loadToolImage|openToolImage)
+                           loadToolImage|openToolImage|requestProjectFiles)
                                                      RpcClient.send -> stdin: {type,id,...}\n
                                                        prompt|steer|abort|get_state|get_messages|
                                                        get_available_models|set_thinking_level|
@@ -108,7 +110,7 @@ webview (React)              host (Node)                                pi --mod
                              <--- extension_ui_request {id,method}  -> broadcast + ack watchdog -> dialog
   HostMessage  <----  ChatBridge.post  (state|history|models|thinkingLevels|stats|sessions|commands|
                                         runtimeStatus|config|rpcEvent|extensionUiRequest|extensionUiDismiss|
-                                        pickedFiles|toolImage)
+                                        pickedFiles|toolImage|projectFiles)
   reducer(state, {type:'host',message}) -> React
 ```
 
@@ -157,49 +159,52 @@ webview (React)              host (Node)                                pi --mod
 
 ## Read Triggers
 
-| If you need to... | Open these files |
-|---|---|
-| Change a wire/host/webview message or event shape | `shared/protocol.ts`, `src/webview/chat-bridge.ts`, `webview/src/store.ts`; capture real events with `scripts/rpc-probe.mjs` and replay in `webview/src/store.test.ts` |
-| Fix streaming/thinking/tool rendering | `shared/blocks.ts`, `webview/src/store.ts`, `webview/src/components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx` |
-| Change how/whether `pi` is spawned (binary, env, args, version) | `src/runtime/bootstrap.ts`, `src/config.ts`, `src/runtime/pi-runtime.ts` (`doStart`, `applySettings`, `handleExit`) |
-| Add a chat-box action / toolbar button | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), `src/webview/chat-bridge.ts` (`handleMessage`) |
-| Work on sessions (list, switch, rename, delete, fork, export) | `src/session/session-store.ts`, `src/webview/chat-bridge.ts` (session ops), `src/runtime/pi-runtime.ts` |
-| Fix sidebar-vs-editor-tab layout/width bugs | `src/webview/webview-surface.ts`, `src/provider.ts`, `src/editor/panel-manager.ts`, `webview/src/assets/css/*.scss` |
-| Touch approvals/dialogs from pi extensions | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/`; the Amulet output channel logs every routing decision as `[ui] …` |
-| Change the context meter | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`) |
-| Show or change what an image tool result does to the wire | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`) |
-| Add/rename a setting | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`) |
-| Verify anything end-to-end | `pnpm typecheck && pnpm test`, then F5 Extension Development Host — host↔webview bugs only appear at runtime |
+| If you need to...                                               | Open these files                                                                                                                                                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Change a wire/host/webview message or event shape               | `shared/protocol.ts`, `src/webview/chat-bridge.ts`, `webview/src/store.ts`; capture real events with `scripts/rpc-probe.mjs` and replay in `webview/src/store.test.ts`                                              |
+| Fix streaming/thinking/tool rendering                           | `shared/blocks.ts`, `webview/src/store.ts`, `webview/src/components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`                                                                                  |
+| Change how/whether `pi` is spawned (binary, env, args, version) | `src/runtime/bootstrap.ts`, `src/config.ts`, `src/runtime/pi-runtime.ts` (`doStart`, `applySettings`, `handleExit`)                                                                                                 |
+| Add a chat-box action / toolbar button                          | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), `src/webview/chat-bridge.ts` (`handleMessage`)                                                                                              |
+| Work on sessions (list, switch, rename, delete, fork, export)   | `src/session/session-store.ts`, `src/webview/chat-bridge.ts` (session ops), `src/runtime/pi-runtime.ts`                                                                                                             |
+| Fix sidebar-vs-editor-tab layout/width bugs                     | `src/webview/webview-surface.ts`, `src/provider.ts`, `src/editor/panel-manager.ts`, `webview/src/assets/css/*.scss`                                                                                                 |
+| Touch approvals/dialogs from pi extensions                      | `src/webview/ui-request-routing.ts`, `src/webview/ui-surfaces.ts`, `src/webview/extension-ui.ts`, `webview/src/components/ui/permission-prompt/`; the Amulet output channel logs every routing decision as `[ui] …` |
+| Change the context meter                                        | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`)                                                                                                           |
+| Show or change what an image tool result does to the wire       | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`)                                                                    |
+| Add/rename a setting                                            | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`)                                                                                                                         |
+| Verify anything end-to-end                                      | `pnpm typecheck && pnpm test`, then F5 Extension Development Host — host↔webview bugs only appear at runtime                                                                                                        |
 
 ## Dependencies
 
 ### Extension host (Node, `vscode` external)
-| Package / Module | Role | Version |
-|---|---|---|
-| `vscode` API | Commands, webview views/panels, config, output channel | `@types/vscode` ^1.90 |
-| `node:child_process`, `node:fs`, `node:os`, `node:readline` | Spawn `pi --mode rpc`, read session/auth files | runtime |
+
+| Package / Module                                            | Role                                                   | Version               |
+| ----------------------------------------------------------- | ------------------------------------------------------ | --------------------- |
+| `vscode` API                                                | Commands, webview views/panels, config, output channel | `@types/vscode` ^1.90 |
+| `node:child_process`, `node:fs`, `node:os`, `node:readline` | Spawn `pi --mode rpc`, read session/auth files         | runtime               |
 
 ### Webview (browser IIFE)
-| Package / Module | Role | Version |
-|---|---|---|
-| `react` / `react-dom` | UI | ^18.3.1 |
-| `zustand` | Focused UI stores (composer, confirm, turn-nav, …) — not chat state | ^5.0.14 |
-| `react-markdown` + `remark-gfm` + `rehype-highlight` + `highlight.js` | Message rendering | ^9 / ^4 / ^7 / ^11 |
-| `react-icons`, `@lobehub/icons-static-svg` | Icons + provider logos | ^5.7 / ^1.91 |
+
+| Package / Module                                                      | Role                                                                | Version            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------ |
+| `react` / `react-dom`                                                 | UI                                                                  | ^18.3.1            |
+| `zustand`                                                             | Focused UI stores (composer, confirm, turn-nav, …) — not chat state | ^5.0.14            |
+| `react-markdown` + `remark-gfm` + `rehype-highlight` + `highlight.js` | Message rendering                                                   | ^9 / ^4 / ^7 / ^11 |
+| `react-icons`, `@lobehub/icons-static-svg`                            | Icons + provider logos                                              | ^5.7 / ^1.91       |
 
 ### Build & test
-| Package / Module | Role | Version |
-|---|---|---|
-| `esbuild` | Two-target bundling (`esbuild.mjs`) | ^0.24 |
-| `sass` | `.scss` → CSS via custom plugin | ^1.101 |
+
+| Package / Module        | Role                                                           | Version     |
+| ----------------------- | -------------------------------------------------------------- | ----------- |
+| `esbuild`               | Two-target bundling (`esbuild.mjs`)                            | ^0.24       |
+| `sass`                  | `.scss` → CSS via custom plugin                                | ^1.101      |
 | `typescript` / `vitest` | `tsc --noEmit` is the only type gate; 12 test files, 138 tests | ^5.7 / ^4.1 |
 
 ## Build & Run
 
-| Command | Purpose |
-|---|---|
-| `pnpm build` / `pnpm watch` | Bundle host + webview once / on change |
-| `pnpm typecheck` | `tsc --noEmit` (never emits — bundling is esbuild only) |
-| `pnpm test` | vitest (pure logic: `shared/`, reducer, routing) |
-| `pnpm package` | `scripts/build-vsix.sh` → typecheck + tests + prod bundle + `.vsix` (`--fast`, `--install`, `--notmp`) |
-| `node scripts/rpc-probe.mjs "<prompt>"` | Reproduce runtime bugs without VS Code (`tmp/rpc-events.jsonl`) |
+| Command                                 | Purpose                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `pnpm build` / `pnpm watch`             | Bundle host + webview once / on change                                                                 |
+| `pnpm typecheck`                        | `tsc --noEmit` (never emits — bundling is esbuild only)                                                |
+| `pnpm test`                             | vitest (pure logic: `shared/`, reducer, routing)                                                       |
+| `pnpm package`                          | `scripts/build-vsix.sh` → typecheck + tests + prod bundle + `.vsix` (`--fast`, `--install`, `--notmp`) |
+| `node scripts/rpc-probe.mjs "<prompt>"` | Reproduce runtime bugs without VS Code (`tmp/rpc-events.jsonl`)                                        |

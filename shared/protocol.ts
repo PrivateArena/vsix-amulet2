@@ -520,6 +520,26 @@ export interface CommandInfo {
   source: string;
 }
 
+/**
+ * One answer to `requestProjectFiles`: the project's file paths, relative to the
+ * runtime's working directory and always in POSIX form (`webview/src/store.ts`).
+ * The webview has no filesystem, so the host lists them and the webview ranks them.
+ */
+export interface ProjectFilesResult {
+  /**
+   * Request this answer belongs to. A listing that arrives after a newer request — or
+   * after a runtime restart moved the working directory — must be discarded, and the id
+   * is the only thing that can tell the two apart.
+   */
+  requestId: number;
+  /** Working directory the scan ran in, so a stale cache can be recognised as stale. */
+  cwd: string;
+  paths: string[];
+  /** The scan hit the host's cap: this is a prefix of the tree, not the whole of it. */
+  truncated: boolean;
+  error?: string;
+}
+
 export interface ForkMessage {
   entryId: string;
   text: string;
@@ -633,6 +653,12 @@ export type WebviewMessage =
   | { type: 'openSessionInEditor'; path: string }
   | { type: 'requestStats' }
   | { type: 'requestCommands' }
+  /**
+   * Ask for the project's file paths to complete an `@`-mention. `force` skips the
+   * host's short-lived cache: the webview asks again when a search finds nothing, which
+   * is also the case for a file the agent has just created.
+   */
+  | { type: 'requestProjectFiles'; requestId: number; force?: boolean }
   | { type: 'openForkPicker' }
   /** Branch from one specific user turn (resolved to an entry id host-side). */
   | { type: 'forkFromMessage'; text: string }
@@ -707,6 +733,7 @@ export type HostMessage =
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'stats'; stats: SessionStats }
   | { type: 'commands'; commands: CommandInfo[] }
+  | { type: 'projectFiles'; result: ProjectFilesResult }
   | { type: 'enterForkMode'; entryId: string; text: string }
   | { type: 'authStatus'; status: AuthStatus }
   | { type: 'providerLoginResult'; result: ProviderLoginResult }

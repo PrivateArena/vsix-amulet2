@@ -14,10 +14,14 @@ import { actions } from '../../../apis/actions';
 import { useChatDispatch, useChatState } from '../../../contexts/chat-context';
 import type { SlashTokenRange } from '../../../hooks/use-slash-commands';
 import { useSlashCommands } from '../../../hooks/use-slash-commands';
+import type { AtTokenRange, FileMention } from '../../../utils/at-mention';
+import { useFileMentions } from '../../../hooks/use-file-mentions';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
+import { FileMenu } from '../file-menu';
 import { splitPromptChain } from '../../../utils/prompt-chain';
 import { commandName, invocationOf } from '../../../utils/slash-command';
+import { mentionInsertion } from '../../../utils/at-mention';
 import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useComposerStore } from '../../../stores/composer-store';
@@ -113,6 +117,10 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     const rootRef = useRef<HTMLDivElement | null>(null);
     /** Caret offset to restore after the next render (slash insertion, quoting). */
     const pendingCaret = useRef<number | null>(null);
+    /** `start:query` of the completion token the user dismissed with Escape. */
+    const [dismissed, setDismissed] = useState<string | null>(null);
+    const dismiss = (token: { start: number }, query: string) =>
+      setDismissed(`${token.start}:${query}`);
 
     useAutoGrow(localRef, input);
     usePublishComposerHeight(rootRef);
@@ -215,7 +223,37 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
       value: input,
       caret,
       onSelect: applySlashCommand,
+      onDismiss: dismiss,
     });
+
+    /**
+     * Put the picked path where the `@token` was. A directory keeps the caret glued to its
+     * trailing slash so the user can descend further; a file gets a space, because the
+     * path is finished and the next word is prose. What lands in the draft is exactly the
+     * path pi would type into `read` — relative to the directory it works in.
+     */
+    const applyFileMention = (mention: FileMention, token: AtTokenRange) => {
+      const inserted = mentionInsertion(mention);
+      pendingCaret.current = token.start + inserted.length;
+      setCaret(pendingCaret.current);
+      setInput(input.slice(0, token.start) + inserted + input.slice(token.end));
+    };
+
+    const files = useFileMentions({
+      value: input,
+      caret,
+      onSelect: applyFileMention,
+      onDismiss: dismiss,
+    });
+
+    // A dismissed menu stays dismissed for the token it was dismissed on: the hooks
+    // recompute visibility from the draft, so without this the next keystroke of the same
+    // word would summon it straight back. It must also gate the key handling, or a hidden
+    // menu would keep eating Enter.
+    const slashKey = slash.token ? `${slash.token.start}:${slash.query}` : '';
+    const fileKey = files.token ? `${files.token.start}:${files.query}` : '';
+    const showSlash = slash.visible && slashKey !== dismissed;
+    const showFiles = files.visible && fileKey !== dismissed;
 
     // Request commands from the host on mount
     useEffect(() => {
@@ -242,8 +280,10 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     );
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // First, let the slash command handler try to consume the event
-      if (slash.onKeyDown(e)) return;
+      // First, let a completion menu try to consume the event. The two never fight for
+      // one token: a value cannot end in both a `/token` and an `@token`.
+      if (showSlash && slash.onKeyDown(e)) return;
+      if (showFiles && files.onKeyDown(e)) return;
 
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
@@ -334,7 +374,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                 ? 'Waiting for runtime…'
                 : streaming
                   ? 'Steer the agent (Esc to stop)…'
-                  : 'Ask anything, @ to add files, / for commands'
+                  : 'Ask anything, @ for project files, / for commands'
             }
             rows={1}
             disabled={!ready}
@@ -351,7 +391,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             onKeyDown={onKeyDown}
             onPaste={onPaste}
           />
-          {slash.visible && (
+          {showSlash && (
             <CommandMenu
               items={slash.items}
               query={slash.query}
@@ -359,6 +399,21 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               onHover={slash.onHover}
               onSelect={(command) => {
                 if (slash.token) applySlashCommand(command, slash.token);
+              }}
+              textareaRef={localRef}
+            />
+          )}
+          {showFiles && (
+            <FileMenu
+              items={files.items}
+              query={files.query}
+              focused={files.focused}
+              cwd={files.cwd}
+              note={files.note}
+              hint={files.hint}
+              onHover={files.onHover}
+              onSelect={(mention) => {
+                if (files.token) applyFileMention(mention, files.token);
               }}
               textareaRef={localRef}
             />

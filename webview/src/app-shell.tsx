@@ -3,6 +3,7 @@ import type { HostMessage } from '../../shared/protocol';
 import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
+import { projectFiles } from './stores/project-files-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -45,6 +46,7 @@ export function Shell() {
       },
       pickedFiles: (message) =>
         dispatch({ type: 'addPendingAttachments', attachments: message.files }),
+      projectFiles: (message) => projectFiles.accept(message.result),
     };
 
     const off = onHostMessage((message: HostMessage) => {

@@ -1,0 +1,138 @@
+/* File menu — floats above the composer, same geometry as the command menu */
+.file-menu {
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+  background: var(--amulet-menu-bg);
+  border: 1px solid var(--amulet-menu-border);
+  border-radius: var(--amulet-radius);
+  box-shadow: var(--amulet-menu-shadow);
+  overflow: hidden;
+  animation: file-menu-in 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: var(--amulet-z-dropdown);
+}
+
+body.animations-disabled .file-menu {
+  animation: none;
+}
+
+.file-menu-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+
+.file-menu-note {
+  padding: 8px;
+  font-size: 0.78em;
+  color: var(--amulet-muted);
+  text-align: center;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: var(--amulet-radius);
+  cursor: pointer;
+  transition: background 0.08s ease;
+
+  &:hover,
+  &.focused {
+    background: var(--amulet-list-hover-bg);
+  }
+
+  &.focused {
+    box-shadow: inset 0 0 0 1px var(--amulet-focus-ring);
+  }
+}
+
+.file-item-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--amulet-suggest-fg) 70%, var(--amulet-muted));
+
+  &.is-dir {
+    color: var(--vscode-icon-folderForeground, var(--amulet-accent));
+  }
+}
+
+/* The path is literal text the model will read, so it stays monospaced and exact. */
+.file-item-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--amulet-monospace);
+  font-size: 0.82em;
+  color: var(--amulet-suggest-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .file-item-dir {
+    color: var(--amulet-muted);
+  }
+
+  .fuzzy-hl {
+    color: var(--amulet-accent);
+    font-weight: 600;
+  }
+}
+
+.file-menu-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--amulet-hairline);
+  background: color-mix(in srgb, var(--amulet-surface) 60%, transparent);
+}
+
+.file-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7em;
+  color: var(--amulet-muted);
+  font-weight: 500;
+}
+
+.file-hint-end {
+  margin-left: auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--amulet-monospace);
+}
+
+.file-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-family: var(--amulet-font);
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--amulet-secondary-fg);
+  background: color-mix(in srgb, var(--amulet-fg) 6%, transparent);
+  border: 1px solid var(--amulet-hairline);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--amulet-hairline);
+}
+
+@keyframes file-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--amulet-popover-enter-y, 7px)) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

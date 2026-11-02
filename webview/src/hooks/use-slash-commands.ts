@@ -42,6 +42,8 @@ interface UseSlashCommandsOptions {
   value: string;
   /** Called when a slash command is selected, with the range it should replace. */
   onSelect: (command: SlashCommand, token: SlashTokenRange) => void;
+  /** Called when the user presses Escape: the caller hides the menu for this token. */
+  onDismiss?: (token: SlashTokenRange, query: string) => void;
   /** Caret offset in `value`; the menu only tracks a token at the caret. */
   caret?: number;
 }
@@ -78,6 +80,7 @@ export function useSlashCommands({
   commands,
   value,
   onSelect,
+  onDismiss,
   caret,
 }: UseSlashCommandsOptions): UseSlashCommandsReturn {
   // Detect slash command: the value ends with `/something` (or `/skill:something`)
@@ -162,11 +165,16 @@ export function useSlashCommands({
         if (focused >= 0 && focused < items.length) selectItem(items[focused]);
         return true;
       }
-      // Escape falls through so the composer can dismiss the menu.
-      if (e.key === 'Escape') return false;
+      // Escape dismisses this token's menu instead of aborting the run underneath it —
+      // which is what the footer's "Esc Dismiss" promises.
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (match) onDismiss?.({ start: match.start, end: match.end }, query);
+        return true;
+      }
       return nav.onKeyDown(e);
     },
-    [visible, items, focused, selectItem, nav],
+    [visible, items, focused, selectItem, nav, match, query, onDismiss],
   );
 
   return {

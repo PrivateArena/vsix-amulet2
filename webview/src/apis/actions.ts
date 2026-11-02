@@ -62,6 +62,13 @@ export const actions = {
     postMessage({ type: 'openSessionInEditor', path }),
   requestSessions: () => postMessage({ type: 'requestSessions' }),
   requestCommands: () => postMessage({ type: 'requestCommands' }),
+  /**
+   * Ask for the project's file paths to complete an `@`-mention. The caller owns the id
+   * and only accepts the answer that carries it, so a listing that arrives late — after a
+   * newer request or a restart that changed the working directory — cannot be applied.
+   */
+  requestProjectFiles: (requestId: number, force?: boolean) =>
+    postMessage({ type: 'requestProjectFiles', requestId, force }),
   /** Ask the host for a fresh `get_session_stats` push (`stats` HostMessage). */
   requestStats: () => postMessage({ type: 'requestStats' }),
   /** Ask the host for a fresh `get_state` push (`state` HostMessage). */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { LuCornerDownLeft } from 'react-icons/lu';
 import type { CommandInfo } from '../../../../../shared/protocol';
@@ -7,6 +7,10 @@ import {
   highlightQuery,
   SKILL_COMMAND_PREFIX,
 } from '../../../utils/slash-command';
+import {
+  useComposerAnchor,
+  popoverStyle,
+} from '../../../hooks/use-composer-anchor';
 import './slash-command-menu.scss';
 
 export interface SlashCommand extends CommandInfo {
@@ -45,31 +49,7 @@ export function CommandMenu({
   onSelect,
   textareaRef,
 }: SlashCommandMenuProps) {
-  const [composerRect, setComposerRect] = useState<DOMRect | null>(null);
-
-  // Calculate position based on the composer's bounding rect
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    // Find the .input-bar parent element
-    const composer = textarea.closest('.input-bar');
-    if (!composer) return;
-
-    const updatePosition = () => {
-      setComposerRect(composer.getBoundingClientRect());
-    };
-
-    updatePosition();
-
-    // Update on scroll/resize
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [textareaRef]);
+  const composerRect = useComposerAnchor(textareaRef);
 
   const handleMouseDown = useCallback(
     (cmd: SlashCommand) => (e: React.MouseEvent) => {
@@ -81,9 +61,6 @@ export function CommandMenu({
 
   if (items.length === 0 || !composerRect) return null;
 
-  // Position menu above the composer with 8px gap
-  const GAP = 8;
-
   const menu = (
     <div
       className="cmd-menu"
@@ -91,10 +68,7 @@ export function CommandMenu({
       aria-label="Slash commands"
       style={
         {
-          position: 'fixed',
-          left: composerRect.left,
-          width: composerRect.width,
-          bottom: window.innerHeight - composerRect.top + GAP,
+          ...popoverStyle(composerRect, window.innerHeight),
           '--amulet-popover-enter-y': '7px',
         } as React.CSSProperties
       }>

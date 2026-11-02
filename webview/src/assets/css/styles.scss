@@ -289,56 +289,6 @@
   padding: 0 4px;
 }
 
-/* ── Autocomplete animations & icons ─────────────────── */
-
-@keyframes suggest-slide {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) translateX(-50%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) translateX(-50%);
-  }
-}
-
-.suggest-icon .pi-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.suggest-icon-skill .pi-icon,
-.suggest-icon-ext .pi-icon,
-.suggest-icon-prompt .pi-icon {
-  color: color-mix(in srgb, var(--amulet-suggest-fg) 72%, var(--amulet-muted));
-}
-
-.suggest-icon-dir .pi-icon {
-  color: color-mix(
-    in srgb,
-    var(--vscode-icon-folderForeground, var(--amulet-fg)) 74%,
-    var(--amulet-suggest-fg)
-  );
-}
-
-.suggest-icon-file .pi-icon {
-  color: color-mix(
-    in srgb,
-    var(--vscode-icon-fileForeground, var(--amulet-fg)) 74%,
-    var(--amulet-suggest-fg)
-  );
-}
-
-.suggest-name {
-  font-family: var(--amulet-monospace);
-  font-size: 0.85em;
-  font-weight: 600;
-  color: var(--amulet-suggest-fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── Session picker ──────────────────────────────────── */
 
 #home-panel {
