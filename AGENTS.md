@@ -37,6 +37,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                                                                                                     |
 | Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                             |
 | Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                               |
+| Right-click menu on the chat body                | [`webview/src/components/entry-list/transcript-menu.tsx`](webview/src/components/entry-list/transcript-menu.tsx), sources in [`webview/src/utils/md-units.ts`](webview/src/utils/md-units.ts), DOM→text in [`webview/src/utils/dom-markdown.ts`](webview/src/utils/dom-markdown.ts) |
 | pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts) (one owner, ack watchdog, single answer), [`src/webview/ui-surfaces.ts`](src/webview/ui-surfaces.ts) (surface registry + fan-out), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
 | Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens |
 | Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                   |
@@ -108,5 +109,11 @@ Extension settings live under the `amulet.*` namespace (declared in [`package.js
   a native VS Code dialog. `extension_ui_response` goes out exactly once per request id. Every step logs as
   `[ui] …` in the Amulet output channel.
 - The `pi` binary is external and may not be on VS Code's PATH. Bootstrap logic and version detection live in [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts).
+- Right-click inside the chat transcript is owned by the webview, not by VS Code. A block that renders a
+  source string (`MdRender`, a thinking body) marks itself `data-copy-unit` and registers that string in a
+  `WeakMap<Element, …>` — the menu must hand back the **raw markdown**, never the rendered DOM; only a partial
+  selection (or a source-less `<pre>`) goes through `serializeDom`. Anything the menu declines (no unit under
+  the cursor, no items) must leave the `contextmenu` event alone so the native menu still appears, and the
+  selection is snapshotted at right-click time because clicking a menu item destroys it.
 - The webview cannot access the microphone, filesystem, or Node APIs directly — everything goes through the host bridge.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

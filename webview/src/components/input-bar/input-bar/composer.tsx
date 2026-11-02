@@ -17,6 +17,7 @@ import { useSlashCommands } from '../../../hooks/use-slash-commands';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
 import { splitPromptChain } from '../../../utils/prompt-chain';
+import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
@@ -25,6 +26,9 @@ import { ModelPicker } from '../model-picker';
 import { ReasoningSelect } from '../reasoning-select';
 import { formatByteSize } from '../../../utils/format';
 import './input-bar.scss';
+
+/** `pendingCaret` value meaning "wherever the new text ends", i.e. a pasted quote. */
+const CARET_AT_END = -1;
 
 /** Read a clipboard image blob into an Attachment (base64 data + data URL). */
 function imageToAttachment(file: File): Promise<Attachment> {
@@ -106,7 +110,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     const [caret, setCaret] = useState(0);
     const localRef = useRef<HTMLTextAreaElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
-    /** Caret offset to restore after the next render (slash insertion). */
+    /** Caret offset to restore after the next render (slash insertion, quoting). */
     const pendingCaret = useRef<number | null>(null);
 
     useAutoGrow(localRef, input);
@@ -120,8 +124,9 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
       pendingCaret.current = null;
       const textarea = localRef.current;
       if (!textarea) return;
+      const at = pos === CARET_AT_END ? textarea.value.length : pos;
       textarea.focus();
-      textarea.setSelectionRange(pos, pos);
+      textarea.setSelectionRange(at, at);
     }, [input]);
 
     const setRefs = (el: HTMLTextAreaElement | null) => {
@@ -223,6 +228,11 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
         useComposerStore.getState().register({
           insertText: (text) =>
             setInput((v) => (v && !v.endsWith(' ') ? `${v} ` : v) + text),
+          quote: (text) => {
+            setInput((v) => appendToDraft(v, toBlockquote(text)));
+            // Answer the quote right away: land the caret after the pasted block.
+            pendingCaret.current = CARET_AT_END;
+          },
           setText: (text) => setInput(text),
           focus: () => localRef.current?.focus(),
         }),

@@ -9,6 +9,11 @@ import { create } from 'zustand';
 export interface ComposerApi {
   /** Append to the current draft, keeping whatever the user already typed. */
   insertText: (text: string) => void;
+  /**
+   * Drop a quoted passage in under the draft, so a right-click "Quote"/"Reply" on the
+   * transcript reads as a reply block rather than as one run-on line.
+   */
+  quote: (text: string) => void;
   /** Replace the draft outright (fork mode reloads a previous message). */
   setText: (text: string) => void;
   focus: () => void;
@@ -56,6 +61,8 @@ export const useComposerStore = create<ComposerStore>((set, get) => ({
 export const composer = {
   insertText: (text: string) =>
     useComposerStore.getState().run((api) => api.insertText(text)),
+  quote: (text: string) =>
+    useComposerStore.getState().run((api) => api.quote(text)),
   setText: (text: string) =>
     useComposerStore.getState().run((api) => api.setText(text)),
   focus: () => useComposerStore.getState().run((api) => api.focus()),

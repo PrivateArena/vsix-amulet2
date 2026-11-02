@@ -6,6 +6,7 @@ import { ChatFind, scrollRangesIntoView } from '../chat-find';
 import { LogoIcon } from '../logo-icon';
 import { LogoText } from '../logo-text';
 import { ProgressBar } from '../progress-bar';
+import { useTranscriptMenu } from './transcript-menu';
 import type { UiMessage } from '../../store';
 import './message-list.scss';
 
@@ -44,6 +45,8 @@ export function EntryList({
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
   const setActiveUid = useTurnNavStore((s) => s.setActiveUid);
+  // Our own menu over the transcript: VS Code's has nothing to say about markdown.
+  const menu = useTranscriptMenu(listRef);
 
   /** Tell the topbar navigator which turn is currently anchored at the top. */
   const syncActiveTurn = useCallback(() => {
@@ -116,7 +119,11 @@ export function EntryList({
 
   return (
     <>
-      <div id="chat-log" ref={listRef} onScroll={onScroll}>
+      <div
+        id="chat-log"
+        ref={listRef}
+        onScroll={onScroll}
+        onContextMenu={menu.open}>
         {messages.length === 0 && ready && (
           <div className="welcome" data-find-skip="">
             <div className="welcome-logo">
@@ -159,6 +166,7 @@ export function EntryList({
           <div className="notice-msg compact-msg">Compacting context…</div>
         )}
       </div>
+      {menu.node}
       <ChatFind containerRef={listRef} onReveal={revealMatches} />
     </>
   );

@@ -10,6 +10,9 @@ import { createPortal } from 'react-dom';
 import { IconBaseProps } from 'react-icons';
 import './ctx-menu.scss';
 
+/** Root class of the menu, also the marker Escape checks for. */
+export const CTX_MENU_CLASS = 'ctx-menu';
+
 export interface ContextMenuItem {
   label: string;
   hint?: string;
@@ -80,7 +83,7 @@ export function CtxMenu({
   return createPortal(
     <div
       ref={ref}
-      className="ctx-menu"
+      className={CTX_MENU_CLASS}
       role="menu"
       style={{ left: pos.left, top: pos.top, minWidth }}
       onContextMenu={(e) => e.preventDefault()}>

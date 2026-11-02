@@ -120,34 +120,8 @@
   margin-bottom: 0;
 }
 
-/* Transient "Copied" confirmation for the right-click menu. Absolute in the
-   bubble's corner and mounted only while it shows, so it reserves no space. */
-.entry-copied {
-  position: absolute;
-  right: 8px;
-  bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--amulet-radius-pill);
-  background: var(--vscode-input-background, var(--amulet-surface-subtle));
-  box-shadow:
-    0 0 0 1px var(--amulet-accent-glow-soft),
-    var(--amulet-shadow-sm);
-  color: var(--amulet-accent);
-  font-size: 0.72em;
-  font-weight: 600;
-  letter-spacing: var(--amulet-tracking-wide);
-  pointer-events: none;
-  user-select: none;
-  animation: bubble-in 0.16s ease-out both;
-}
-
-/* The right-click menu is open on this bubble. */
-.entry-bubble.is-ctx-open {
-  border-color: var(--amulet-accent-line);
-}
+/* The transient "Copied" pill and the open-menu outline on a block both live with the
+   transcript menu that raises them (`entry-list/transcript-menu.scss`). */
 
 .entry-role {
   display: inline-flex;

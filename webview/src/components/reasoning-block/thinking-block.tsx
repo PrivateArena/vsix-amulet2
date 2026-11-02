@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LuChevronRight } from 'react-icons/lu';
 import { useChatState } from '../../contexts/chat-context';
+import { registerCopySource } from '../../utils/md-units';
 import './reasoning-block.scss';
 
 interface ThinkingBlockProps {
@@ -14,8 +15,16 @@ export function ReasoningBlock({ text, active = false }: ThinkingBlockProps) {
   // block; clicking a header overrides it for that block alone.
   const expandedByDefault = useChatState().expandThinking;
   const [manual, setManual] = useState<boolean | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const expanded = manual ?? expandedByDefault;
   const hasText = text.trim().length > 0;
+
+  // Reasoning arrives as text and is shown as text, so the copy source is the raw
+  // block — newlines and all.
+  useEffect(
+    () => registerCopySource(bodyRef.current, text, { pre: true }),
+    [text],
+  );
 
   // Nothing to show once thinking is done and produced no content.
   if (!hasText && !active) return null;
@@ -43,7 +52,11 @@ export function ReasoningBlock({ text, active = false }: ThinkingBlockProps) {
           </span>
         )}
       </button>
-      {hasText && <div className="reasoning-body">{text}</div>}
+      {hasText && (
+        <div className="reasoning-body" ref={bodyRef} data-copy-unit="thinking">
+          {text}
+        </div>
+      )}
     </div>
   );
 }

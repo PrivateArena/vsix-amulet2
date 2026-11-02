@@ -1,0 +1,52 @@
+/*
+ * The block a live transcript menu is acting on. An attribute, not a class: React
+ * re-renders the block (streaming) without touching what it does not manage.
+ */
+[data-ctx-open] {
+  border-radius: var(--amulet-radius);
+  outline: 1px solid var(--amulet-accent-line);
+  outline-offset: 3px;
+}
+
+/*
+ * Transient "Copied" confirmation, anchored at the right-click. A pill rather than a
+ * menu-item tick: the menu closes on the click, so it cannot carry the feedback.
+ */
+.chat-copy-flash {
+  position: fixed;
+  z-index: calc(var(--amulet-z-dropdown) + 20);
+  transform: translate(-4px, -130%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--amulet-radius-pill);
+  background: var(--vscode-input-background, var(--amulet-surface-subtle));
+  box-shadow:
+    0 0 0 1px var(--amulet-accent-glow-soft),
+    var(--amulet-shadow-sm);
+  color: var(--amulet-accent);
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: var(--amulet-tracking-wide);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  animation: chat-copy-flash-in 0.16s ease-out both;
+}
+
+body.animations-disabled .chat-copy-flash {
+  animation: none;
+}
+
+@keyframes chat-copy-flash-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, calc(-130% + 4px));
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-4px, -130%);
+  }
+}

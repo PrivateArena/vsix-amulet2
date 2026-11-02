@@ -1,16 +1,23 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { postMessage } from '../apis/vscode';
+import { registerCopySource } from '../utils/md-units';
 
 interface MarkdownProps {
   children: string;
 }
 
 export const MdRender = memo(function MdRender({ children }: MarkdownProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Publish the source, not the rendering, so a right-click "Copy as Markdown" on an
+  // assistant paragraph or a subagent report gives back exactly what was rendered.
+  useEffect(() => registerCopySource(rootRef.current, children), [children]);
+
   return (
-    <div className="entry-content-md">
+    <div className="entry-content-md" ref={rootRef} data-copy-unit="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[

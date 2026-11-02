@@ -1,5 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { LuCheck, LuCopy, LuGitBranch } from 'react-icons/lu';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Attachment, ContentBlock } from '../../../../shared/protocol';
 import {
   asText,
@@ -8,13 +7,11 @@ import {
   normalizeContent,
   textOfContent,
 } from '../../../../shared/blocks';
-import { actions } from '../../apis/actions';
 import { useChatState } from '../../contexts/chat-context';
 import type { ToolExec, UiMessage } from '../../store';
-import { useCopyFeedback } from '../../hooks/use-copy-feedback';
+import { registerCopySource } from '../../utils/md-units';
 import { formatByteSize } from '../../utils/format';
 import { clockTime } from '../../utils/time';
-import { ContextMenuItem, useCtxMenu } from '../ui/ctx-menu';
 import { MdRender } from '../md-render';
 import { ReasoningBlock } from '../reasoning-block';
 import { ExecBlock } from '../exec-view';
@@ -23,32 +20,6 @@ import './message-view.scss';
 interface MessageViewProps {
   message: UiMessage;
   tools: Record<string, ToolExec>;
-}
-
-/** Copy/branch actions for a user turn, anchored on right-click. */
-function useUserMessageMenu(message: UiMessage) {
-  const text = useMemo(() => textOfContent(message.content).trim(), [message]);
-  const { copied, copy } = useCopyFeedback();
-
-  const items = useMemo<ContextMenuItem[]>(
-    () => [
-      {
-        label: 'Copy message',
-        icon: LuCopy,
-        onSelect: () => copy(text),
-      },
-      {
-        label: 'Branch from here',
-        hint: 'edit & resend',
-        icon: LuGitBranch,
-        onSelect: () => actions.forkFromMessage(text),
-      },
-    ],
-    [text, copy],
-  );
-
-  const ctx = useCtxMenu(items, { minWidth: 180 });
-  return { ctx, copied };
 }
 
 function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
@@ -89,7 +60,9 @@ function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
  *
  * Copy / branch are a right-click menu rather than a hover toolbar: the transcript
  * is dense, and a floating pill over the bubble costs a line of it for actions
- * used once in a while. The timestamp moved into the tooltip.
+ * used once in a while. The timestamp moved into the tooltip. The bubble is not a
+ * copy unit — its paragraphs already are, and the gallery beside them is not text —
+ * it only declares the message it owns, for the menu to copy and to branch from.
  */
 function UserBubble({
   message,
@@ -97,9 +70,14 @@ function UserBubble({
   attachments,
 }: MessageViewProps & { attachments: Attachment[] | undefined }) {
   const clampRef = useRef<HTMLDivElement | null>(null);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
-  const { ctx, copied } = useUserMessageMenu(message);
+  const source = textOfContent(message.content).trim();
+
+  // The menu hands this exact string to "Branch from here", which pi matches against
+  // the runtime's history by text — so it is the message, never its rendering.
+  useEffect(() => registerCopySource(bubbleRef.current, source), [source]);
 
   // Measure only while collapsed: expanding drops the max-height, so the
   // element stops overflowing and the toggle would remove itself.
@@ -116,42 +94,34 @@ function UserBubble({
   }, [expanded, message]);
 
   return (
-    <>
+    <div
+      ref={bubbleRef}
+      className="entry-bubble"
+      data-branch=""
+      title={
+        message.timestamp != null
+          ? `${clockTime(message.timestamp)} · right-click to copy or branch`
+          : 'Right-click to copy or branch'
+      }>
       <div
-        className={`entry-bubble${ctx.isOpen ? ' is-ctx-open' : ''}`}
-        title={
-          message.timestamp != null
-            ? `${clockTime(message.timestamp)} · right-click to copy or branch`
-            : 'Right-click to copy or branch'
-        }
-        onContextMenu={ctx.open}>
-        <div
-          ref={clampRef}
-          className={`bubble-clamp${expanded ? ' is-expanded' : ''}`}>
-          {attachments && attachments.length > 0 && (
-            <AttachmentGallery attachments={attachments} />
-          )}
-          {normalizeContent(message.content).map((block, i) =>
-            renderBlock(block, i, tools),
-          )}
-        </div>
-        {overflowing && (
-          <button
-            type="button"
-            className="bubble-toggle"
-            onClick={() => setExpanded((v) => !v)}>
-            {expanded ? 'Show less' : 'Show more'}
-          </button>
+        ref={clampRef}
+        className={`bubble-clamp${expanded ? ' is-expanded' : ''}`}>
+        {attachments && attachments.length > 0 && (
+          <AttachmentGallery attachments={attachments} />
         )}
-        {copied && (
-          <span className="entry-copied" role="status">
-            <LuCheck size={11} />
-            Copied
-          </span>
+        {normalizeContent(message.content).map((block, i) =>
+          renderBlock(block, i, tools),
         )}
       </div>
-      {ctx.menu}
-    </>
+      {overflowing && (
+        <button
+          type="button"
+          className="bubble-toggle"
+          onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
   );
 }
 
