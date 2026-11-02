@@ -481,7 +481,7 @@ body.animations-disabled .exec-chevron svg {
 
 .exec-block.is-scroll-focused .exec-content {
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 
 /* Monospace font for code and output blocks */
@@ -538,7 +538,7 @@ body.animations-disabled .exec-block > .exec-content-wrap {
 .exec-scroll {
   max-height: min(340px, 55vh);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   opacity: 0;
   transition: opacity var(--amulet-transition-fast) var(--amulet-ease-out);
 }
@@ -621,7 +621,7 @@ body:not(.animations-disabled)
 .exec-block.pending :is(.exec-write-stream, .exec-cmd-stream) {
   max-height: min(200px, 50vh);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   /* The follow writes `scrollTop` to keep the newest line in view. Scroll anchoring writes it
      too — a fast delta slides several rows of the tail window off the top at once — and the
      browser reports its own adjustment as a `scroll` event, which the follow can only judge as

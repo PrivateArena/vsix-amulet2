@@ -20,7 +20,7 @@ body.animations-disabled .cmd-menu {
 .cmd-menu-list {
   flex: 1;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   padding: 4px;
 }
 
