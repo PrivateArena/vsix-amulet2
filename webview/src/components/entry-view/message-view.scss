@@ -79,19 +79,11 @@
 .bubble-clamp {
   max-height: min(7em, 20vh);
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - 20px),
-    transparent
-  );
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
 }
 
 .bubble-clamp.is-expanded {
   max-height: none;
   overflow: visible;
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 .bubble-toggle {
