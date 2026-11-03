@@ -4,6 +4,7 @@ import { EditorChatManager } from './editor/panel-manager';
 import { SessionManager } from './session/session-manager';
 import { registerCommands } from './commands';
 import { affectsRestart } from './config';
+import { initNotifications } from './notify/notify-service';
 import type { Logger } from './runtime/pi-runtime';
 
 function createLogger(channel: vscode.LogOutputChannel): Logger {
@@ -52,6 +53,10 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(editorManager);
 
   registerCommands(context, sessions, provider, editorManager, log);
+
+  // "Amulet has something for you" alerts: the report of a finished run, and any pi dialog parked on an
+  // answer. Delivered as a VS Code toast, plus an OS notification while this window is unfocused.
+  context.subscriptions.push(initNotifications(log));
 
   // Restart the runtime when a restart-affecting setting changes.
   context.subscriptions.push(

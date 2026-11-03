@@ -14,6 +14,7 @@ import {
   pendingUiRequestCount,
   releaseUiRequest,
   UI_DIALOG_ACK_TIMEOUT_MS,
+  type DialogDeps,
 } from './ui-request-routing';
 
 /** Isolated assertion: the shared map is module state, so ids are torn down explicitly. */
@@ -259,6 +260,143 @@ describe('housekeeping', () => {
     // The evicted id is free again, so a recycled request id stays trackable.
     expect(beginUiRequest(request('cap-first'), h.deps)).toBe(true);
     for (const id of [...ids, 'cap-new', 'cap-first']) releaseUiRequest(id);
+    expect(pendingUiRequestCount()).toBe(0);
+  });
+});
+
+describe('attention hooks', () => {
+  /** A claim with the callback `src/notify` hangs off the end of a dialog's life. */
+  function attentionHarness(
+    native: () => Promise<ExtensionUiResponse | null> = async () => null,
+  ) {
+    const settled: string[] = [];
+    const deps: DialogDeps = {
+      fallbackToNative: native,
+      respond: () => {},
+      dismiss: () => {},
+      log: () => {},
+      onSettled: (req) => settled.push(req.id),
+    };
+    return { deps, settled };
+  }
+
+  it('does not retire an alert for a claim that was still being routed', () => {
+    const h = attentionHarness();
+    expect(beginUiRequest(request('at-claim'), h.deps)).toBe(true);
+    // A losing bridge cannot settle the winner's alert by trying to claim the same id.
+    expect(beginUiRequest(request('at-claim'), h.deps)).toBe(false);
+    expect(h.settled).toEqual([]);
+    releaseUiRequest('at-claim');
+  });
+
+  it('retires the alert with the answer, never twice', () => {
+    const h = attentionHarness();
+    beginUiRequest(request('at-answer'), h.deps);
+    expect(answerUiRequest('at-answer', response('at-answer'))).toBe(true);
+    expect(answerUiRequest('at-answer', response('at-answer'))).toBe(false);
+    expect(h.settled).toEqual(['at-answer']);
+  });
+
+  it('retires the alert when VS Code answered the dialog natively', async () => {
+    const h = attentionHarness(async () => response('at-native'));
+    beginUiRequest(request('at-native'), h.deps);
+    // No surface painted it, so the question goes straight to the native dialog.
+    armUiRequest('at-native', 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.settled).toEqual(['at-native']);
+  });
+
+  it('retires the alert when the watchdog hands a never-painted dialog to VS Code', async () => {
+    vi.useFakeTimers();
+    const h = attentionHarness(async () => response('at-watchdog'));
+    beginUiRequest(request('at-watchdog'), h.deps);
+    // A surface accepted the request but never proved it painted the dialog.
+    armUiRequest('at-watchdog', 1);
+    await vi.advanceTimersByTimeAsync(UI_DIALOG_ACK_TIMEOUT_MS + 1);
+    expect(h.settled).toEqual(['at-watchdog']);
+  });
+
+  it('retires the alert for an evicted dialog nobody had painted yet', async () => {
+    const h = attentionHarness(async () => response('at-evicted'));
+    const ids: string[] = [];
+    for (let i = 0; i < MAX_PENDING; i++) {
+      const id = `at-queue-${i}`;
+      ids.push(id);
+      beginUiRequest(request(id), h.deps);
+    }
+    // The oldest question was never painted, so eviction hands it to the native dialog and it settles there.
+    expect(beginUiRequest(request('at-cap'), h.deps)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.settled).toEqual(['at-queue-0']);
+    for (const id of [...ids.slice(1), 'at-cap']) releaseUiRequest(id);
+  });
+
+  it('retires the alert when the native dialog itself failed', async () => {
+    const h = attentionHarness(async () => {
+      throw new Error('no window to ask');
+    });
+    beginUiRequest(request('at-throw'), h.deps);
+    armUiRequest('at-throw', 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.settled).toEqual(['at-throw']);
+  });
+
+  it('retires the alert even when a surface cannot be told about the answer', () => {
+    // A webview that is already gone throws on `postMessage`; pi still got its answer, and the alert that
+    // is no longer true still has to come down.
+    const settled: string[] = [];
+    const logs: string[] = [];
+    const deps: DialogDeps = {
+      fallbackToNative: async () => null,
+      respond: () => {},
+      dismiss: () => {
+        throw new Error('webview is gone');
+      },
+      log: (text) => logs.push(text),
+      onSettled: (req) => settled.push(req.id),
+    };
+    beginUiRequest(request('at-broken'), deps);
+    expect(answerUiRequest('at-broken', response('at-broken'))).toBe(true);
+    expect(settled).toEqual(['at-broken']);
+    expect(logs.join(' ')).toContain('dismiss failed');
+  });
+
+  it('does not let a broken alert hook answer pi twice', () => {
+    const responses: ExtensionUiResponse[] = [];
+    const logs: string[] = [];
+    const deps: DialogDeps = {
+      fallbackToNative: async () => null,
+      respond: (r) => responses.push(r),
+      dismiss: () => {},
+      log: (text) => logs.push(text),
+      onSettled: () => {
+        throw new Error('notify is broken');
+      },
+    };
+    beginUiRequest(request('at-hook'), deps);
+    expect(answerUiRequest('at-hook', response('at-hook'))).toBe(true);
+    expect(responses).toHaveLength(1);
+    expect(logs.join(' ')).toContain('settle hook failed');
+  });
+
+  it('leaves the alert up for an evicted dialog a surface had already painted', () => {
+    const h = attentionHarness();
+    const ids: string[] = [];
+    for (let i = 0; i < MAX_PENDING; i++) {
+      const id = `at-evict-${i}`;
+      ids.push(id);
+      beginUiRequest(request(id), h.deps);
+      armUiRequest(id, 1);
+      // Painted, so eviction has to leave it (and its alert) alone.
+      ackUiRequest(id, true);
+    }
+    // Evicting a dialog a surface already painted leaves it on screen, so its alert stays up too.
+    expect(beginUiRequest(request('at-cap'), h.deps)).toBe(true);
+    expect(h.settled).toEqual([]);
+    for (const id of [...ids, 'at-cap']) releaseUiRequest(id);
     expect(pendingUiRequestCount()).toBe(0);
   });
 });

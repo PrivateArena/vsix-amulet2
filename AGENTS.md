@@ -41,6 +41,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts) (one owner, ack watchdog, single answer), [`src/webview/ui-surfaces.ts`](src/webview/ui-surfaces.ts) (surface registry + fan-out), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
 | Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens |
 | Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                   |
+| "Look at this" notifications (host-side)         | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar) |
 | React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                             |
 | React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                     |
 
@@ -96,9 +97,47 @@ suite built from such a capture.
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
+
+The three `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
+process, so `notifySettings()` in [`src/config.ts`](src/config.ts) reads them at delivery time and a change
+takes effect on the next alert (never a restart, never a webview push). Two alerts exist, and both are
+decided host-side because both moments are already handled there: a run finishing its report, and a pi dialog
+parked on an answer. Rules worth keeping:
+
+- **A clean report is announced on `agent_end`, a bad one on `agent_settled`.** `agent_settled` is the true
+  end of a run, but it lands after retries and post-run compaction — minutes after the reply was readable,
+  which is the delay the alert exists to avoid. So a `stopReason: 'stop'` reply pings from `agent_end`, while
+  `'error'` and `'length'` are held: pi re-enters the loop after `agent_end` for auto-retry, truncation
+  recovery and compaction, and a run that looks failed at `agent_end` is often still working. `agent_end`'s
+  own `willRetry` cannot make that call (it is the auto-retry predicate only, and `_prepareRetry` can still
+  decline), so a held failure is released — or dropped, if `agent_settled.aborted` says the human stopped it
+  — when the run settles.
+- **One alert per dialog, owned by the claim; retired by the answer.** `beginUiRequest` elects one
+  orchestrating bridge and only that bridge alerts. Retirement is the `onSettled` hook of the single-answer
+  slot, so it happens wherever the answer came from — this surface, another one, or the native fallback —
+  and it runs in a `finally`, because a throwing alert hook must never make the router hand pi a second
+  answer for one question. Non-modal methods never alert: `notify`/`setStatus`/`setWidget` are emitted in a
+  tight loop, and every bridge handles those. Dialogs are classified by their `title` prefix (`pi-gate:`,
+  `pi-subagent:`) but every modal method alerts, so an unseen extension is still covered.
+- **The toast is the record, the OS notifier is the reach.** VS Code's notification is visible inside the
+  workbench only, so the OS channel (`notify-send`, macOS `display notification`, Windows balloon tip) fires
+  while the window is unfocused — always through `spawn(argv, { shell: false })`, never a shell string, with
+  the text in argv or (on Windows) in the environment, so no report body is ever parsed. The freedesktop
+  urgency vocabulary is `low | normal | critical` and nothing else — an unknown level exits 1, which reads as
+  "no notifier here". An unanswered dialog is `critical` because that is the tier that survives
+  Do-Not-Disturb, and since servers may clip a notification body, the *title* carries the quoted command.
+  Positional text is `--`-terminated: a report or folder name starting with `-` would otherwise be eaten by
+  getopt, and a notifier that refuses three notifications in a row (too old for our options) is dropped
+  rather than respawned for every alert. An unanswered dialog is tracked per runtime, because a restart of one workspace folder must not
+  silence a question another folder is still parked on.
+  No OS channel is fatal: the toast, the "approval waiting" status-bar entry, and the dialog itself remain.
+  While one is unanswered the status bar counts them ([`approval-ledger.ts`](src/notify/approval-ledger.ts),
+  which is why it is per-runtime: a restart of one workspace folder must not silence a question another is
+  still parked on), because a notification expires and an unanswered dialog does not; a dialog whose extension times out on its own (pi-subagent's 5-minute ceiling) is dropped when it
+  does. `Amulet: Test Notification` proves which channel the machine actually has.
 
 ## Gotchas
 

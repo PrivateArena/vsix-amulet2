@@ -174,6 +174,11 @@ export interface AppMessage {
   model?: string;
   usage?: Usage;
   stopReason?: string;
+  /**
+   * On a failed assistant reply (`stopReason: 'error'`), the provider's message. The UI already shows it
+   * inline; it is what a failure notification has to say.
+   */
+  errorMessage?: string;
   responseId?: string;
   responseModel?: string;
   /** Attachments sent with a user message. */
@@ -432,7 +437,15 @@ export interface MessageEndEvent {
  */
 export type RpcEvent =
   | { type: 'agent_start' }
-  | { type: 'agent_end'; messages?: AppMessage[] }
+  /**
+   * The low-level loop is done and the reply is finished. `willRetry` is set by the runtime, not by us:
+   * true means a retry attempt follows, so this reply is not the last word. A run emits this more than once
+   * whenever the loop re-enters — auto-retry, truncation recovery, or a compaction that resumes the turn —
+   * each time with its own finished reply.
+   */
+  | { type: 'agent_end'; messages?: AppMessage[]; willRetry?: boolean }
+  /** The whole run settled, retries and post-run compaction included. Can land minutes after `agent_end`. */
+  | { type: 'agent_settled'; aborted?: boolean }
   | { type: 'turn_start' }
   | { type: 'turn_end'; message?: AppMessage; toolResults?: unknown[] }
   | MessageStartEvent

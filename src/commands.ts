@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { sendTestNotification } from './notify/notify-service';
 import type { PiSidebarProvider } from './provider';
 import type { EditorChatManager } from './editor/panel-manager';
 import type { SessionManager } from './session/session-manager';
@@ -39,6 +40,10 @@ export function registerCommands(
   reg('amulet.focusInput', async () => {
     await provider.reveal();
     provider.focusInput();
+  });
+
+  reg('amulet.testNotification', async () => {
+    await sendTestNotification();
   });
 
   reg('amulet.switchModel', () => switchModel(sessions, provider, log));

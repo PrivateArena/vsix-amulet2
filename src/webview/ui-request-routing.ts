@@ -41,6 +41,12 @@ export interface DialogDeps {
   /** Tell all surfaces to drop this dialog (another surface or VS Code answered it). */
   dismiss(id: string): void;
   log(text: string): void;
+  /**
+   * The request stopped being pending: answered here, or handed to the native dialog and answered there.
+   * Optional, called at most once per request — the same guarantee {@link answerUiRequest} gives pi — and
+   * never allowed to throw, because an alert that fails to retire itself must not cost pi its answer.
+   */
+  onSettled?(request: ExtensionUiRequest): void;
 }
 
 interface PendingDialog {
@@ -93,14 +99,16 @@ export function armUiRequest(id: string, shown: number): void {
   if (!entry || entry.answered) return;
   entry.surfaces = shown;
   if (shown === 0) {
-    void runNativeFallback(id, 'no live surface');
+    start(runNativeFallback(id, 'no live surface'));
     return;
   }
   entry.timer = setTimeout(
     () =>
-      void runNativeFallback(
-        id,
-        `nobody painted it in ${UI_DIALOG_ACK_TIMEOUT_MS}ms`,
+      start(
+        runNativeFallback(
+          id,
+          `nobody painted it in ${UI_DIALOG_ACK_TIMEOUT_MS}ms`,
+        ),
       ),
     UI_DIALOG_ACK_TIMEOUT_MS,
   );
@@ -139,8 +147,11 @@ export function answerUiRequest(
     entry.timer = undefined;
   }
   pending.delete(id);
-  entry.deps.respond(response);
-  entry.deps.dismiss(id);
+  deliverAnswer(
+    entry,
+    () => entry.deps.respond(response),
+    () => entry.deps.dismiss(id),
+  );
   return true;
 }
 
@@ -168,7 +179,15 @@ function evictOldest(): void {
   // A dialog a surface already painted is left alone: it can still be answered in the webview, and
   // popping a second question over it would be worse than forgetting the id.
   if (!entry || entry.acked || entry.answered) return;
-  void takeOverNatively(oldest.value, entry, 'evicted');
+  start(takeOverNatively(oldest.value, entry, 'evicted'));
+}
+
+/**
+ * Nothing here is awaited — the watchdog fires and the eviction runs on their own — so a dependency that
+ * throws has to be swallowed somewhere, and it is not going to be the caller's problem.
+ */
+function start(takeover: Promise<void>): void {
+  void takeover.catch(() => undefined);
 }
 
 /** Take over natively, unless a visible surface already showed the dialog or it has been answered. */
@@ -191,19 +210,73 @@ async function takeOverNatively(
     clearTimeout(entry.timer);
     entry.timer = undefined;
   }
-  entry.deps.log(
-    `[ui] ${entry.request.method} ${id}: ${reason} ` +
-      `(posted to ${entry.surfaces} surface(s)) → native dialog`,
-  );
-  entry.deps.dismiss(id);
+  // Did the native dialog's answer reach pi? Only if this stays false may the failure path send another.
+  let answered = false;
   try {
+    entry.deps.log(
+      `[ui] ${entry.request.method} ${id}: ${reason} ` +
+        `(posted to ${entry.surfaces} surface(s)) → native dialog`,
+    );
+    entry.deps.dismiss(id);
     const response = await entry.deps.fallbackToNative(entry.request);
-    if (response) entry.deps.respond(response);
+    if (response) {
+      answered = true;
+      entry.deps.respond(response);
+    }
   } catch (err) {
     // A failed native dialog must not leave the tool call parked: no answer is a deny for pi-gate anyway,
     // but sending one frees the runtime and makes the failure visible in the log.
     const text = err instanceof Error ? err.message : String(err);
     entry.deps.log(`[ui] ${id}: native dialog failed: ${text}`);
-    entry.deps.respond({ type: 'extension_ui_response', id, cancelled: true });
+    if (!answered) {
+      answered = true;
+      entry.deps.respond({
+        type: 'extension_ui_response',
+        id,
+        cancelled: true,
+      });
+    }
+  } finally {
+    retire(entry, id);
+  }
+}
+
+/**
+ * Hand pi its answer, then retire the request. Each step is fenced: an answer that failed to go out is
+ * already lost either way, and it must not also cost the human the *alert* retirement that the dialog
+ * still on screen depends on.
+ */
+function deliverAnswer(
+  entry: PendingDialog,
+  respond: () => void,
+  dismiss: () => void,
+): void {
+  try {
+    respond();
+  } catch (err) {
+    entry.deps.log(
+      `[ui] ${entry.request.id}: respond failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  try {
+    dismiss();
+  } catch (err) {
+    entry.deps.log(`[ui] ${entry.request.id}: dismiss failed`);
+  }
+  retire(entry, entry.request.id);
+}
+
+/** Last step of a finished request — the hook the alert lives by. Must never throw. */
+function retire(entry: PendingDialog, id: string): void {
+  try {
+    entry.deps.onSettled?.(entry.request);
+  } catch (err) {
+    entry.deps.log(
+      `[ui] ${id}: settle hook failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }

@@ -2,7 +2,7 @@
   "name": "amulet",
   "displayName": "Amulet — Pi Agent for VS Code",
   "description": "AI coding agent for VS Code, powered by the pi runtime.",
-  "version": "1.0.38",
+  "version": "1.0.39",
   "publisher": "gunir",
   "private": true,
   "icon": "media/icon.png",
@@ -91,6 +91,11 @@
       {
         "command": "amulet.focusInput",
         "title": "Focus Chat Input",
+        "category": "Amulet"
+      },
+      {
+        "command": "amulet.testNotification",
+        "title": "Test Notification",
         "category": "Amulet"
       },
       {
@@ -220,13 +225,31 @@
           "order": 6,
           "markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
         },
+        "amulet.notifyOnTurnDone": {
+          "type": "boolean",
+          "default": true,
+          "order": 7,
+          "markdownDescription": "Notify me when a run finishes writing its final report, so the chat can be in the background while the agent works."
+        },
+        "amulet.notifyOnApproval": {
+          "type": "boolean",
+          "default": true,
+          "order": 8,
+          "markdownDescription": "Notify me when a pi extension is parked waiting for an answer — a tool-approval prompt (for example `pi-gate`), a subagent asking for more turn/time budget, or any other dialog that blocks the run. While one is unanswered, a status-bar entry keeps counting them; the notification itself disappears, the question does not."
+        },
+        "amulet.notifySystem": {
+          "type": "boolean",
+          "default": true,
+          "order": 9,
+          "markdownDescription": "Also deliver notifications to the operating system's notification centre while this VS Code window is not focused (`notify-send` on Linux, `display notification` on macOS, a balloon tip on Windows). Nothing is ever run through a shell: the notifier is spawned with an argument array, and a missing one falls back to VS Code's own notification."
+        },
         "amulet.extraArgs": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "order": 7,
+          "order": 10,
           "scope": "machine",
           "markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
         }

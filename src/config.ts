@@ -57,6 +57,30 @@ export function readConfig(): PiConfig {
   };
 }
 
+/**
+ * When Amulet is allowed to interrupt the user. Separate from {@link PiConfig} because none of it is
+ * about the child process: it is read at delivery time, so a change takes effect on the next alert.
+ */
+export interface NotifySettings {
+  /** Announce a run that finished writing its report. */
+  onTurnDone: boolean;
+  /** Announce a pi extension dialog parked waiting for an answer. */
+  onApproval: boolean;
+  /** Also reach the OS notification centre while this window is not focused. */
+  system: boolean;
+}
+
+export function notifySettings(): NotifySettings {
+  // No {@link LEGACY_SECTION} fallback here: these keys shipped after the rename, and the declared
+  // defaults in the manifest are their only other source. One lookup for all three switches.
+  const cfg = vscode.workspace.getConfiguration(SECTION);
+  return {
+    onTurnDone: cfg.get<boolean>('notifyOnTurnDone', true),
+    onApproval: cfg.get<boolean>('notifyOnApproval', true),
+    system: cfg.get<boolean>('notifySystem', true),
+  };
+}
+
 /** The subset of settings the webview renders. */
 export function webviewConfig(): WebviewConfig {
   const { expandThinking } = readConfig();
@@ -65,6 +89,9 @@ export function webviewConfig(): WebviewConfig {
 
 /** Config key behind the webview's "Uncollapse thinking" toggle. */
 export const EXPAND_THINKING_KEY = `${SECTION}.expandThinking`;
+
+/** Config key behind the "approval waiting" status-bar entry (see `src/notify`). */
+export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
 
 /** Config key for the startup thinking level (`disabled` = leave the runtime alone). */
 export const THINKING_LEVEL_KEY = `${SECTION}.thinkingLevel`;

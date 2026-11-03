@@ -43,6 +43,10 @@ src/runtime/              bootstrap.ts (binary/env/args), pi-runtime.ts (lifecyc
 src/rpc/                  jsonl.ts, rpc-client.ts (request/response + events), rpc-process.ts (spawn/stdio)
 src/session/              session-manager.ts (runtime pool), session-store.ts (session files on disk)
 src/config.ts             PiConfig + amulet.*/pintra.* dual-namespace reads, restart keys
+src/notify/               "look at this" alerts: run-report.ts (which event is the report),
+                          approval-prompt.ts (which dialog parks the run), approval-ledger.ts (which ones are
+                          still unanswered), system-channel.ts (OS notifier), attention.ts (payload+policy),
+                          notify-service.ts (vscode glue, toast, status bar)
 src/commands.ts           registerCommands(): palette entries -> surfaces/runtime ops
 src/auth-store.ts         read/write pi auth.json (provider credentials)
 shared/protocol.ts        RpcCommand / RpcEvent / WebviewMessage / HostMessage — single truth
@@ -75,6 +79,8 @@ webview/                  -> PROJECT_OVERVIEW.webview.md
 | src/session/session-manager.ts    | Runtime pool per workspace folder + restart-all                                                  | ~60  | `getRuntime(cwd: string): PiRuntime`, `getActiveRuntime(): PiRuntime`, `restartAll(): Promise<void>`                                                                                                                    |
 | src/session/session-store.ts      | Read pi's on-disk session files (list/name metadata)                                             | ~122 | `listSessions(agentDir, cwd, currentPath?): SessionInfo[]`, `buildSessionInfo(filePath): SessionInfo \| null`                                                                                                           |
 | src/config.ts                     | `amulet.*` reads with read-only `pintra.*` fallback; restart-key diff                            | ~104 | `readConfig(): PiConfig`, `webviewConfig(): WebviewConfig`, `affectsRestart(e): boolean`, `isExplicitlySet(cfg, key): boolean`                                                                                          |
+| src/notify/approval-ledger.ts     | Which dialogs are still unanswered, per runtime, with their expiry timers                        | ~90  | `class ApprovalLedger` — `track(id, cwd, timeoutMs?)`, `settle(id)`, `clearRuntime(cwd)`, `has(id)`, `dispose()`                                                                                                        |
+| src/notify/notify-service.ts      | Only `vscode`-touching half of the alert feature: toast + OS channel + status bar                | ~270 | `initNotifications(log): Disposable`, `watchRuntime(r): void`, `approvalRequested(req, cwd): void`, `approvalSettled(id): void`, `sendTestNotification(): Promise<void>`                                                |
 | src/commands.ts                   | Palette commands -> runtime ops + surface reveals                                                | ~119 | `registerCommands(context, sessions, provider, editorManager, log): void`                                                                                                                                               |
 | src/auth-store.ts                 | Provider credentials in `agentDir/auth.json`                                                     | ~61  | `readAuthStatus(agentDir): AuthStatus`, `writeAuthEntry(agentDir, providerId, entry): string`                                                                                                                           |
 | shared/protocol.ts                | All four message unions + wire payload shapes                                                    | 620  | `type RpcCommand`, `type RpcEvent`, `type WebviewMessage`, `type HostMessage`, `interface SessionStats`, `interface NestedToolCalls`, `interface ExtensionUiRequest`                                                    |
@@ -185,6 +191,7 @@ webview (React)              host (Node)                                pi --mod
 | Change compaction (progress, card, timeout, cancel)             | `src/rpc/rpc-client.ts` (`LONG_RUNNING_COMMANDS`), `src/webview/chat-bridge.ts` (`runCompact`), `webview/src/store.ts` (`compaction*`), `webview/src/components/entry-list/compaction-card/`                        |
 | Show or change what an image tool result does to the wire       | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`)                                                                    |
 | Add/rename a setting                                            | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`)                                                                                                                         |
+| Change when Amulet interrupts the user                          | `src/notify/` (`run-report.ts` for the report event, `approval-prompt.ts` for the dialog kinds, `system-channel.ts` for the OS notifier)                                                                            |
 | Verify anything end-to-end                                      | `pnpm typecheck && pnpm test`, then F5 Extension Development Host — host↔webview bugs only appear at runtime                                                                                                        |
 
 ## Dependencies

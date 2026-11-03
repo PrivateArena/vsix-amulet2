@@ -33,6 +33,11 @@ import {
 } from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
 import { resolveBinaryPath, getAgentVersion } from '../runtime/bootstrap';
+import {
+  approvalRequested,
+  approvalSettled,
+  watchRuntime,
+} from '../notify/notify-service';
 import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
 import { listSessions, sessionsDirForCwd } from '../session/session-store';
@@ -158,6 +163,9 @@ export class ChatBridge implements vscode.Disposable {
     this.detach();
     const runtime = this.sessions.getActiveRuntime();
     this.runtime = runtime;
+    // Run-finished alerts are installed once per runtime rather than per surface, so a run reports once
+    // however many chats are open on it.
+    watchRuntime(runtime);
 
     this.subscriptions.push(
       runtime.onStatus((status) =>
@@ -1365,6 +1373,10 @@ export class ChatBridge implements vscode.Disposable {
    * Route one `extension_ui_request` to the human. A modal request is shown on every surface of this
    * runtime and answered once by whoever gets the click first, with a native VS Code dialog as the
    * fallback if no webview proves it painted one. See {@link ui-request-routing}.
+   *
+   * The two `approval*` deps are that routing's alert pair: claiming a request is what announces it (so N
+   * surfaces still produce one notification), and the single-answer slot is what retires it — including
+   * when a *different* surface or VS Code's native dialog is the one that answered.
    */
   private async onUiRequest(req: ExtensionUiRequest): Promise<void> {
     const runtime = this.runtime;
@@ -1380,15 +1392,26 @@ export class ChatBridge implements vscode.Disposable {
       fallbackToNative: (request) =>
         handleExtensionUiRequest(request, this.log),
       respond: (response) => {
-        if (!this.disposed) this.runtime?.respondToExtensionUi(response);
+        // Deliberately *not* gated on `disposed`: `dispose()` cancels the dialogs this surface was showing,
+        // and pi has to hear that or the tool call stays parked behind a question nobody can answer. The
+        // request belongs to the runtime captured here, and an answer it no longer waits for is dropped.
+        runtime.respondToExtensionUi(response);
       },
       dismiss: dismissUiRequest,
       log: (text) => this.log.info(text),
+      // The alert's other half: whoever answers — this surface, another one, VS Code's own dialog — is
+      // what retires the "waiting for you" entry, so no dialog can leave it standing.
+      onSettled: (request) => approvalSettled(request.id),
     };
-    // Every bridge receives the request; the first one to claim it orchestrates for all of them.
+    // Every bridge receives the request; the first one to claim it orchestrates for all of them, and
+    // claiming is therefore also what decides that exactly one bridge notifies for a dialog.
     if (!beginUiRequest(req, deps)) return;
     const shown = showUiRequest(req, runtime);
     armUiRequest(req.id, shown);
+    // Arming first: with no surface to paint it, the question has already gone to VS Code's own modal
+    // dialog by the time this runs — and that dialog is just as invisible to a user in another
+    // application, so it is worth alerting for too.
+    approvalRequested(req, runtime.cwd);
   }
 
   private detach(): void {
@@ -1398,7 +1421,9 @@ export class ChatBridge implements vscode.Disposable {
 
   dispose(): void {
     this.disposed = true;
-    // Leave the registry first, so `countSurfacesShowing` below no longer counts this surface.
+    // Leave the registry first, so `countSurfacesShowing` below no longer counts this surface. The answers
+    // that follow do go out (`deps.respond` is not gated on `disposed`): a surface closing is not an answer,
+    // and pi would stay parked behind a question nothing can show any more.
     this.unregisterSurface();
     // Answer any dialog still open in the (now gone) surface so pi doesn't hang — unless another surface
     // is still showing the same question, where the human can answer it.
