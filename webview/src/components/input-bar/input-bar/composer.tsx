@@ -27,6 +27,7 @@ import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
 import { ContextMeter } from '../ctx-meter';
+import { CompactionHistory } from '../compaction-history';
 import { ModelPicker } from '../model-picker';
 import { ReasoningSelect } from '../reasoning-select';
 import { formatByteSize } from '../../../utils/format';
@@ -430,6 +431,8 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               onClick={() => actions.pickFiles()}
             />
             <ContextMeter />
+            {/* The compact-history list, right where the meter reports how full the context is. */}
+            <CompactionHistory />
             <span className="toolbar-hide-narrow">
               <ModelPicker />
             </span>

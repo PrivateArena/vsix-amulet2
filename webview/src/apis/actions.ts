@@ -73,6 +73,16 @@ export const actions = {
   requestStats: () => postMessage({ type: 'requestStats' }),
   /** Ask the host for a fresh `get_state` push (`state` HostMessage). */
   requestState: () => postMessage({ type: 'requestState' }),
+  /**
+   * Ask for the loaded session's compaction list (`compactions` HostMessage). The caller owns the
+   * id and only accepts the answer that carries it, so a list that lands after a session switch
+   * cannot be drawn as the new session's history.
+   */
+  requestCompactions: (requestId: number) =>
+    postMessage({ type: 'requestCompactions', requestId }),
+  /** Ask for one boundary's summary text (`compactionDetail` HostMessage), by entry id. */
+  requestCompactionDetail: (id: string) =>
+    postMessage({ type: 'requestCompactionDetail', id }),
   openForkPicker: () => postMessage({ type: 'openForkPicker' }),
   forkFromMessage: (text: string) =>
     postMessage({ type: 'forkFromMessage', text }),

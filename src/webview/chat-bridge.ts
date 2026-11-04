@@ -17,6 +17,11 @@ import type {
   WebviewMessage,
 } from '../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
+import {
+  compactionBoundaryList,
+  compactionDetailOf,
+  stripCompactionBoundaries,
+} from '../../shared/session-entries';
 import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
 import {
   stripEventImages,
@@ -40,7 +45,11 @@ import {
 } from '../notify/notify-service';
 import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
 import type { SessionManager } from '../session/session-manager';
-import { listSessions, sessionsDirForCwd } from '../session/session-store';
+import {
+  listSessions,
+  readBranchCompactions,
+  sessionsDirForCwd,
+} from '../session/session-store';
 import { handleExtensionUiRequest } from './extension-ui';
 import { listProjectFiles } from './project-files';
 import {
@@ -261,11 +270,15 @@ export class ChatBridge implements vscode.Disposable {
    * Post a history snapshot with the image payloads out of its tool results. A session
    * that read a dozen screenshots persists their bytes in full, and the UI can only ever
    * show one it was asked for — see {@link stripHistoryImagePayloads}.
+   *
+   * Compaction boundaries come out too: pi projects only the newest one, at the head of the list,
+   * which reads as a card that lost its place. Every boundary of the branch is served on demand
+   * by `requestCompactions` instead — see {@link pushCompactions}.
    */
   private postHistory(messages: HistoryMessage[]): void {
     this.post({
       type: 'history',
-      messages: stripHistoryImagePayloads(messages),
+      messages: stripHistoryImagePayloads(stripCompactionBoundaries(messages)),
     });
   }
 
@@ -378,6 +391,12 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'requestStats':
           await this.pushStats();
+          return;
+        case 'requestCompactions':
+          await this.pushCompactions(message.requestId);
+          return;
+        case 'requestCompactionDetail':
+          await this.pushCompactionDetail(message.id);
           return;
         case 'requestCommands':
           await this.pushCommands();
@@ -684,6 +703,48 @@ export class ChatBridge implements vscode.Disposable {
       });
     } catch {
       /* ignore */
+    }
+  }
+
+  /**
+   * Post the session's compaction history — the list behind the compact-history button.
+   *
+   * Nothing like this crosses the wire with the transcript: `get_messages` projects one boundary
+   * and no file lists, so the list is read off the session file, and only when the button is
+   * hovered. The summaries stay on disk until {@link pushCompactionDetail} is asked for one.
+   */
+  private async pushCompactions(requestId: number): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime?.isReady) return;
+    try {
+      const sessionFile = (await runtime.getState()).sessionFile ?? null;
+      const boundaries = compactionBoundaryList(
+        readBranchCompactions(sessionFile),
+      );
+      this.post({ type: 'compactions', requestId, sessionFile, boundaries });
+    } catch (err) {
+      this.log.warn(
+        `Failed to read the compaction history: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** Post one boundary's summary. A boundary that has gone away answers with null. */
+  private async pushCompactionDetail(id: string): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime?.isReady) return;
+    try {
+      const sessionFile = (await runtime.getState()).sessionFile ?? null;
+      const entry = readBranchCompactions(sessionFile).find((e) => e.id === id);
+      this.post({
+        type: 'compactionDetail',
+        id,
+        detail: entry ? compactionDetailOf(entry) : null,
+      });
+    } catch (err) {
+      this.log.warn(
+        `Failed to read compaction ${id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

@@ -7,22 +7,31 @@ import './compaction-card.scss';
 
 interface CompactionCardProps {
   info: CompactionInfo;
+  /**
+   * Show the summary without a click. The transcript keeps a collapsed card because a boundary is
+   * a divider, not a message; the compact-history dialog has nowhere else to put it.
+   */
+  defaultExpanded?: boolean;
 }
 
 /**
- * A compaction boundary in the transcript.
+ * A compaction boundary in the transcript, or the whole of the compact-history dialog.
  *
- * The same card serves both sources: the live `compaction_end` event, and pi's persisted
- * `compactionSummary` history entry — the latter carries only the summary and the token
- * count it replaced, so every figure beyond those is optional by design.
+ * The same card serves both sources: the live `compaction_end` event, and a boundary read back off
+ * pi's persisted entry — the latter carries the summary, the token count it replaced and the file
+ * lists, but no reason, duration or post-compaction estimate, so every figure beyond those is
+ * optional by design.
  */
-export function CompactionCard({ info }: CompactionCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export function CompactionCard({
+  info,
+  defaultExpanded = false,
+}: CompactionCardProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const summary = info.summary?.trim();
   // pi also appends `<read-files>`/`<modified-files>` blocks to the summary text itself, but
   // markdown rendering drops unknown raw HTML, so those tags are invisible here — the list
-  // rebuilt from `details` is the only readable form. History-reloaded boundaries carry no
-  // `details` and therefore show no chips.
+  // rebuilt from `details` is the only readable form, and it is what a boundary opened from the
+  // compact-history dialog shows too: the host reads those lists back off the persisted entry.
   const files = [
     ...(info.readFiles?.map((path) => ({ label: 'read', path })) ?? []),
     ...(info.modifiedFiles?.map((path) => ({ label: 'edited', path })) ?? []),

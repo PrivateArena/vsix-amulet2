@@ -164,4 +164,13 @@ parked on an answer. Rules worth keeping:
   failures arrive as `aborted: true` or `errorMessage`, never as a missing event — and
   `contextUsage.tokens` is `null` until the next assistant response, so the context meter falls back
   to the newest boundary's `estimatedTokensAfter`.
+- Compaction boundaries never come back in the transcript. `get_messages` answers with the model-context
+  **projection**, which hoists the newest boundary to the head of the list, zeroes every older one,
+  and reports only `summary`/`tokensBefore`/`timestamp` — one card at the top of a reloaded session,
+  which reads as a bug. So `postHistory` strips that role (`stripCompactionBoundaries`) and the
+  boundaries live in the compact-history list instead: `requestCompactions` answers with rows read
+  off the session file (`readBranchCompactions` in `src/session/session-store.ts`, branch-walked by
+  `shared/session-entries.ts`), and `requestCompactionDetail` fetches one summary when its row is
+  clicked. Both are on demand, so summaries never cross the wire unread. Not via `get_entries`
+  either: it returns every persisted entry (multi-megabyte) to answer one list.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

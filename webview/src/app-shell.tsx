@@ -4,6 +4,7 @@ import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
 import { projectFiles } from './stores/project-files-store';
+import { useCompactionHistoryStore } from './stores/compaction-history-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -47,6 +48,13 @@ export function Shell() {
       pickedFiles: (message) =>
         dispatch({ type: 'addPendingAttachments', attachments: message.files }),
       projectFiles: (message) => projectFiles.accept(message.result),
+      // Compaction lists and summaries are on demand, so they never enter the transcript.
+      compactions: (message) =>
+        useCompactionHistoryStore.getState().acceptList(message),
+      compactionDetail: (message) =>
+        useCompactionHistoryStore
+          .getState()
+          .acceptDetail(message.id, message.detail),
     };
 
     const off = onHostMessage((message: HostMessage) => {
@@ -60,12 +68,16 @@ export function Shell() {
   }, []);
 
   // While an extension dialog is open, Escape answers that question (deny) — it must not also abort the
-  // whole run underneath it, which is what the old unconditional binding did. Same for the session-info
-  // dialog, whose Escape only closes itself.
+  // whole run underneath it, which is what the old unconditional binding did. Same for the chat-panel
+  // dialogs, whose Escape only closes themselves.
   const sessionInfoOpen = useSessionInfoStore((s) => s.open);
+  const compactionOpen = useCompactionHistoryStore((s) => s.openId !== null);
   useEscapeKey(
     () => actions.abort(),
-    state.streaming && state.pendingUi.length === 0 && !sessionInfoOpen,
+    state.streaming &&
+      state.pendingUi.length === 0 &&
+      !sessionInfoOpen &&
+      !compactionOpen,
   );
 
   // Stay on the splash until the runtime is actually up. The runtime reports

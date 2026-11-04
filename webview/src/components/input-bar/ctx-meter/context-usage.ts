@@ -41,8 +41,8 @@ function liveContextTokens(messages: UiMessage[]): number | null {
  * The newest compaction boundary's estimate of the context it rebuilt — the only figure
  * available directly after one, since `get_session_stats` reports null usage until the next
  * assistant response lands. Only the *last* boundary counts: an older one describes a context
- * that no longer exists, and a boundary with no estimate (a cancelled compaction, or one
- * reloaded from history) honestly leaves the meter without a reading.
+ * that no longer exists, and a boundary with no estimate — a cancelled compaction, or one whose
+ * summary came from the compact-history dialog — honestly leaves the meter without a reading.
  */
 function lastCompactionEstimate(messages: UiMessage[]): number | null {
   for (let i = messages.length - 1; i >= 0; i--) {

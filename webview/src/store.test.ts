@@ -1572,7 +1572,10 @@ describe('reducer — compaction', () => {
     ).toBeUndefined();
   });
 
-  it("renders pi's persisted compactionSummary history entry as the same card", () => {
+  it("leaves pi's persisted compactionSummary line out of the transcript", () => {
+    // A boundary is not a chat message, and the projection answers with at most one of many —
+    // so nothing lands in the transcript, whose card list is owned by the live run. The compact-
+    // history list reads them all off the session file, on demand.
     const next = reducer(
       initialState,
       host({
@@ -1585,20 +1588,23 @@ describe('reducer — compaction', () => {
             tokensBefore: 148_000,
             timestamp: 1_700_000_000_000,
           },
+          {
+            role: 'compactionSummary',
+            summary: 'And again.',
+            tokensBefore: 190_000,
+            timestamp: 1_700_000_600_000,
+          },
           { role: 'user', content: 'after' },
         ] as never,
       }),
     );
 
-    expect(next.messages.map((m) => m.role)).toEqual([
-      'user',
-      'compaction',
-      'user',
+    expect(next.messages.map((m) => m.role)).toEqual(['user', 'user']);
+    expect(next.messages.every((m) => m.compaction === undefined)).toBe(true);
+    // What survives are the two chat lines, payloads intact.
+    expect(next.messages.map((m) => m.content[0])).toMatchObject([
+      { type: 'text', text: 'earlier' },
+      { type: 'text', text: 'after' },
     ]);
-    expect(next.messages[1].compaction).toMatchObject({
-      outcome: 'done',
-      summary: 'Everything before this was summarized.',
-      tokensBefore: 148_000,
-    });
   });
 });

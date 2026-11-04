@@ -306,15 +306,84 @@ export interface NestedToolCalls {
 
 /**
  * pi's projection of a persisted `compaction` entry, and what `get_messages` returns in
- * its place: everything before the boundary is pruned from the list, so this message *is*
- * the boundary a reloaded transcript has to render. There is no live counterpart — the
- * summary text itself only ever crosses the wire in `compaction_end`.
+ * its place: everything before the boundary is pruned from the list, so this message is the
+ * only trace of a compaction the wire gives back — and only of the newest one. The host
+ * filters it out of the history snapshot and answers `requestCompactions` from the session
+ * file instead, so a boundary is shown by the compact-history list, not in the transcript.
  */
 export interface CompactionSummaryMessage {
   role: 'compactionSummary';
   summary: string;
   tokensBefore: number;
   timestamp?: number;
+}
+
+/**
+ * One compaction of the current session, as the compact-history list shows it: enough to pick a
+ * boundary out of a list, and nothing that costs a summary transfer to draw. The summary text
+ * itself — kilobytes per boundary — travels only with {@link CompactionDetail}.
+ */
+export interface CompactionBoundary {
+  /** pi's persisted entry id, which is what a detail request asks back for. */
+  id: string;
+  /** When the compaction settled, in epoch ms (pi stores an ISO string). */
+  timestamp: number;
+  /** Context size the summary replaced. No `after` figure is persisted, so none is reported. */
+  tokensBefore: number;
+  /** Files the summary says were read / edited, as counts: the list counts, the dialog lists. */
+  readCount: number;
+  modifiedCount: number;
+  /** Whether pi stored any summary text at all, so a row is never a dead end by surprise. */
+  hasSummary: boolean;
+}
+
+/**
+ * The full record of one boundary: the summary text plus the detail the runtime's own projection
+ * drops. Bounded by design — `firstKeptEntryId` only says what the projection kept, and
+ * `systemMessage` is a whole prompt per boundary; neither renders.
+ */
+export interface CompactionDetail {
+  id: string;
+  timestamp: number;
+  tokensBefore: number;
+  summary: string;
+  readFiles?: string[];
+  modifiedFiles?: string[];
+  /** True when a pi extension wrote the summary instead of the built-in summariser. */
+  fromHook?: boolean;
+}
+
+/**
+ * One line of pi's persisted session file, reduced to what a branch walk needs. Entries are
+ * appended in file order, which is not branch order, so `parentId` is what identifies the
+ * path the live transcript actually sits on.
+ */
+export interface SessionEntryRef {
+  id: string;
+  parentId: string | null;
+}
+
+/**
+ * pi's persisted `type: "compaction"` entry, as written by `SessionManager.appendCompaction`.
+ * The durable counterpart of {@link CompactionResult}: it keeps the summarisation `usage` and
+ * the read/modified file lists, but records no reason and no post-compaction estimate, and its
+ * `timestamp` is an ISO string rather than the epoch ms the projected message carries. Only
+ * `summary`, `tokensBefore` and the file lists reach the UI; `firstKeptEntryId` is *why* the
+ * projection keeps one boundary, and the entry's `systemMessage` is deliberately not modelled —
+ * it is a whole system prompt per boundary, for no rendering value.
+ */
+export interface CompactionEntry {
+  type: 'compaction';
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  summary: string;
+  firstKeptEntryId?: string;
+  tokensBefore?: number;
+  details?: { readFiles?: string[]; modifiedFiles?: string[] };
+  usage?: Usage;
+  /** True when a pi extension produced the summary instead of the built-in summariser. */
+  fromHook?: boolean;
 }
 
 /**
@@ -753,6 +822,15 @@ export type WebviewMessage =
   | { type: 'renameSession'; path: string; name: string }
   | { type: 'openSessionInEditor'; path: string }
   | { type: 'requestStats' }
+  /**
+   * Ask for the compactions of the session the runtime has loaded, for the compact-history list.
+   * On demand by design: the list is read off the session file, and the summaries it stands for
+   * stay there until one is opened. `requestId` echoes back so a list that lands after a session
+   * switch is dropped instead of shown as the new session's.
+   */
+  | { type: 'requestCompactions'; requestId: number }
+  /** Ask for one boundary's summary text, by its persisted entry id. */
+  | { type: 'requestCompactionDetail'; id: string }
   | { type: 'requestCommands' }
   /**
    * Ask for the project's file paths to complete an `@`-mention. `force` skips the
@@ -833,6 +911,23 @@ export type HostMessage =
     }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'stats'; stats: SessionStats }
+  /**
+   * Answer to `requestCompactions`: the compactions of the branch the loaded session ends on,
+   * newest first, summaries left out. `sessionFile` is the file they came from, so the webview can
+   * tell a list of the old session from one of the session it is on now.
+   */
+  | {
+      type: 'compactions';
+      requestId: number;
+      sessionFile: string | null;
+      boundaries: CompactionBoundary[];
+    }
+  /**
+   * Answer to `requestCompactionDetail`. Null when that entry is no longer in the session file —
+   * the list was taken before a switch, a fork or a delete — which the dialog says out loud
+   * rather than showing an empty summary.
+   */
+  | { type: 'compactionDetail'; id: string; detail: CompactionDetail | null }
   | { type: 'commands'; commands: CommandInfo[] }
   | { type: 'projectFiles'; result: ProjectFilesResult }
   | { type: 'enterForkMode'; entryId: string; text: string }

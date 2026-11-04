@@ -35,6 +35,7 @@ import {
   toolImagesOf,
 } from '../../shared/blocks';
 import { FALLBACK_THINKING_LEVELS } from '../../shared/protocol';
+import { isCompactionSummaryMessage } from '../../shared/session-entries';
 
 export type ToolStatus = 'running' | 'done' | 'error';
 
@@ -126,8 +127,10 @@ export interface CompactionInfo {
 export interface UiMessage {
   uid: string;
   /**
-   * `compaction` is the transcript's context-window boundary: no content, and it is
-   * rendered on its own rather than inside a turn timeline.
+   * `compaction` is a context-window boundary the *live* run produced: no content, rendered on
+   * its own rather than inside a turn timeline. Boundaries of a reloaded session are absent by
+   * design — pi projects at most one of them, so they are read off the session file by the
+   * compact-history list instead, on demand.
    */
   role: 'user' | 'assistant' | 'system' | 'compaction';
   content: ContentBlock[];
@@ -198,12 +201,16 @@ export const initialState: ChatState = {
 };
 
 const DISPLAYABLE_ROLES = new Set(['user', 'assistant', 'system']);
-/** pi's persisted compaction boundary, which the transcript renders as its own card. */
-const COMPACTION_ROLE = 'compactionSummary';
 
-/** History roles the transcript renders: chat bubbles, plus pi's persisted context boundary. */
-function isDisplayableHistoryRole(role: string): boolean {
-  return DISPLAYABLE_ROLES.has(role) || role === COMPACTION_ROLE;
+/**
+ * The history lines the transcript renders: chat bubbles, and nothing else.
+ *
+ * pi's persisted `compactionSummary` line is deliberately out — it is not a message, and the
+ * projection answers with at most the newest of many, at the head of the list. Boundaries belong
+ * to the compact-history list, which reads them all off the session file on demand.
+ */
+function isTranscriptHistoryMessage(m: HistoryMessage): m is AppMessage {
+  return DISPLAYABLE_ROLES.has(m.role) && !isCompactionSummaryMessage(m);
 }
 
 let uidCounter = 0;
@@ -240,30 +247,6 @@ function toUiMessage(m: AppMessage): UiMessage {
     model: m.model,
     timestamp: m.timestamp,
     attachments: m.attachments,
-  };
-}
-
-/**
- * One history line → a transcript entry. pi persists a compaction as a
- * `role: "compactionSummary"` message carrying no content, so it becomes the durable
- * boundary card instead of a bubble; everything else is an ordinary message.
- */
-function toUiHistoryMessage(m: HistoryMessage): UiMessage {
-  if (m.role !== COMPACTION_ROLE) return toUiMessage(m);
-  return {
-    uid: nextUid(),
-    role: 'compaction',
-    content: [],
-    streaming: false,
-    timestamp: m.timestamp,
-    compaction: {
-      outcome: 'done',
-      // The persisted entry records no reason, and the live run is long gone.
-      reason: null,
-      endedAt: m.timestamp ?? Date.now(),
-      summary: m.summary,
-      tokensBefore: m.tokensBefore,
-    },
   };
 }
 
@@ -598,8 +581,8 @@ export function reducer(state: ChatState, action: Action): ChatState {
       };
     case 'history': {
       const newMessages = message.messages
-        .filter((m) => isDisplayableHistoryRole(m.role))
-        .map(toUiHistoryMessage)
+        .filter(isTranscriptHistoryMessage)
+        .map(toUiMessage)
         // Same rule as `message_start`: pi persists the leading system message
         // with its body in `sections`, so it carries no displayable blocks.
         .filter((m) => !(m.role === 'system' && m.content.length === 0));
@@ -667,8 +650,8 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       // narrow — cast to the specific event to get its optional `message` back.
       const msg = (event as MessageStartEvent).message;
       if (!msg || !DISPLAYABLE_ROLES.has(msg.role)) {
-        // Deliberately the narrow role set, not `isDisplayableHistoryRole`: only history carries
-        // a compaction boundary, and a streamed one must not become an empty chat bubble.
+        // Deliberately the narrow role set: only history carries a compaction boundary, and a
+        // streamed one must not become an empty chat bubble.
         // A settled tool result carries pi's authoritative record of the calls that
         // tool made and whether pi truncated it (count/size limits). The live list
         // is already complete for the UI, so only the flag is harvested here.
@@ -881,8 +864,8 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
       return {
         ...state,
         compaction: null,
-        // The boundary belongs in the transcript it just shortened — and on reload the same
-        // card comes out of pi's persisted `compactionSummary` history entry.
+        // The boundary belongs in the transcript it just shortened. A later reload shows none:
+        // the compact-history list reads every one of them off the session file, on demand.
         messages: [
           ...state.messages,
           {
