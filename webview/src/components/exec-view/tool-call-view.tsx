@@ -29,6 +29,7 @@ import {
   tipHead,
   toolDuration,
   toolFullText,
+  toolTarget,
 } from './tool-display';
 import {
   SUBAGENT_TITLE,
@@ -119,7 +120,9 @@ export function ExecBlock({
   // card at all: the header shows one line of it, the tooltip and the copy button the
   // whole text.
   const prompt = subagent ? subagentPrompt(effectiveArgs, subagent) : '';
-  const summary = prompt || summarize(name, effectiveArgs);
+  // A `read` names its line window too (see `readLineRange`); the header shortens the path but
+  // keeps the window, which is the part that tells the reader what the card actually covers.
+  const summary = prompt || toolTarget(name, effectiveArgs);
   const nested = childCalls(tool, tools);
   const report = subagent
     ? (subagent.report ??

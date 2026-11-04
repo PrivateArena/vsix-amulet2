@@ -8,12 +8,15 @@ import {
   childCalls,
   countCallRows,
   formatDuration,
+  readLineRange,
+  summarize,
   tipHead,
   tipTail,
   toolDuration,
   toolFullText,
   toolPreview,
   toolRowPreview,
+  toolTarget,
 } from './tool-display';
 
 describe('formatDuration', () => {
@@ -117,6 +120,45 @@ describe('toolPreview / toolFullText', () => {
       argsOmittedBytes: 40000,
     } satisfies ToolExec;
     expect(toolRowPreview(tool)).toBe('[arguments omitted, 40000 bytes]');
+  });
+});
+
+describe('readLineRange / toolTarget', () => {
+  it('names the window a partial read covers', () => {
+    expect(readLineRange({ offset: 120, limit: 42 })).toBe(':120-161');
+    // An offset with no count runs to the end of the file, a count with no offset starts at 1.
+    expect(readLineRange({ offset: 7 })).toBe(':7');
+    expect(readLineRange({ limit: 200 })).toBe(':1-200');
+    expect(
+      toolTarget('read', { path: 'a/watch_test.go', offset: 120, limit: 42 }),
+    ).toBe('a/watch_test.go:120-161');
+  });
+
+  it('says nothing about a whole-file read or a malformed argument', () => {
+    expect(readLineRange({})).toBe('');
+    // A strict schema reports an omitted optional argument as `null`, not as line 0.
+    expect(
+      readLineRange({ path: 'a.md', offset: null, limit: undefined }),
+    ).toBe('');
+    expect(readLineRange({ offset: 'two', limit: 4 })).toBe('');
+    // Accepts the numeric string a looser model writes.
+    expect(readLineRange({ offset: '10', limit: '2' })).toBe(':10-11');
+  });
+
+  it('keeps the range out of the path itself', () => {
+    // The path alone is what Copy hands out and what the code body reads a language from.
+    const args = { path: '/a/watch_test.go', offset: 120, limit: 42 };
+    expect(summarize('read', args)).toBe('/a/watch_test.go');
+    expect(toolFullText('read', args)).toBe('/a/watch_test.go');
+  });
+
+  it('is the range on a nested-call row, and nothing on another tool', () => {
+    expect(toolPreview('read', { path: 'a.md', offset: 3, limit: 8 })).toBe(
+      'a.md:3-10',
+    );
+    expect(toolTarget('write', { path: 'a.md', offset: 3, limit: 8 })).toBe(
+      'a.md',
+    );
   });
 });
 

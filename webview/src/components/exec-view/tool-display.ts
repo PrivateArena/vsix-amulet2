@@ -81,6 +81,46 @@ export function summarize(name: string, args: Record<string, unknown>): string {
   }
 }
 
+/**
+ * The line window a `read` covers, formatted as pi's own read renderer formats it (its
+ * `formatReadLineRange`): `:120-161` for an offset plus a line count, `:120` for an offset that
+ * runs to the end of the file, and nothing for a whole-file read.
+ *
+ * Returned as a suffix rather than folded into {@link summarize}, because the path alone is what
+ * the card's Copy button hands out and what the code body reads a highlight language from.
+ */
+export function readLineRange(args: Record<string, unknown>): string {
+  // A strict schema represents an omitted optional argument as `null`, which is "not given",
+  // not "line 0" — and a model that sends nothing at all must not get a bogus `:1` either.
+  const { offset, limit } = args;
+  if (offset == null && limit == null) return '';
+  const start = offset == null ? 1 : asLineNumber(offset);
+  if (start === undefined) return '';
+  if (limit == null) return `:${start}`;
+  const count = asLineNumber(limit);
+  if (count === undefined) return '';
+  return `:${start}-${start + count - 1}`;
+}
+
+/** A line number the model wrote, as a number or as the numeric string a loose schema allows. */
+function asLineNumber(value: unknown): number | undefined {
+  const num =
+    typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof num === 'number' && Number.isFinite(num) ? num : undefined;
+}
+
+/**
+ * What a card names its call by: the argument that identifies it, plus — for a `read` — the
+ * lines it covers. A card that read 42 lines of a 900-line file says which 42.
+ */
+export function toolTarget(
+  name: string,
+  args: Record<string, unknown>,
+): string {
+  const target = summarize(name, args);
+  return name === 'read' && target ? target + readLineRange(args) : target;
+}
+
 export function basename(p: string): string {
   const clean = p.replace(/[/\\]+$/, '');
   const idx = Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\'));
@@ -158,7 +198,7 @@ export function oneLine(text: string): string {
 
 /** Single-line preview for a row: newlines and indent collapse, CSS does the ellipsis. */
 export function toolPreview(name: string, args: unknown): string {
-  return oneLine(summarize(name, asRecord(args)));
+  return oneLine(toolTarget(name, asRecord(args)));
 }
 
 /**

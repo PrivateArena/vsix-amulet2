@@ -271,6 +271,44 @@ const IMAGE_REF = {
   bytes: 4096,
 };
 
+describe('read card line window', () => {
+  const readTool = (args: Record<string, unknown>): ToolExec => ({
+    toolCallId: 'r1',
+    toolName: 'read',
+    args: { path: '/a/b/watch_test.go', ...args },
+    status: 'done',
+    durationMs: 8,
+    resultText: 'func TestWatch(t *testing.T) {',
+  });
+
+  it('names the lines a partial read covered', () => {
+    const html = card({
+      name: 'read',
+      tool: readTool({ offset: 120, limit: 42 }),
+    });
+    // The header shortens the path but keeps the window, which is what says what the card
+    // covers; the tooltip carries the path in full and still ends with it.
+    expect(html).toContain('watch_test.go:120-161');
+    expect(html).toContain('title="/a/b/watch_test.go:120-161"');
+    // The code body reads its highlight language from the bare path, not from the suffixed one.
+    expect(html).toContain('language-go');
+  });
+
+  it('says nothing about a read of the whole file', () => {
+    const html = card({ name: 'read', tool: readTool({}) });
+    expect(html).toContain('>watch_test.go<');
+    expect(html).not.toContain('watch_test.go:');
+  });
+
+  it('shows the window as soon as the model has typed it', () => {
+    const html = card({
+      name: 'read',
+      partialArgs: '{"path":"notes/a.md","offset":16,"limit":8}',
+    });
+    expect(html).toContain('a.md:16-23');
+  });
+});
+
 describe('read card for an image', () => {
   const imageTool = (patch: Partial<ToolExec> = {}): ToolExec => ({
     toolCallId: 'r1',
