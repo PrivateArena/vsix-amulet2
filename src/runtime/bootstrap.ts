@@ -1,10 +1,32 @@
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import type { PiConfig } from '../config';
 
 export const ENV_AGENT_DIR = 'PI_CODING_AGENT_DIR';
+
+/**
+ * The agent directory the runtime actually reads: `amulet.agentDir` when set, else pi's own default.
+ *
+ * Two rules, both so a reader lands on the directory the child process was told to use, and not on a
+ * directory the extension host happens to be in:
+ *  - `~` is expanded, because the setting is passed to the child as `PI_CODING_AGENT_DIR` and pi
+ *    expands it;
+ *  - a relative value is resolved against {@link cwd}, which is the working directory the child is
+ *    spawned in — the extension host's own cwd is a different folder.
+ *
+ * An inherited `PI_CODING_AGENT_DIR` is never consulted: some other pi extension could have exported
+ * it, and it would point the readers at a different install than the one this extension spawns.
+ */
+export function resolveAgentDir(configuredAgentDir: string, cwd?: string): string {
+  if (!configuredAgentDir) return join(homedir(), '.pi', 'agent');
+  const expanded =
+    configuredAgentDir === '~' || configuredAgentDir.startsWith('~/')
+      ? join(homedir(), configuredAgentDir.slice(2))
+      : configuredAgentDir;
+  return cwd ? resolve(cwd, expanded) : resolve(expanded);
+}
 
 function candidateBinDirs(): string[] {
   const home = homedir();

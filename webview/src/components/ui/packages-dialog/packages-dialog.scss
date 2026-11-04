@@ -1,0 +1,652 @@
+/* Packages dialog — same surface language as the Session Info dialog, scoped to pk-*. */
+
+.pk-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above the other data dialogs (1050) so a stack of them is decided by role and not by mount order;
+     below a pi approval (1100), which can park the run this dialog's reload would restart. */
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--amulet-bg) 55%, transparent);
+  animation: pk-fade-in 0.15s ease both;
+}
+
+.pk-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: calc(100vh - 32px);
+  border: 1px solid
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
+  box-shadow:
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+  animation: pk-enter 0.2s var(--amulet-ease-out) both;
+  overflow: hidden;
+}
+
+.pk-dialog:focus,
+.pk-dialog:focus-visible {
+  outline: none;
+}
+
+.pk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--amulet-border-subtle);
+}
+
+.pk-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.pk-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Tabs are the two questions the dialog can answer; the list is the one we can answer locally. */
+.pk-tabs {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 8px 16px 0;
+}
+
+.pk-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--amulet-radius-sm);
+  background: transparent;
+  color: var(--amulet-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.pk-tab:hover {
+  background: var(--amulet-surface-hover);
+  color: var(--amulet-fg);
+}
+
+.pk-tab.is-active {
+  border-color: var(--amulet-border);
+  background: var(--amulet-surface-subtle);
+  color: var(--amulet-fg);
+  font-weight: 600;
+}
+
+.pk-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
+}
+
+.pk-tab-count {
+  padding: 0 5px;
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-surface-hover);
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-fg-muted);
+}
+
+.pk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  min-height: 8rem;
+}
+
+.pk-alert,
+.pk-progress,
+.pk-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-surface-subtle);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--amulet-fg);
+  white-space: pre-line;
+}
+
+.pk-alert.ok {
+  border-color: color-mix(in srgb, var(--amulet-success) 40%, transparent);
+  background: color-mix(in srgb, var(--amulet-success) 10%, transparent);
+}
+
+.pk-alert.error {
+  border-color: color-mix(in srgb, var(--amulet-error) 40%, transparent);
+  background: color-mix(in srgb, var(--amulet-error) 10%, transparent);
+}
+
+.pk-alert.reload {
+  border-color: color-mix(in srgb, var(--amulet-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--amulet-warning) 10%, transparent);
+}
+
+.pk-progress {
+  justify-content: space-between;
+}
+
+.pk-note {
+  color: var(--amulet-muted);
+}
+
+.pk-note code,
+.pk-alert code,
+.pk-install-foot code,
+.pk-formats code {
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+}
+
+/* --- install form --------------------------------------------------------------------------- */
+
+.pk-install {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--amulet-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-surface-subtle);
+}
+
+.pk-install-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pk-install-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.pk-install-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pk-install-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius-xs);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-fg);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.pk-install-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
+}
+
+.pk-install-scopes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-bg);
+  width: max-content;
+}
+
+.pk-scope {
+  appearance: none;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: var(--amulet-radius-xs);
+  background: transparent;
+  color: var(--amulet-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.pk-scope.is-active {
+  background: var(--amulet-surface-hover);
+  color: var(--amulet-fg);
+  font-weight: 600;
+}
+
+.pk-scope:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pk-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+}
+
+.pk-formats li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.pk-error-text {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--amulet-error);
+}
+
+.pk-install-foot {
+  margin: 0;
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+}
+
+.pk-link {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--amulet-accent-strong);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.pk-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pk-link.danger {
+  color: var(--amulet-error);
+}
+
+/* --- installed list ------------------------------------------------------------------------- */
+
+.pk-installed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The inactive tab's panel is hidden, not unmounted, so its filter and any open confirmation survive. */
+.pk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pk-panel[hidden] {
+  display: none;
+}
+
+.pk-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-muted);
+}
+
+.pk-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--amulet-fg);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.pk-filter input:focus {
+  outline: none;
+}
+
+.pk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pk-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--amulet-border);
+  border-radius: var(--amulet-radius-pill);
+  background: transparent;
+  color: var(--amulet-muted);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.pk-chip.is-active {
+  border-color: var(--amulet-accent);
+  color: var(--amulet-fg);
+}
+
+.pk-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
+}
+
+.pk-chip-count {
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-fg-faint);
+}
+
+.pk-count {
+  margin: 0;
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+}
+
+.pk-empty {
+  margin: 8px 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--amulet-muted);
+}
+
+.pk-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--amulet-border-subtle);
+}
+
+.pk-row:first-child {
+  border-top: 0;
+}
+
+/* Disabled declarations stay readable: the files are on disk, only loading is switched off. */
+.pk-row.is-off .pk-main {
+  opacity: 0.62;
+}
+
+.pk-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--amulet-radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pk-tone-0 {
+  background: color-mix(in srgb, var(--amulet-accent) 20%, transparent);
+  color: var(--amulet-accent-strong);
+}
+
+.pk-tone-1 {
+  background: color-mix(in srgb, var(--amulet-info) 20%, transparent);
+  color: var(--amulet-info);
+}
+
+.pk-tone-2 {
+  background: color-mix(in srgb, var(--amulet-warning) 20%, transparent);
+  color: var(--amulet-warning);
+}
+
+.pk-tone-3 {
+  background: color-mix(in srgb, var(--amulet-error) 18%, transparent);
+  color: var(--amulet-error);
+}
+
+.pk-tone-4 {
+  background: var(--amulet-surface-hover);
+  color: var(--amulet-fg-muted);
+}
+
+.pk-tone-5 {
+  background: var(--amulet-accent-faint);
+  color: var(--amulet-accent-strong);
+}
+
+.pk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pk-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.pk-version,
+.pk-badge {
+  padding: 0 5px;
+  border-radius: var(--amulet-radius-xs);
+  background: var(--amulet-surface-hover);
+  font-size: var(--amulet-type-xs);
+  font-weight: 400;
+  color: var(--amulet-fg-muted);
+}
+
+.pk-summary {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--amulet-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pk-source {
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+}
+
+.pk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-fg-faint);
+}
+
+.pk-warn {
+  color: var(--amulet-warning);
+}
+
+.pk-author {
+  color: var(--amulet-muted);
+}
+
+.pk-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.pk-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--amulet-muted);
+}
+
+/* A switch, not a checkbox: the declaration stays either way — only `autoload` moves. */
+.pk-switch {
+  appearance: none;
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: none;
+  border: 1px solid var(--amulet-border);
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-surface-hover);
+  cursor: pointer;
+  transition:
+    background-color var(--amulet-transition-fast),
+    border-color var(--amulet-transition-fast);
+}
+
+.pk-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--amulet-muted);
+  transition: transform var(--amulet-transition-fast);
+}
+
+.pk-switch[aria-checked='true'] {
+  border-color: var(--amulet-accent);
+  background: color-mix(in srgb, var(--amulet-accent) 32%, transparent);
+}
+
+.pk-switch[aria-checked='true']::after {
+  background: var(--amulet-accent);
+  transform: translateX(16px);
+}
+
+.pk-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amulet-focus-ring);
+}
+
+.pk-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pk-spin {
+  animation: pk-spin 1s linear infinite;
+}
+
+/* --- discover / footer ---------------------------------------------------------------------- */
+
+.pk-discover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0 16px;
+}
+
+.pk-discover-note {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--amulet-muted);
+}
+
+.pk-foot {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 0;
+  padding: 6px 16px 8px;
+  border-top: 1px solid var(--amulet-border-subtle);
+  background: var(--amulet-surface-subtle);
+}
+
+.pk-foot-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-code);
+  color: var(--amulet-fg-faint);
+}
+
+@keyframes pk-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pk-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+body.animations-disabled .pk-overlay,
+body.animations-disabled .pk-dialog,
+body.animations-disabled .pk-spin {
+  animation: none;
+}

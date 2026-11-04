@@ -1,6 +1,7 @@
 import type {
   Attachment,
   ExtensionUiResponse,
+  PackageScope,
   ProviderLoginRequest,
   ThinkingLevel,
 } from '../../../shared/protocol';
@@ -96,6 +97,38 @@ export const actions = {
   openSettings: () => postMessage({ type: 'openSettings' }),
   openExternal: (url: string) => postMessage({ type: 'openExternal', url }),
   copyText: (text: string) => postMessage({ type: 'copyText', text }),
+
+  // pi packages
+  /**
+   * Ask for the configured pi packages (`packages` HostMessage). The caller owns the id and only
+   * accepts the answer that carries it, so a listing that lands after the settings files moved — or
+   * after a folder switch changed the project file — cannot be drawn as the other one's.
+   */
+  requestPackages: (requestId: number) =>
+    postMessage({ type: 'requestPackages', requestId }),
+  installPackage: (opId: number, source: string, scope: PackageScope) =>
+    postMessage({ type: 'installPackage', opId, source, scope }),
+  removePackage: (opId: number, source: string, scope: PackageScope) =>
+    postMessage({ type: 'removePackage', opId, source, scope }),
+  setPackageEnabled: (
+    opId: number,
+    source: string,
+    index: number,
+    scope: PackageScope,
+    enabled: boolean,
+  ) =>
+    postMessage({
+      type: 'setPackageEnabled',
+      opId,
+      source,
+      index,
+      scope,
+      enabled,
+    }),
+  cancelPackageOperation: () => postMessage({ type: 'cancelPackageOperation' }),
+  /** Restart the pi runtimes so they load the declarations the settings files now hold. */
+  reloadPackages: (opId: number) =>
+    postMessage({ type: 'reloadPackages', opId }),
 
   // provider login / auth.json
   requestAuthStatus: () => postMessage({ type: 'requestAuthStatus' }),

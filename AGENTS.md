@@ -42,6 +42,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens                             |
 | Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                                                                                                                                                     |
 | "Look at this" notifications (host-side)        | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar)                      |
+| pi package manager (installed list, enable/disable, install/remove) | [`src/packages/`](src/packages/) — `package-settings.ts` reads/edits the `packages` arrays of pi's `settings.json`, `package-catalog.ts` resolves a source to its on-disk package, `package-service.ts` runs the `pi install`/`pi remove` child; state in [`webview/src/stores/packages-store.ts`](webview/src/stores/packages-store.ts), UI in [`webview/src/components/ui/packages-dialog/`](webview/src/components/ui/packages-dialog/), shared source rules in [`shared/pi-packages.ts`](shared/pi-packages.ts) |
 | React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                                                                                                                                                               |
 | React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                                                                                                                                                       |
 
@@ -193,4 +194,21 @@ parked on an answer. Rules worth keeping:
   when `handled` arrives with no dialog, toast or transcript event in sight (`visibleOutput`,
   `isUserVisibleUiMethod`), `reportSilentCommand` posts a `notice` HostMessage — one standalone
   `role: 'system'` row — rather than leaving the human with "nothing happened".
+- **Packages are settings on disk, not wire state.** pi exposes no RPC command for `settings.json`, so
+  the Packages dialog reads that file itself and edits one array element to enable or disable a
+  declaration: `autoload: false` is pi's own disable flag (the same value its `pi config` TUI writes)
+  and re-enabling collapses back to the plain string form unless resource filters remain in the entry.
+  Only install and remove shell out, because those move npm/git checkouts — and both always pass an
+  explicit trust flag (`-na` for user scope, `-l -a` for project scope), since without one `pi install`
+  loads and runs the workspace's own extensions just to work out which scope it may write. Trust itself
+  is decided the way pi decides it (`resolveProjectTrust`), not by reading `trust.json` alone: a folder
+  with nothing trust-requiring is trusted without any stored decision, which is exactly the state a
+  first `pi install -l` starts from. Nothing
+  re-reads settings mid-run, so every change is pending until the runtimes restart: `reloadRequired` is
+  a content fingerprint of the declarations against the value captured at `connect()` — never an mtime,
+  because pi rewrites `settings.json` for unrelated reasons — and `reloadPackages` applies it. Broken
+  declarations are still listed (unrecognised entry, missing checkout, unreadable file): a package pi
+  skipped at startup is the main reason a human opens the dialog. pi dedupes declarations by package
+  identity (npm name, git host/path, resolved local path) with project-before-user precedence, so rows
+  carry `identity` and `shadowed`: a row pi will ignore is marked and its controls disabled.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

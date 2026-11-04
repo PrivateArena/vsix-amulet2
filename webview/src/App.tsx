@@ -3,6 +3,7 @@ import { Modal } from './components/ui/modal';
 import { AuthDialog } from './components/ui/auth-dialog';
 import { PermissionPrompt } from './components/ui/permission-prompt';
 import { SessionInfoDialog } from './components/ui/session-info-dialog';
+import { PackagesDialog } from './components/ui/packages-dialog';
 import { CompactionDialog } from './components/ui/compaction-dialog';
 import { ChatCtx } from './contexts/chat-context';
 
@@ -18,6 +19,7 @@ export function App() {
       <PermissionPrompt />
       <SessionInfoDialog />
       <CompactionDialog />
+      <PackagesDialog />
     </ChatCtx>
   );
 }

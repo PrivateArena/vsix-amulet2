@@ -10,9 +10,11 @@ import type {
   ExtensionUiRequest,
   HistoryMessage,
   HostMessage,
+  PackageScope,
   ProviderLoginRequest,
   PromptDisposition,
   RpcEvent,
+  RuntimeStatus,
   SessionStats,
   ThinkingLevel,
   WebviewMessage,
@@ -46,6 +48,14 @@ import {
   watchRuntime,
 } from '../notify/notify-service';
 import { PI_UPDATE_ARGS, updatePi } from '../runtime/pi-updater';
+import {
+  beginPackageCommand,
+  listPackages,
+  packagesFingerprintOf,
+  runPackageCommand,
+  togglePackage,
+} from '../packages/package-service';
+import type { PackageDirs } from '../packages/package-catalog';
 import type { SessionManager } from '../session/session-manager';
 import {
   listSessions,
@@ -134,6 +144,18 @@ export class ChatBridge implements vscode.Disposable {
   /** True while a `pi update` child process is running (the menu is re-entrant). */
   private piUpdateInFlight = false;
   /**
+   * Fingerprint of the package declarations the bound runtime loaded, captured when its child started.
+   * Comparing a listing against it is what makes "pi is running something else than what the settings
+   * say now" visible — including when the edit came from a terminal and not from here.
+   */
+  private packageBaseline: string | null = null;
+  /** Runtime instance {@link packageBaseline} belongs to; a new one has loaded something new. */
+  private packageRuntime: PiRuntime | null = null;
+  /** Last phase seen from the bound runtime, so a restart is recognisable as the move into `ready`. */
+  private lastPhase: RuntimeStatus['phase'] | null = null;
+  /** The one `pi install`/`pi remove` child this bridge is waiting on, or null when idle. */
+  private packageOp: AbortController | null = null;
+  /**
    * Tool-image reads in flight, keyed by call id, position and path. A card asks again
    * whenever state says it has no pixels, so the duplicates are expected — React mounts the
    * webview tree twice in development, and two surfaces read the same file.
@@ -198,15 +220,21 @@ export class ChatBridge implements vscode.Disposable {
   async connect(): Promise<void> {
     this.detach();
     const runtime = this.sessions.getActiveRuntime();
+    // A runtime this surface has not seen yet has loaded whatever the files declare now (a child that
+    // started before this webview existed is unobservable, and this is the closest honest answer).
+    // Deliberately *not* re-captured on every connect: `restart` and a webview reload both reconnect
+    // while the same declarations stand, and re-baselining there would hide a real pending change.
+    if (this.packageRuntime !== runtime) {
+      this.packageRuntime = runtime;
+      this.packageBaseline = this.readPackagesFingerprint();
+    }
     this.runtime = runtime;
     // Run-finished alerts are installed once per runtime rather than per surface, so a run reports once
     // however many chats are open on it.
     watchRuntime(runtime);
 
     this.subscriptions.push(
-      runtime.onStatus((status) =>
-        this.post({ type: 'runtimeStatus', status }),
-      ),
+      runtime.onStatus((status) => this.onRuntimeStatus(status)),
     );
     this.subscriptions.push(
       runtime.onEvent((event) => this.onRuntimeEvent(event)),
@@ -245,6 +273,23 @@ export class ChatBridge implements vscode.Disposable {
     } catch {
       // Status already reflects the error.
     }
+  }
+
+  /**
+   * Forward a runtime status, and remember what the child loaded on the way in.
+   *
+   * The move into `ready` is the moment pi read its `settings.json`, so it is the only place the
+   * package baseline may be taken. Every attached surface sees the same transition, which is why this
+   * is not done in {@link connect}: after "Reload pi" the surfaces that did not ask for the reload
+   * would otherwise keep claiming a change that had long been applied.
+   */
+  private onRuntimeStatus(status: RuntimeStatus): void {
+    const previous = this.lastPhase;
+    this.lastPhase = status.phase;
+    if (status.phase === 'ready' && previous !== 'ready') {
+      this.packageBaseline = this.readPackagesFingerprint();
+    }
+    this.post({ type: 'runtimeStatus', status });
   }
 
   private onRuntimeEvent(event: { type: string }): void {
@@ -435,6 +480,40 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'requestProjectFiles':
           await this.pushProjectFiles(message.requestId, message.force);
+          return;
+        case 'requestPackages':
+          this.pushPackages(message.requestId);
+          return;
+        case 'installPackage':
+          await this.runPackageCli(
+            'install',
+            message.source,
+            message.scope,
+            message.opId,
+          );
+          return;
+        case 'removePackage':
+          await this.runPackageCli(
+            'remove',
+            message.source,
+            message.scope,
+            message.opId,
+          );
+          return;
+        case 'setPackageEnabled':
+          this.setPackageEnabled(
+            message.source,
+            message.index,
+            message.scope,
+            message.enabled,
+            message.opId,
+          );
+          return;
+        case 'cancelPackageOperation':
+          this.packageOp?.abort();
+          return;
+        case 'reloadPackages':
+          this.reloadPackages(message.opId);
           return;
         case 'requestSessions':
           await this.pushSessions();
@@ -1297,6 +1376,199 @@ export class ChatBridge implements vscode.Disposable {
     return Promise.race([reloaded, timeout]);
   }
 
+  // --- Pi packages -----------------------------------------------------------
+
+  /** The two directories every package question is about: the agent dir and the runtime's folder. */
+  private packageDirs(): PackageDirs {
+    return {
+      agentDir: readConfig().agentDir,
+      cwd: this.runtime?.cwd ?? this.sessions.activeCwd(),
+    };
+  }
+
+  /** What the settings files declare right now, or null when they cannot be read at all. */
+  private readPackagesFingerprint(): string | null {
+    try {
+      return packagesFingerprintOf(this.packageDirs());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Post the configured pi packages.
+   *
+   * Deliberately not gated on the runtime being ready, unlike the other pushes: a package that broke
+   * pi's startup is precisely the one the user needs to be able to disable, and the list is read off
+   * disk rather than asked of the child process.
+   */
+  private pushPackages(requestId: number): void {
+    const dirs = this.packageDirs();
+    try {
+      this.post({
+        type: 'packages',
+        result: listPackages({
+          dirs,
+          baseline: this.packageBaseline,
+          requestId,
+        }),
+      });
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      this.log.warn(`Could not list pi packages: ${text}`);
+      // Answer anyway: a dialog left spinning is worse than one that says it could not read.
+      this.post({
+        type: 'packages',
+        result: {
+          requestId,
+          cwd: dirs.cwd,
+          userSettingsFile: '',
+          projectSettingsFile: '',
+          projectTrusted: false,
+          packages: [],
+          reloadRequired: false,
+          errors: [text],
+        },
+      });
+    }
+  }
+
+  /** Flip one declaration between loaded and autoload-disabled, in its settings file. */
+  private setPackageEnabled(
+    source: string,
+    index: number,
+    scope: PackageScope,
+    enabled: boolean,
+    opId: number,
+  ): void {
+    const result = togglePackage({
+      dirs: this.packageDirs(),
+      source,
+      index,
+      scope,
+      enabled,
+      opId,
+    });
+    if (result.ok) {
+      this.log.info(
+        `${enabled ? 'Enabled' : 'Disabled'} pi package "${source}" (${scope} scope); a reload is needed to apply it.`,
+      );
+    } else {
+      this.log.warn(
+        `Could not change pi package "${source}": ${result.output}`,
+      );
+    }
+    this.post({ type: 'packageOpResult', result });
+  }
+
+  /**
+   * One `pi install`/`pi remove` child process, with its output in the log channel and its verdict
+   * in the dialog. Only one at a time per surface: two npm installs racing in the same managed
+   * prefix is how a package tree gets corrupted.
+   */
+  private async runPackageCli(
+    op: 'install' | 'remove',
+    source: string,
+    scope: PackageScope,
+    opId: number,
+  ): Promise<void> {
+    const refuse = (output: string): void =>
+      this.post({
+        type: 'packageOpResult',
+        result: { op, opId, source, ok: false, exitCode: null, output },
+      });
+
+    if (this.packageOp) {
+      refuse('Another package operation is still running in this chat.');
+      return;
+    }
+
+    const config = readConfig();
+    const dirs = this.packageDirs();
+    // Claim the install roots before spawning anything: a second chat surface (or a second window on
+    // the same agent directory) writing the same managed npm prefix is a corrupted package tree.
+    const release = beginPackageCommand(dirs);
+    if (!release) {
+      refuse(
+        'Another pi package command is already running for this folder — wait for it to finish.',
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    this.packageOp = controller;
+    this.log.info(
+      `Running ${op === 'install' ? 'pi install' : 'pi remove'} "${source}" (${scope} scope) in ${dirs.cwd}`,
+    );
+
+    try {
+      const result = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title:
+            op === 'install'
+              ? 'Installing pi package…'
+              : 'Removing pi package…',
+          cancellable: true,
+        },
+        async (progress, token) => {
+          const cancellation = token.onCancellationRequested(() =>
+            controller.abort(),
+          );
+          const run = await runPackageCommand({
+            config,
+            dirs,
+            op,
+            source,
+            scope,
+            opId,
+            signal: controller.signal,
+            onOutput: (line) => {
+              this.log.info(`pi ${op}: ${line}`);
+              if (line.trim()) progress.report({ message: line.slice(-60) });
+            },
+          });
+          cancellation.dispose();
+          return run;
+        },
+      );
+
+      if (result.ok) {
+        this.log.info(
+          `pi ${op} finished for "${source}" — reload needed to apply.`,
+        );
+      } else {
+        this.log.error(
+          `pi ${op} failed for "${source}" (exit ${result.exitCode ?? 'spawn error'}):\n${result.output ?? ''}`,
+        );
+      }
+      this.post({ type: 'packageOpResult', result });
+    } finally {
+      this.packageOp = null;
+      release();
+    }
+  }
+
+  /** Restart the runtimes so they load what the settings files declare, and report how it went. */
+  private async reloadPackages(opId: number): Promise<void> {
+    const outcome = await this.reloadPiRuntimes();
+    this.post({
+      type: 'packageOpResult',
+      result: {
+        op: 'reload',
+        opId,
+        source: '',
+        ok: outcome === 'reloaded',
+        output:
+          outcome === 'reloaded'
+            ? undefined
+            : outcome === 'stale'
+              ? 'The pi runtimes did not come back — use "Reload Pi config" or check the log.'
+              : 'Reloading the pi runtimes timed out — check the log.',
+      },
+    });
+  }
+
   // --- Provider login (auth.json) ------------------------------------------
 
   private async providerLogin(request: ProviderLoginRequest): Promise<void> {
@@ -1600,6 +1872,9 @@ export class ChatBridge implements vscode.Disposable {
 
   dispose(): void {
     this.disposed = true;
+    // A package install/remove still running belongs to a webview that is gone; its output had
+    // exactly one reader.
+    this.packageOp?.abort();
     // Leave the registry first, so `countSurfacesShowing` below no longer counts this surface. The answers
     // that follow do go out (`deps.respond` is not gated on `disposed`): a surface closing is not an answer,
     // and pi would stay parked behind a question nothing can show any more.

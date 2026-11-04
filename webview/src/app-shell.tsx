@@ -5,6 +5,7 @@ import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
 import { projectFiles } from './stores/project-files-store';
 import { useCompactionHistoryStore } from './stores/compaction-history-store';
+import { usePackagesStore } from './stores/packages-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -55,6 +56,10 @@ export function Shell() {
         useCompactionHistoryStore
           .getState()
           .acceptDetail(message.id, message.detail),
+      // Packages come from settings files, not the wire, so they live with the dialog too.
+      packages: (message) => usePackagesStore.getState().acceptList(message),
+      packageOpResult: (message) =>
+        usePackagesStore.getState().acceptOp(message.result),
     };
 
     const off = onHostMessage((message: HostMessage) => {
@@ -72,12 +77,14 @@ export function Shell() {
   // dialogs, whose Escape only closes themselves.
   const sessionInfoOpen = useSessionInfoStore((s) => s.open);
   const compactionOpen = useCompactionHistoryStore((s) => s.openId !== null);
+  const packagesOpen = usePackagesStore((s) => s.open);
   useEscapeKey(
     () => actions.abort(),
     state.streaming &&
       state.pendingUi.length === 0 &&
       !sessionInfoOpen &&
-      !compactionOpen,
+      !compactionOpen &&
+      !packagesOpen,
   );
 
   // Stay on the splash until the runtime is actually up. The runtime reports

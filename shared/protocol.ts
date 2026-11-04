@@ -888,7 +888,45 @@ export type WebviewMessage =
   | { type: 'openAuthFile' }
   | { type: 'providerLogin'; request: ProviderLoginRequest }
   | { type: 'log'; level: 'info' | 'warn' | 'error'; text: string }
-  | { type: 'extensionUiResponse'; response: ExtensionUiResponse };
+  | { type: 'extensionUiResponse'; response: ExtensionUiResponse }
+  /**
+   * Ask for the configured pi packages (`packages` HostMessage). The caller owns the id and only
+   * accepts the answer that carries it, so a listing that lands after a newer request — or after a
+   * workspace folder switch moved the project file — cannot be drawn as the other one's.
+   */
+  | { type: 'requestPackages'; requestId: number }
+  /** Run `pi install <source>` (add `-l` for {@link scope} `project`) and answer `packageOpResult`. */
+  | {
+      type: 'installPackage';
+      opId: number;
+      source: string;
+      scope: PackageScope;
+    }
+  /** Run `pi remove <source>` for {@link scope}, which also drops the declaration. */
+  | {
+      type: 'removePackage';
+      opId: number;
+      source: string;
+      scope: PackageScope;
+    }
+  /**
+   * Flip one declaration between loaded and autoload-disabled by editing the settings file that
+   * holds it — no install work, so it is instant and never touches the network. The declaration is
+   * picked by {@link index} within {@link scope}, and by source as a cross-check: two spellings of
+   * one package can sit in one file, and the row that was clicked must not edit the other.
+   */
+  | {
+      type: 'setPackageEnabled';
+      opId: number;
+      source: string;
+      index: number;
+      scope: PackageScope;
+      enabled: boolean;
+    }
+  /** Terminate the `pi install`/`pi remove` child this bridge is waiting on. */
+  | { type: 'cancelPackageOperation' }
+  /** Restart the pi runtimes so they load what the settings files now declare. */
+  | { type: 'reloadPackages'; opId: number };
 
 /** Messages sent from the extension host to the webview. */
 export type HostMessage =
@@ -952,7 +990,112 @@ export type HostMessage =
    * Retract a dialog the host already forwarded: another surface (or VS Code's native dialog) answered
    * it, so this copy must disappear without sending a second answer.
    */
-  | { type: 'extensionUiDismiss'; id: string };
+  | { type: 'extensionUiDismiss'; id: string }
+  /** Answer to `requestPackages`. */
+  | { type: 'packages'; result: PackageListResult }
+  /** Outcome of an install / remove / enable / disable / reload, shown inline in the dialog. */
+  | { type: 'packageOpResult'; result: PackageOpResult };
+
+// ============================================================================
+// Pi packages (an npm / git / local unit shipping extensions, skills, prompts, themes)
+// ============================================================================
+
+/** Which settings file holds a declaration: `~/.pi/agent/settings.json` or `<cwd>/.pi/settings.json`. */
+export type PackageScope = 'user' | 'project';
+
+/** Pi's own taxonomy of a package source string. */
+export type PackageSourceKind = 'npm' | 'git' | 'local';
+
+/** What one package can add to pi. Mirrors pi's own `RESOURCE_TYPES`. */
+export type PackageResourceKind =
+  'extensions' | 'skills' | 'prompts' | 'themes';
+
+/**
+ * One `packages` array element, read back as a row. A declaration pi cannot identify is still
+ * listed — with {@link PackageEntry.error} — because a hand-edited settings file must never make
+ * the whole list disappear.
+ */
+export interface PackageEntry {
+  /** The declaration verbatim, which is also what `pi remove` has to be given. */
+  source: string;
+  scope: PackageScope;
+  /** Position in the settings file's `packages` array, which is what an operation targets. */
+  index: number;
+  kind: PackageSourceKind;
+  /** Short display name (npm package name, git repo, or local directory). */
+  name: string;
+  /**
+   * pi's dedupe key (`npm:<name>`, `git:<host>/<path>`, `local:<resolved path>`): what identifies the
+   * package behind the source string, so two spellings of one package are recognised as such here too.
+   */
+  identity: string;
+  /** False for the object form with `autoload: false`, which is how pi disables a package. */
+  enabled: boolean;
+  /** Object form: pi narrows its resources, and `pi list` marks it `(filtered)`. */
+  filtered: boolean;
+  /** Object form with explicit `extensions`/`skills`/`prompts`/`themes` arrays worth preserving. */
+  hasFilters: boolean;
+  /** Where pi loads it from, when the source resolves to a path. */
+  installedPath?: string;
+  /** {@link installedPath} exists, so pi can actually load the package.
+   * False is the "failed to install" state pi itself only warns about at startup. */
+  installed: boolean;
+  version?: string;
+  description?: string;
+  author?: string;
+  /**
+   * What the package on disk offers, discovered from its `pi` manifest or conventional directories.
+   * A declaration-level filter (`"extensions": []`) can still hold a kind back, so this describes
+   * the package rather than what the current run will load.
+   */
+  resourceKinds?: PackageResourceKind[];
+  /**
+   * Set when pi will not act on this declaration: another entry for the same package took
+   * precedence (a project declaration replaces a user one, and an earlier one wins in one file), so
+   * toggling or removing this row could not change what loads. The reason belongs to the row, because
+   * a control that does nothing has to say why.
+   */
+  shadowed?: string;
+  /** Why this row is inert (unreadable settings file, unrecognised source). */
+  error?: string;
+}
+
+export interface PackageListResult {
+  requestId: number;
+  /** Runtime working directory, which is what `project` scope means. */
+  cwd: string;
+  userSettingsFile: string;
+  projectSettingsFile: string;
+  /** Pi reads the project file only after the folder is trusted; untrusted rows are inert. */
+  projectTrusted: boolean;
+  packages: PackageEntry[];
+  /**
+   * The declarations moved since this runtime started, so what pi loaded differs from what the
+   * files say and a reload is owed. Content, not mtime: pi itself rewrites settings.json on
+   * unrelated changes, which must not read as a pending package change.
+   */
+  reloadRequired: boolean;
+  /** Per-file read/parse failures, listed so a broken file explains its own empty row set. */
+  errors: string[];
+}
+
+export type PackageOperation =
+  'install' | 'remove' | 'enable' | 'disable' | 'reload';
+
+export interface PackageOpResult {
+  op: PackageOperation;
+  /** Id of the request that started this operation, so an answer is matched to the row that asked. */
+  opId: number;
+  /** Source the op acted on (`reload` has none). */
+  source: string;
+  ok: boolean;
+  /** Killed through `cancelPackageOperation` before finishing. */
+  cancelled?: boolean;
+  /** `pi` child exit code, or null when it never ran. Only for CLI-backed ops. */
+  exitCode?: number | null;
+  /** Failure detail or command output tail, so the dialog can say what the registry said. */
+  output?: string;
+}
 
 export interface WebviewConfig {
   /** Render reasoning blocks expanded unless the user overrode one locally. */

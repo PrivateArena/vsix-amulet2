@@ -1,5 +1,4 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type {
   CompactionEntry,
@@ -8,6 +7,7 @@ import type {
 } from '../../shared/protocol';
 import { textOfContent } from '../../shared/blocks';
 import { branchEntries } from '../../shared/session-entries';
+import { resolveAgentDir } from '../runtime/bootstrap';
 
 /**
  * Reads pi session files directly from disk to power the history browser.
@@ -47,13 +47,10 @@ interface CachedBoundaries {
 const boundaryCache = new Map<string, CachedBoundaries>();
 const BOUNDARY_CACHE_SIZE = 8;
 
-function agentDir(configuredAgentDir: string): string {
-  if (configuredAgentDir) return resolve(configuredAgentDir);
-  // Only use the env var if it was explicitly set by this extension, not
-  // inherited from a different pi extension (which would point to a
-  // different agent directory). The pi child process defaults to ~/.pi/agent
-  // when PI_CODING_AGENT_DIR is absent, so we match that here.
-  return join(homedir(), '.pi', 'agent');
+function agentDir(configuredAgentDir: string, cwd: string): string {
+  // The same directory the runtime child is told to use (`buildSpawnEnv`), so the sessions the
+  // history browser lists are the ones the runtime writes.
+  return resolveAgentDir(configuredAgentDir, cwd);
 }
 
 function encodeCwd(cwd: string): string {
@@ -65,7 +62,7 @@ export function sessionsDirForCwd(
   configuredAgentDir: string,
   cwd: string,
 ): string {
-  return join(agentDir(configuredAgentDir), 'sessions', encodeCwd(cwd));
+  return join(agentDir(configuredAgentDir, cwd), 'sessions', encodeCwd(cwd));
 }
 
 /**
