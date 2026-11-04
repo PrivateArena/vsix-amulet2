@@ -4,11 +4,13 @@ import type { ExtensionUiRequest } from '../../../../../shared/protocol';
 import { actions } from '../../../apis/actions';
 import { useChatDispatch, useChatState } from '../../../contexts/chat-context';
 import { useEscapeKey } from '../../../hooks/use-escape-key';
+import { useCopyFeedback } from '../../../hooks/use-copy-feedback';
 import { useListNavigation } from '../../../hooks/use-list-navigation';
 import { Button } from '../button';
 import {
   buildUiResponse,
   dialogDraft,
+  dialogHint,
   dialogMessage,
   dialogOptions,
   dialogTitle,
@@ -82,6 +84,7 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
   useEscapeKey(cancel);
 
   const title = dialogTitle(request);
+  const isReport = request.method === 'editor';
   const queueNote =
     queued > 0
       ? ` · ${queued} more question${queued === 1 ? '' : 's'} after this one`
@@ -90,7 +93,7 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
   return createPortal(
     <div className="pp-overlay" ref={overlayRef}>
       <div
-        className="pp-dialog"
+        className={`pp-dialog${isReport ? ' is-report' : ''}`}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}>
@@ -103,15 +106,21 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
           {request.method === 'select' && (
             <SelectBody request={request} onAnswer={answer} />
           )}
-          {(request.method === 'input' || request.method === 'editor') && (
-            <TextBody request={request} onAnswer={answer} />
+          {request.method === 'input' && (
+            <InputBody request={request} onAnswer={answer} />
+          )}
+          {request.method === 'editor' && (
+            <EditorBody request={request} onAnswer={answer} />
           )}
           {request.method === 'confirm' && (
             <ConfirmBody request={request} onAnswer={answer} />
           )}
         </div>
         <div className="pp-foot">
-          <span className="pp-hint">Esc to deny{queueNote}</span>
+          <span className="pp-hint">
+            {dialogHint(request)}
+            {queueNote}
+          </span>
           {request.method === 'select' && (
             <Button variant="ghost" size="sm" onClick={cancel}>
               Deny
@@ -204,49 +213,95 @@ function SelectBody({
   );
 }
 
-function TextBody({
+/** Single-line answer (`input`): the placeholder is the draft pi suggested. */
+function InputBody({
   request,
   onAnswer,
 }: {
   request: ExtensionUiRequest;
   onAnswer: (answer: UiAnswer) => void;
 }) {
-  const isEditor = request.method === 'editor';
   const [value, setValue] = useState(() => dialogDraft(request));
   const submit = () => onAnswer({ kind: 'value', value });
 
   return (
     <div className="pp-form">
-      {isEditor ? (
-        <textarea
-          className="pp-textarea"
-          value={value}
-          rows={8}
-          autoFocus
-          onChange={(e) => setValue(e.target.value)}
-        />
-      ) : (
-        <input
-          className="pp-input"
-          type="text"
-          value={value}
-          placeholder={dialogDraft(request) || 'Type your answer…'}
-          autoFocus
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            }
-          }}
-        />
-      )}
+      <input
+        className="pp-input"
+        type="text"
+        value={value}
+        placeholder={dialogDraft(request) || 'Type your answer…'}
+        autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
       <div className="pp-form-actions">
         <Button variant="ghost" onClick={() => onAnswer({ kind: 'cancelled' })}>
           Cancel
         </Button>
         <Button variant="primary" onClick={submit}>
-          {isEditor ? 'Save' : 'Send'}
+          Send
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * `editor` the way pi renders it: the text *is* the payload.
+ *
+ * Extensions report command output through this method — `/gatec status` and `/gatec grants`
+ * both call `ctx.ui.editor(title, body)` — so the body is monospace, scrolls, and can be
+ * copied out of the webview, which has no clipboard of its own. The keys and the two exits
+ * mirror pi's own `ExtensionEditorComponent`: Enter submits, Shift+Enter breaks the line,
+ * Escape closes. Closing answers `cancelled`, which is how pi resolves it to `undefined`;
+ * it parks the run either way, so this cannot leave the question unanswered.
+ */
+function EditorBody({
+  request,
+  onAnswer,
+}: {
+  request: ExtensionUiRequest;
+  onAnswer: (answer: UiAnswer) => void;
+}) {
+  const [value, setValue] = useState(() => dialogDraft(request));
+  const { copied, copy } = useCopyFeedback();
+  const submit = () => onAnswer({ kind: 'value', value });
+
+  return (
+    <div className="pp-form">
+      <textarea
+        className="pp-report"
+        value={value}
+        spellCheck={false}
+        rows={16}
+        autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
+      <div className="pp-form-actions">
+        <Button
+          variant="ghost"
+          className="pp-action-lead"
+          disabled={!value}
+          onClick={() => copy(value)}>
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+        <Button variant="ghost" onClick={() => onAnswer({ kind: 'cancelled' })}>
+          Close
+        </Button>
+        <Button variant="primary" onClick={submit}>
+          Send
         </Button>
       </div>
     </div>

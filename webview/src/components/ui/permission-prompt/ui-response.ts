@@ -42,6 +42,22 @@ export function dialogMessage(req: ExtensionUiRequest): string {
   return typeof req.message === 'string' ? req.message : '';
 }
 
+/**
+ * What Escape does, in the words the footer shows.
+ *
+ * On the wire every dialog exits the same way — `cancelled`, which pi resolves to "no
+ * answer" — but for an approval that *is* a refusal, while an `editor` report or an
+ * `input` is only a view being closed. Only the first deserves the word "deny".
+ */
+export function dialogHint(req: Pick<ExtensionUiRequest, 'method'>): string {
+  if (req.method === 'editor') {
+    // pi's own editor: Enter submits, Shift+Enter breaks the line.
+    return 'Enter sends · Shift+Enter newline · Esc closes without answering';
+  }
+  if (req.method === 'select' || req.method === 'confirm') return 'Esc to deny';
+  return 'Esc closes without answering';
+}
+
 /** Placeholder for `input`, initial text for `editor`. */
 export function dialogDraft(req: ExtensionUiRequest): string {
   if (req.method === 'editor') {

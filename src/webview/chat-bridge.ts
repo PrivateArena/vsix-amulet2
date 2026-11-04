@@ -11,6 +11,7 @@ import type {
   HistoryMessage,
   HostMessage,
   ProviderLoginRequest,
+  PromptDisposition,
   RpcEvent,
   SessionStats,
   ThinkingLevel,
@@ -337,15 +338,19 @@ export class ChatBridge implements vscode.Disposable {
               }
             }
           }
-          await runtime?.prompt(
-            promptText,
-            rpcImages.length > 0 ? rpcImages : undefined,
-          );
+          if (runtime) {
+            await this.submitText(
+              runtime,
+              promptText,
+              'send',
+              rpcImages.length > 0 ? rpcImages : undefined,
+            );
+          }
           await this.sendFollowUps(runtime, message.followUps);
           return;
         }
         case 'steer':
-          await runtime?.steer(message.text);
+          if (runtime) await this.submitText(runtime, message.text, 'steer');
           await this.sendFollowUps(runtime, message.followUps);
           return;
         case 'abort':
@@ -628,7 +633,7 @@ export class ChatBridge implements vscode.Disposable {
     if (!runtime || !parts || parts.length === 0) return;
     for (const part of parts) {
       try {
-        await runtime.prompt(part, undefined, 'followUp');
+        await this.submitText(runtime, part, 'follow-up');
       } catch (err) {
         const text = err instanceof Error ? err.message : String(err);
         this.log.error(`Chained prompt "${part.slice(0, 40)}" failed: ${text}`);
@@ -636,6 +641,50 @@ export class ChatBridge implements vscode.Disposable {
         return;
       }
     }
+  }
+
+  /**
+   * The one place that puts a piece of webview text in front of pi.
+   *
+   * The route matters: pi executes an extension command *only* from `prompt`, and throws
+   * on it from `steer`/`follow_up` (`_queueUserInput`, pi dist/core/agent-session.js:1770).
+   * So a recognised `/command` always leaves as a prompt — even when the webview asked to
+   * queue it, which is what pi's own TUI does with a command typed during a run. The
+   * command names come from the runtime's own `get_commands`, never from the webview, so
+   * the rule holds however the text arrived.
+   */
+  private async submitText(
+    runtime: PiRuntime,
+    text: string,
+    route: 'send' | 'steer' | 'follow-up',
+    images?: unknown[],
+  ): Promise<PromptDisposition | undefined> {
+    if (text.startsWith('/') && runtime.isExtensionCommand(text)) {
+      if (route !== 'send') {
+        this.log.info(
+          `"${text.slice(0, 40)}" sent as a prompt instead of queued: pi runs ` +
+            `extension commands immediately and rejects them on the queueing path.`,
+        );
+      }
+      const disposition = await runtime.prompt(text, images);
+      if (disposition === 'handled') {
+        // Nothing follows this: no run, so no events, and the extension's own dialogs
+        // (if it opened any) are the whole interaction.
+        this.log.info(
+          `pi handled "${text.slice(0, 40)}" as an extension command (no run started).`,
+        );
+      }
+      return disposition;
+    }
+    if (route === 'steer') {
+      await runtime.steer(text);
+      return undefined;
+    }
+    return runtime.prompt(
+      text,
+      images,
+      route === 'follow-up' ? 'followUp' : undefined,
+    );
   }
 
   private async pushState(): Promise<void> {
@@ -1038,7 +1087,7 @@ export class ChatBridge implements vscode.Disposable {
     this.postHistory(messages as HistoryMessage[]);
     // A fork starts a new session, which re-resolves the model and its levels.
     void this.pushThinkingLevels();
-    await runtime.prompt(text);
+    await this.submitText(runtime, text, 'send');
   }
 
   private async exportChat(): Promise<void> {

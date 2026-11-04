@@ -205,6 +205,14 @@ export interface ModelInfo {
 /** Queueing behaviour for `prompt` when the agent is already running. */
 export type PromptStreamingBehavior = 'steer' | 'followUp';
 
+/**
+ * What pi did with a `prompt` command, in its response data.
+ *
+ * `handled` means an extension command or an input handler consumed the text: no run
+ * starts, so no `agent_start`/`agent_settled` will ever arrive (`docs/rpc.md`).
+ */
+export type PromptDisposition = 'handled' | 'queued' | 'started';
+
 export type RpcCommand =
   | {
       type: 'prompt';

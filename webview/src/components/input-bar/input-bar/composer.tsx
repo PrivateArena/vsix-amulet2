@@ -28,6 +28,7 @@ import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
 import { ContextMeter } from '../ctx-meter';
 import { CompactionHistory } from '../compaction-history';
+import { ExtensionCommands } from '../extension-commands';
 import { ModelPicker } from '../model-picker';
 import { ReasoningSelect } from '../reasoning-select';
 import { formatByteSize } from '../../../utils/format';
@@ -269,6 +270,19 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
         useComposerStore.getState().register({
           insertText: (text) =>
             setInput((v) => (v && !v.endsWith(' ') ? `${v} ` : v) + text),
+          // Reads the textarea rather than the closure: this registration happens once, so
+          // the `input` it captured is forever empty, while the element always holds the
+          // draft the user is looking at.
+          prefixDraft: (text) => {
+            const current = localRef.current?.value ?? '';
+            if (current.startsWith(text)) {
+              localRef.current?.focus();
+              return;
+            }
+            setInput(text + current);
+            // Park the caret after `/name ` so the arguments can be typed straight away.
+            pendingCaret.current = text.length;
+          },
           quote: (text) => {
             setInput((v) => appendToDraft(v, toBlockquote(text)));
             // Answer the quote right away: land the caret after the pasted block.
@@ -433,6 +447,8 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             <ContextMeter />
             {/* The compact-history list, right where the meter reports how full the context is. */}
             <CompactionHistory />
+            {/* pi's extension commands, for the same reason: they are runtime state, not prose. */}
+            <ExtensionCommands />
             <span className="toolbar-hide-narrow">
               <ModelPicker />
             </span>

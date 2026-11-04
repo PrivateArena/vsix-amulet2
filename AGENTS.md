@@ -26,24 +26,24 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 
 ### Key files
 
-| Concern                                         | Location                                                                                                                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Shared protocol types (RPC + Host↔Webview)      | [`shared/protocol.ts`](shared/protocol.ts)                                                                                                                               |
-| Extension entry / activation                    | [`src/extension.ts`](src/extension.ts)                                                                                                                                   |
-| RPC framing + typed client                      | [`src/rpc/`](src/rpc/) (`jsonl.ts`, `rpc-client.ts`, `rpc-process.ts`)                                                                                                   |
-| Runtime bootstrap (binary resolution, env/PATH) | [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts)                                                                                                                   |
-| Runtime lifecycle + crash recovery              | [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)                                                                                                                 |
-| Session/runtime pool                            | [`src/session/session-manager.ts`](src/session/session-manager.ts)                                                                                                       |
-| Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                                                                                                     |
-| Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                             |
-| Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                               |
-| Right-click menu on the chat body                | [`webview/src/components/entry-list/transcript-menu.tsx`](webview/src/components/entry-list/transcript-menu.tsx), sources in [`webview/src/utils/md-units.ts`](webview/src/utils/md-units.ts), DOM→text in [`webview/src/utils/dom-markdown.ts`](webview/src/utils/dom-markdown.ts) |
+| Concern                                         | Location                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared protocol types (RPC + Host↔Webview)      | [`shared/protocol.ts`](shared/protocol.ts)                                                                                                                                                                                                                                                                 |
+| Extension entry / activation                    | [`src/extension.ts`](src/extension.ts)                                                                                                                                                                                                                                                                     |
+| RPC framing + typed client                      | [`src/rpc/`](src/rpc/) (`jsonl.ts`, `rpc-client.ts`, `rpc-process.ts`)                                                                                                                                                                                                                                     |
+| Runtime bootstrap (binary resolution, env/PATH) | [`src/runtime/bootstrap.ts`](src/runtime/bootstrap.ts)                                                                                                                                                                                                                                                     |
+| Runtime lifecycle + crash recovery              | [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)                                                                                                                                                                                                                                                   |
+| Session/runtime pool                            | [`src/session/session-manager.ts`](src/session/session-manager.ts)                                                                                                                                                                                                                                         |
+| Sidebar webview provider                        | [`src/provider.ts`](src/provider.ts)                                                                                                                                                                                                                                                                       |
+| Editor-tab chat panels                          | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                                                                                                                                                               |
+| Host↔webview bridge                             | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                                                                                                                                                                 |
+| Right-click menu on the chat body               | [`webview/src/components/entry-list/transcript-menu.tsx`](webview/src/components/entry-list/transcript-menu.tsx), sources in [`webview/src/utils/md-units.ts`](webview/src/utils/md-units.ts), DOM→text in [`webview/src/utils/dom-markdown.ts`](webview/src/utils/dom-markdown.ts)                        |
 | pi extension dialogs (pi-gate approvals)        | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts) (one owner, ack watchdog, single answer), [`src/webview/ui-surfaces.ts`](src/webview/ui-surfaces.ts) (surface registry + fan-out), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/) |
-| Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens |
-| Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                   |
-| "Look at this" notifications (host-side)         | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar) |
-| React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                             |
-| React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                     |
+| Image results of a tool call                    | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens                             |
+| Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                                                                                                                                                     |
+| "Look at this" notifications (host-side)        | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar)                      |
+| React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                                                                                                                                                               |
+| React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                                                                                                                                                       |
 
 ## Build & dev commands
 
@@ -128,7 +128,7 @@ parked on an answer. Rules worth keeping:
   the text in argv or (on Windows) in the environment, so no report body is ever parsed. The freedesktop
   urgency vocabulary is `low | normal | critical` and nothing else — an unknown level exits 1, which reads as
   "no notifier here". An unanswered dialog is `critical` because that is the tier that survives
-  Do-Not-Disturb, and since servers may clip a notification body, the *title* carries the quoted command.
+  Do-Not-Disturb, and since servers may clip a notification body, the _title_ carries the quoted command.
   Positional text is `--`-terminated: a report or folder name starting with `-` would otherwise be eaten by
   getopt, and a notifier that refuses three notifications in a row (too old for our options) is dropped
   rather than respawned for every alert. An unanswered dialog is tracked per runtime, because a restart of one workspace folder must not
@@ -173,4 +173,19 @@ parked on an answer. Rules worth keeping:
   `shared/session-entries.ts`), and `requestCompactionDetail` fetches one summary when its row is
   clicked. Both are on demand, so summaries never cross the wire unread. Not via `get_entries`
   either: it returns every persisted entry (multi-megabyte) to answer one list.
+- An extension command is **prompt-only text and has no output channel**. There is no "run command"
+  RPC: `/name args` executes because pi's `prompt` matches its first token against the registered
+  extension commands, and `steer`/`follow_up` reject such text outright (pi 1.5.0: `Extension command
+"/gatec" cannot be queued`). So every webview submission goes through `submitText` in
+  [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts), which sends a recognised command as a
+  `prompt` even when the webview asked to queue it; the names come from `get_commands` cached on the
+  runtime (`isExtensionCommand`) and matched by [`shared/command-invocation.ts`](shared/command-invocation.ts),
+  which mirrors pi's rule exactly (offset 0, name up to the first literal space, case-sensitive). A
+  recognised command answers `disposition: 'handled'`, writes nothing to the session and emits **no
+  events**, so the extension's own `extension_ui_request`s are the only thing the user can see — which
+  is why command output is a dialog concern, not a transcript one. `get_commands` ships
+  `name`/`description`/`source`/`sourceInfo` only: argument hints (`getArgumentCompletions`,
+  `argumentHint`) never cross the wire, so no client may build an argument menu — the launcher writes
+  the invocation into the composer and the human finishes it. `ctx.ui.custom()` is a runtime-side no-op
+  in RPC mode, so a TUI-only extension (`/system-prompt`) shows nothing in any client.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

@@ -3,6 +3,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
+  PromptDisposition,
   PromptStreamingBehavior,
   RpcCommand,
   RpcCommandType,
@@ -181,8 +182,14 @@ export class RpcClient {
     message: string,
     images?: unknown[],
     streamingBehavior?: PromptStreamingBehavior,
-  ): Promise<void> {
-    await this.call({ type: 'prompt', message, images, streamingBehavior });
+  ): Promise<PromptDisposition | undefined> {
+    const data = await this.call<{ disposition?: PromptDisposition }>({
+      type: 'prompt',
+      message,
+      images,
+      streamingBehavior,
+    });
+    return data?.disposition;
   }
   async steer(message: string, images?: unknown[]): Promise<void> {
     await this.call({ type: 'steer', message, images });

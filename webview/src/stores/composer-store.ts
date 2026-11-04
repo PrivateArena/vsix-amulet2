@@ -10,6 +10,12 @@ export interface ComposerApi {
   /** Append to the current draft, keeping whatever the user already typed. */
   insertText: (text: string) => void;
   /**
+   * Put text at the *head* of the draft. pi anchors a slash command at offset 0, so an
+   * appended `/name` would be read as prose; this is the insertion that keeps it a command.
+   * Idempotent: an already-prefixed draft is left alone.
+   */
+  prefixDraft: (text: string) => void;
+  /**
    * Drop a quoted passage in under the draft, so a right-click "Quote"/"Reply" on the
    * transcript reads as a reply block rather than as one run-on line.
    */
@@ -61,6 +67,8 @@ export const useComposerStore = create<ComposerStore>((set, get) => ({
 export const composer = {
   insertText: (text: string) =>
     useComposerStore.getState().run((api) => api.insertText(text)),
+  prefixDraft: (text: string) =>
+    useComposerStore.getState().run((api) => api.prefixDraft(text)),
   quote: (text: string) =>
     useComposerStore.getState().run((api) => api.quote(text)),
   setText: (text: string) =>

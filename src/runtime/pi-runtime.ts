@@ -1,4 +1,5 @@
 import { RpcClient } from '../rpc/rpc-client';
+import { parseCommandInvocation } from '../../shared/command-invocation';
 import {
   buildSpawnEnv,
   buildStartupArgs,
@@ -10,6 +11,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
+  PromptDisposition,
   PromptStreamingBehavior,
   RpcEvent,
   RuntimeStatus,
@@ -44,6 +46,13 @@ export class PiRuntime {
   /** Cached `pi --version`, re-resolved only when the resolved binary changes. */
   private agentVersion = '';
   private agentVersionFor = '';
+  /**
+   * Names of the extension commands this child process reported, refreshed by every
+   * {@link getCommands}. They belong to the process, not to a surface, which is why the
+   * runtime owns them: pi only runs `/name` text that matches one of these, and the host
+   * must know that before it chooses between `prompt` and `steer`.
+   */
+  private extensionCommands = new Set<string>();
 
   constructor(
     readonly cwd: string,
@@ -109,6 +118,9 @@ export class PiRuntime {
     this.log.info(
       `Starting pi runtime: ${resolved.command} (cwd: ${this.cwd})`,
     );
+    // A new child process loads its own extensions; commands from the previous one
+    // must not decide how text is routed to this one.
+    this.extensionCommands.clear();
     if (!resolved.resolved) {
       this.log.warn(
         `Could not resolve "${config.binaryPath}" to an absolute path. Relying on PATH. ` +
@@ -148,6 +160,10 @@ export class PiRuntime {
       this.log.info(
         `pi runtime ready. Model: ${state.model?.name ?? '(none)'}.`,
       );
+      // Prime the extension-command names this process registered: the host has to know them
+      // before it routes text (`isExtensionCommand`), and a command is worthless if the
+      // first one typed after startup is queued instead of run.
+      void this.getCommands().catch(() => undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.log.error(`Failed to start pi runtime: ${message}`);
@@ -249,7 +265,7 @@ export class PiRuntime {
     message: string,
     images?: unknown[],
     streamingBehavior?: PromptStreamingBehavior,
-  ): Promise<unknown> {
+  ): Promise<PromptDisposition | undefined> {
     return this.requireClient().prompt(message, images, streamingBehavior);
   }
   steer(message: string): Promise<unknown> {
@@ -323,7 +339,26 @@ export class PiRuntime {
   getCommands(): Promise<
     Array<{ name: string; description?: string; source: string }>
   > {
-    return this.requireClient().getCommands();
+    return this.requireClient()
+      .getCommands()
+      .then((commands) => {
+        this.extensionCommands = new Set(
+          commands
+            .filter((c) => c.source === 'extension')
+            .map((c) => c.name)
+            .filter((name) => !!name),
+        );
+        return commands;
+      });
+  }
+  /**
+   * Whether pi would run this text as a registered extension command instead of
+   * sending it to the model. False whenever the list has never been fetched — then
+   * the caller keeps whatever route it chose, which is the pre-existing behaviour.
+   */
+  isExtensionCommand(text: string): boolean {
+    const invocation = parseCommandInvocation(text);
+    return !!invocation && this.extensionCommands.has(invocation.name);
   }
   respondToExtensionUi(response: ExtensionUiResponse): void {
     this.client?.respondToExtensionUi(response);

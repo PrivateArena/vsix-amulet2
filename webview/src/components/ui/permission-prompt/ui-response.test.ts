@@ -6,6 +6,7 @@ import {
 import {
   buildUiResponse,
   dialogDraft,
+  dialogHint,
   dialogMessage,
   dialogOptions,
   dialogTitle,
@@ -123,6 +124,24 @@ describe('MODAL_UI_METHODS', () => {
   it('lists the four dialog methods, which are the ones the host must route to exactly one surface', () => {
     expect([...MODAL_UI_METHODS].sort()).toEqual(
       ['confirm', 'editor', 'input', 'select'].sort(),
+    );
+  });
+});
+
+describe('dialogHint', () => {
+  it('calls Escape a deny only where "no answer" really denies', () => {
+    expect(dialogHint(req('select'))).toBe('Esc to deny');
+    expect(dialogHint(req('confirm'))).toBe('Esc to deny');
+  });
+
+  it('calls Escape a close on the two methods that carry text, not consent', () => {
+    // pi-gate reports command output through `editor`, so closing that view is not a refusal.
+    expect(dialogHint(req('input'))).toBe('Esc closes without answering');
+  });
+
+  it("spells out pi's editor keys, since Enter is not a newline there", () => {
+    expect(dialogHint(req('editor'))).toBe(
+      'Enter sends · Shift+Enter newline · Esc closes without answering',
     );
   });
 });

@@ -183,6 +183,22 @@ webview (React)              host (Node)                                pi --mod
     `summarization_retry_*` and a cancel (`abort` cancels a compaction), not a token count.
     The meter has the same gap: `contextUsage.tokens` is null right after a compaction, so
     `contextUsageOf` falls back to the newest boundary's `estimatedTokensAfter`.
+11. **An extension command is a prompt, never queued input, and it has no output.** pi has
+    no "run command" RPC: `/name args` executes because the `prompt` path matches its first
+    token against the registered commands, and `steer`/`follow_up` **reject** such text
+    (verified against pi 1.5.0: `Extension command "/gatec" cannot be queued`). So
+    `submitText` in `chat-bridge.ts` is the only route to the runtime and it re-routes a
+    recognised command to `prompt` even when the webview asked to queue it — the names come
+    from `get_commands`, cached per process on `PiRuntime`, warmed up at start, and matched
+    by `shared/command-invocation.ts`, which mirrors pi's matcher (offset 0, name up to the
+    first literal space, case-sensitive). A recognised command answers `disposition:`
+    `"handled"`, writes nothing to the session and emits no events at all; its only visible
+    product is the `extension_ui_request`s its handler chose, so command output can _only_
+    reach the UI through the dialog path. `get_commands` carries `name`/`description`/
+    `source`/`sourceInfo` and nothing else — argument hints never cross the wire, which is
+    why the launcher writes the invocation into the composer instead of building an
+    argument menu. And `ctx.ui.custom()` is a runtime-side no-op in RPC mode, so a TUI-only
+    extension (`/system-prompt`) shows nothing in any client — not a bug Amulet can fix.
 
 ## Read Triggers
 
@@ -198,6 +214,7 @@ webview (React)              host (Node)                                pi --mod
 | Change the context meter                                        | `webview/src/components/input-bar/ctx-meter/context-usage.ts`, `src/webview/chat-bridge.ts` (`pushStats`)                                                                                                                                                                                        |
 | Change compaction (progress, card, timeout, cancel)             | `src/rpc/rpc-client.ts` (`LONG_RUNNING_COMMANDS`), `src/webview/chat-bridge.ts` (`runCompact`), `shared/session-entries.ts`, `src/session/session-store.ts`, `webview/src/store.ts`, `entry-list/compaction-card/`                                                                               |
 | Change the compact-history list / boundary dialog               | `shared/session-entries.ts`, `src/session/session-store.ts` (`readBranchCompactions`), `src/webview/chat-bridge.ts` (`pushCompactions`/`pushCompactionDetail`), `webview/src/stores/compaction-history-store.ts`, `components/input-bar/compaction-history/`, `components/ui/compaction-dialog/` |
+| Run or route a pi extension command (`/gatec`, `/subagentc`)    | `shared/command-invocation.ts`, `src/runtime/pi-runtime.ts` (`isExtensionCommand`, command cache warm-up in `doStart`), `src/webview/chat-bridge.ts` (`submitText`), `webview/src/components/input-bar/extension-commands/`                                                                      |
 | Show or change what an image tool result does to the wire       | `shared/blocks.ts` (`stripEventImages`/`stripHistoryImagePayloads`), `src/webview/tool-image.ts`, `src/webview/chat-bridge.ts` (`loadToolImage`)                                                                                                                                                 |
 | Add/rename a setting                                            | `package.json` (`contributes.configuration`), `src/config.ts` (`SECTION`, `affectsRestart`)                                                                                                                                                                                                      |
 | Change when Amulet interrupts the user                          | `src/notify/` (`run-report.ts` for the report event, `approval-prompt.ts` for the dialog kinds, `system-channel.ts` for the OS notifier)                                                                                                                                                         |

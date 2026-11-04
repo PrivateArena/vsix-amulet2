@@ -145,8 +145,7 @@
   color: color-mix(in srgb, var(--amulet-fg) 78%, var(--amulet-muted));
 }
 
-.pp-input,
-.pp-textarea {
+.pp-input {
   box-sizing: border-box;
   width: 100%;
   padding: 7px 9px;
@@ -159,10 +158,43 @@
   resize: vertical;
 }
 
-.pp-input:focus,
-.pp-textarea:focus {
+.pp-input:focus {
   outline: none;
   border-color: color-mix(in srgb, var(--amulet-accent) 60%, transparent);
+}
+
+/* An `editor` request carries a report, not a form field: pi-gate's `/gatec status` and
+   `/gatec grants` both arrive through it. Give that text the width it asks for. */
+.pp-dialog.is-report {
+  width: min(760px, 100%);
+}
+
+/* pi renders the same payload in its own Editor: monospace, verbatim, wrapping, scrolling
+   inside itself so the dialog keeps its head and foot on screen. */
+.pp-report {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 240px;
+  max-height: 52vh;
+  padding: 8px 10px;
+  border: 1px solid var(--amulet-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-bg);
+  color: var(--amulet-fg);
+  font-family: var(--amulet-monospace);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.pp-report:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--amulet-accent) 60%, transparent);
+}
+
+/* Copy acts on the text, not on the answer, so it sits away from the exits. */
+.pp-action-lead {
+  margin-inline-end: auto;
 }
 
 .pp-form-actions {
