@@ -68,6 +68,20 @@ export function isModalUiMethod(method: string): boolean {
   return MODAL_METHOD_SET.has(method);
 }
 
+/** The one fire-and-forget method that puts text in front of the human. */
+const TOAST_UI_METHODS: ReadonlySet<string> = new Set(['notify']);
+
+/**
+ * True when this method shows the human something: a dialog in the chat, or a toast.
+ *
+ * `setStatus` / `setWidget` / `setTitle` / `set_editor_text` are chrome — a footer line or a
+ * widget Amulet does not render — so a command whose only output is one of those has still left
+ * the transcript silent, which is what {@link isUserVisibleUiMethod} is asked to tell apart.
+ */
+export function isUserVisibleUiMethod(method: string): boolean {
+  return isModalUiMethod(method) || TOAST_UI_METHODS.has(method);
+}
+
 /** True while this module is still tracking `id` (diagnostics and tests). */
 export function isTrackingUiRequest(id: string): boolean {
   return pending.has(id);

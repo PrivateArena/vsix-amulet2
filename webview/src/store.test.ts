@@ -601,6 +601,24 @@ describe('reducer — local UI actions', () => {
   });
 });
 
+describe('reducer — host notice', () => {
+  it('appends a settled, standalone system row carrying the text', () => {
+    const next = reducer(
+      initialState,
+      host({ type: 'notice', text: '/system-prompt ran, but sent nothing.' }),
+    );
+    expect(next.messages).toHaveLength(1);
+    const [row] = next.messages;
+    expect(row.role).toBe('system');
+    expect(row.streaming).toBe(false);
+    // `standalone` is what keeps the row out of the turn above it in the transcript.
+    expect(row.standalone).toBe(true);
+    expect(row.content).toEqual([
+      { type: 'text', text: '/system-prompt ran, but sent nothing.' },
+    ]);
+  });
+});
+
 describe('reducer — pi 1.4.0 wire shapes', () => {
   // Recorded from `pi --mode rpc` on a real run (tmp/rpc-probe.mjs). The shapes
   // that a block-array-only reducer used to reject: the system message carries a

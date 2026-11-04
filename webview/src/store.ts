@@ -147,6 +147,11 @@ export interface UiMessage {
   startedAt?: number;
   firstTokenAt?: number;
   attachments?: import('../../shared/protocol').Attachment[];
+  /**
+   * Set for a host-injected line (`notice`): it is not part of the reply above it, so the
+   * transcript groups it as its own block instead of appending it to the previous turn.
+   */
+  standalone?: boolean;
   /** Set for `role === 'compaction'`: what one compaction cost and produced. */
   compaction?: CompactionInfo;
 }
@@ -627,6 +632,23 @@ export function reducer(state: ChatState, action: Action): ChatState {
       return applyToolImageResult(state, message);
     case 'rpcEvent':
       return applyRpcEvent(state, message.event);
+    case 'notice':
+      // One line from the host, rendered as a system row of its own: pi emitted nothing, and
+      // "nothing happened" is only honest if the chat says so.
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            uid: nextUid(),
+            role: 'system',
+            content: [{ type: 'text', text: message.text }],
+            streaming: false,
+            standalone: true,
+            timestamp: Date.now(),
+          },
+        ],
+      };
     // focusInput / insertText / enterForkMode / pickedFiles / projectFiles are handled in
     // the Shell before reaching the reducer; anything else is a no-op here.
     default:

@@ -187,5 +187,10 @@ parked on an answer. Rules worth keeping:
   `name`/`description`/`source`/`sourceInfo` only: argument hints (`getArgumentCompletions`,
   `argumentHint`) never cross the wire, so no client may build an argument menu — the launcher writes
   the invocation into the composer and the human finishes it. `ctx.ui.custom()` is a runtime-side no-op
-  in RPC mode, so a TUI-only extension (`/system-prompt`) shows nothing in any client.
+  in RPC mode, so a TUI-only extension (`/system-prompt`) shows nothing in any client — not a bug
+  Amulet can fix. Its `prompt` response only lands when the handler returns, so a dialog parks it:
+  `submitText` sends it with `longRunning: true` (the 15-minute budget, not the 30s default). And
+  when `handled` arrives with no dialog, toast or transcript event in sight (`visibleOutput`,
+  `isUserVisibleUiMethod`), `reportSilentCommand` posts a `notice` HostMessage — one standalone
+  `role: 'system'` row — rather than leaving the human with "nothing happened".
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.

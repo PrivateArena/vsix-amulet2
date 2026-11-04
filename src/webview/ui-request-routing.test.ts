@@ -11,6 +11,7 @@ import {
   beginUiRequest,
   isModalUiMethod,
   isTrackingUiRequest,
+  isUserVisibleUiMethod,
   pendingUiRequestCount,
   releaseUiRequest,
   UI_DIALOG_ACK_TIMEOUT_MS,
@@ -89,6 +90,26 @@ describe('isModalUiMethod', () => {
     }
     for (const method of ['notify', 'setStatus', 'setTitle', 'setWidget']) {
       expect(isModalUiMethod(method)).toBe(false);
+    }
+  });
+});
+
+describe('isUserVisibleUiMethod', () => {
+  it('counts a dialog or a toast as output the human sees', () => {
+    for (const method of [...MODAL_UI_METHODS, 'notify']) {
+      expect(isUserVisibleUiMethod(method)).toBe(true);
+    }
+  });
+
+  it('does not count chrome the transcript never shows', () => {
+    for (const method of [
+      'setStatus',
+      'setTitle',
+      'setWidget',
+      'set_editor_text',
+      'setWorkingMessage',
+    ]) {
+      expect(isUserVisibleUiMethod(method)).toBe(false);
     }
   });
 });

@@ -902,6 +902,12 @@ export type HostMessage =
   | { type: 'config'; config: WebviewConfig }
   | { type: 'focusInput' }
   | { type: 'insertText'; text: string }
+  /**
+   * One line the host has to say about the transcript, that pi never emitted: a host-side
+   * observation the human would otherwise experience as silence. Renders as its own
+   * `role: 'system'` row, outside anybody's reply.
+   */
+  | { type: 'notice'; text: string }
   | { type: 'pickedFiles'; files: Attachment[] }
   /**
    * Answer to `loadToolImage`, keyed by the call and position that asked for it. `error`

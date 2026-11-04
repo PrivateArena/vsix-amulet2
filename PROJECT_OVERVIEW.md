@@ -198,7 +198,17 @@ webview (React)              host (Node)                                pi --mod
     `source`/`sourceInfo` and nothing else — argument hints never cross the wire, which is
     why the launcher writes the invocation into the composer instead of building an
     argument menu. And `ctx.ui.custom()` is a runtime-side no-op in RPC mode, so a TUI-only
-    extension (`/system-prompt`) shows nothing in any client — not a bug Amulet can fix.
+    extension (`/system-prompt`) shows nothing in any client — not a bug Amulet can fix (Pendant
+    renders it because it embeds the SDK and pipes real pi-tui frames into xterm.js; it is not an
+    RPC client). Two consequences of `handled`, both owned by `submitText`:
+    - the response only lands when the handler **returns**, so a dialog it opened parks the
+      `prompt` reply for as long as the human takes — hence the `longRunning` budget in
+      `rpc-client.ts`, since the 30s default would fail a command that worked;
+    - nothing is guaranteed to be visible, so `reportSilentCommand` compares the bridge's
+      `visibleOutput` counter (dialogs, toasts, transcript events — `isUserVisibleUiMethod` plus
+      `VISIBLE_EVENT_TYPES`) across the call and, when it did not move, posts a `notice`
+      HostMessage: one standalone `role: 'system'` transcript row. Re-checked after a grace
+      period, because a handler may `notify` without awaiting it.
 
 ## Read Triggers
 

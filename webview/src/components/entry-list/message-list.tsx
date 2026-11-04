@@ -25,7 +25,8 @@ type TranscriptBlock =
  * a prompt and its reply together as one scrollable block — and gives the topbar
  * navigator a stable jump target per turn (`data-turn`). Messages before the first
  * user turn form a leading, header-less group. A compaction closes the turn it lands
- * in and renders on its own: it is a context boundary, not part of anybody's reply.
+ * in and renders on its own: it is a context boundary, not part of anybody's reply. A
+ * host `notice` (`standalone`) starts a group for the same reason.
  */
 function groupTranscript(messages: UiMessage[]): TranscriptBlock[] {
   const blocks: TranscriptBlock[] = [];
@@ -35,7 +36,12 @@ function groupTranscript(messages: UiMessage[]): TranscriptBlock[] {
       continue;
     }
     const last = blocks[blocks.length - 1];
-    if (m.role === 'user' || !last || last.kind === 'compaction') {
+    if (
+      m.role === 'user' ||
+      m.standalone ||
+      !last ||
+      last.kind === 'compaction'
+    ) {
       blocks.push({ kind: 'turn', key: m.uid, items: [m] });
     } else {
       last.items.push(m);

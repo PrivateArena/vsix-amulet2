@@ -260,13 +260,22 @@ export class PiRuntime {
   /**
    * Send a prompt. `streamingBehavior` decides what pi does when a run is
    * already in flight (`queued` disposition) — it is ignored while idle.
+   *
+   * `longRunning` is for an extension command, whose response only lands when the handler
+   * returns: a dialog it opened parks that reply for as long as the human takes to answer.
    */
   prompt(
     message: string,
     images?: unknown[],
     streamingBehavior?: PromptStreamingBehavior,
+    options?: { longRunning?: boolean },
   ): Promise<PromptDisposition | undefined> {
-    return this.requireClient().prompt(message, images, streamingBehavior);
+    return this.requireClient().prompt(
+      message,
+      images,
+      streamingBehavior,
+      options,
+    );
   }
   steer(message: string): Promise<unknown> {
     return this.requireClient().steer(message);

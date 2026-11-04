@@ -18,6 +18,7 @@ import type {
   WebviewMessage,
 } from '../../shared/protocol';
 import { MAX_ATTACHMENT_BYTES } from '../../shared/constants';
+import { parseCommandInvocation } from '../../shared/command-invocation';
 import {
   compactionBoundaryList,
   compactionDetailOf,
@@ -64,6 +65,7 @@ import {
   armUiRequest,
   beginUiRequest,
   isModalUiMethod,
+  isUserVisibleUiMethod,
   type DialogDeps,
 } from './ui-request-routing';
 import {
@@ -76,6 +78,24 @@ import {
 
 /** Ceiling for the post-update runtime reload, so its result toast always shows. */
 const PI_RELOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * Events that put something in the transcript, so a command that emitted one was not silent.
+ * Deliberately narrow: `queue_update` and friends are bookkeeping the human never reads.
+ */
+const VISIBLE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'agent_start',
+  'message_start',
+  'tool_execution_start',
+  'compaction_start',
+]);
+
+/**
+ * How long to wait after an extension command reports `handled` before concluding it produced
+ * nothing. A handler may `notify` without awaiting it, so a toast can land just after the
+ * response — and a notice about silence that arrives beside a toast would be a lie.
+ */
+const SILENT_COMMAND_GRACE_MS = 400;
 
 export interface ChatBridgeOptions {
   /** Human-readable surface name in the output-channel log (`sidebar`, `editor`). */
@@ -130,6 +150,12 @@ export class ChatBridge implements vscode.Disposable {
   private compactionEnds = 0;
   /** True while a `compact` command awaits its (post-summarisation) response. */
   private compactInFlight = false;
+  /**
+   * Count of outputs this bridge has seen that the human can actually read — a dialog, a toast,
+   * or a transcript event. {@link submitText} compares it around an extension command to decide
+   * whether that command left the chat with nothing to show.
+   */
+  private visibleOutput = 0;
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
   private readonly unregisterSurface: () => void;
 
@@ -222,6 +248,7 @@ export class ChatBridge implements vscode.Disposable {
   }
 
   private onRuntimeEvent(event: { type: string }): void {
+    if (VISIBLE_EVENT_TYPES.has(event.type)) this.visibleOutput++;
     // Image payloads are the one part of a tool result no renderer can show, and the
     // one part big enough to matter: redact them, then hand the reference over.
     this.post({
@@ -666,13 +693,20 @@ export class ChatBridge implements vscode.Disposable {
             `extension commands immediately and rejects them on the queueing path.`,
         );
       }
-      const disposition = await runtime.prompt(text, images);
+      const seenBefore = this.visibleOutput;
+      // `longRunning`: pi resolves this response when the command handler *returns*, so a
+      // dialog the handler opened parks it for as long as the human takes to answer — the
+      // generic 30s budget would fail a command that worked.
+      const disposition = await runtime.prompt(text, images, undefined, {
+        longRunning: true,
+      });
       if (disposition === 'handled') {
         // Nothing follows this: no run, so no events, and the extension's own dialogs
         // (if it opened any) are the whole interaction.
         this.log.info(
           `pi handled "${text.slice(0, 40)}" as an extension command (no run started).`,
         );
+        await this.reportSilentCommand(runtime, text, seenBefore);
       }
       return disposition;
     }
@@ -685,6 +719,39 @@ export class ChatBridge implements vscode.Disposable {
       images,
       route === 'follow-up' ? 'followUp' : undefined,
     );
+  }
+
+  /**
+   * Say so when an extension command this chat ran leaves nothing to show.
+   *
+   * A handled command writes no user message, starts no run and emits no events: everything the
+   * human learns comes from the `ctx.ui.*` calls its handler chose. A handler that renders with
+   * `ctx.ui.custom()` chose nothing this client could receive — pi resolves that method to
+   * `undefined` outside the terminal (`docs/rpc-extension-ui`), which is why the same command
+   * works in a TUI and appears to do nothing here. Silence is then indistinguishable from a
+   * send that never landed, so the transcript states what happened instead.
+   */
+  private async reportSilentCommand(
+    runtime: PiRuntime,
+    text: string,
+    seenBefore: number,
+  ): Promise<void> {
+    await new Promise((resolve) =>
+      setTimeout(resolve, SILENT_COMMAND_GRACE_MS),
+    );
+    // A restart of this folder, or a window that closed, is not ours to comment on any more.
+    if (this.disposed || this.runtime !== runtime) return;
+    if (this.visibleOutput > seenBefore) return;
+    const name = parseCommandInvocation(text)?.name ?? text.slice(1);
+    this.log.info(
+      `Extension command "/${name}" produced no dialog, toast or transcript event.`,
+    );
+    this.post({
+      type: 'notice',
+      text:
+        `/${name} ran, but sent nothing this chat can show. An extension that renders ` +
+        `with ctx.ui.custom() only appears in pi's terminal.`,
+    });
   }
 
   private async pushState(): Promise<void> {
@@ -1489,6 +1556,8 @@ export class ChatBridge implements vscode.Disposable {
    * when a *different* surface or VS Code's native dialog is the one that answered.
    */
   private async onUiRequest(req: ExtensionUiRequest): Promise<void> {
+    // First, before any early return: whatever the routing decides, this request was seen here.
+    if (isUserVisibleUiMethod(req.method)) this.visibleOutput++;
     const runtime = this.runtime;
     if (!runtime) return;
 

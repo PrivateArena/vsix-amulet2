@@ -39,7 +39,10 @@ export interface RpcClientOptions extends RpcProcessOptions {
  *   plus the entry write and context rebuild. Minutes on a large window.
  * - `fork` awaits the branch summary of the abandoned path the same way.
  *
- * `prompt` is deliberately absent: it answers at preflight and reports the run over events.
+ * `prompt` is absent for ordinary text: it answers at preflight and reports the run over
+ * events. An extension command is the exception — pi resolves `prompt` only when the command
+ * handler returns, and a handler parked on `ctx.ui.confirm()` waits for a human. Such callers
+ * opt in with `longRunning` rather than by command type.
  */
 const LONG_RUNNING_COMMANDS: ReadonlySet<RpcCommandType> = new Set([
   'compact',
@@ -127,14 +130,17 @@ export class RpcClient {
   }
 
   /** The response budget for one command: long for the ones that carry an LLM call. */
-  private timeoutFor(command: RpcCommand): number {
-    return LONG_RUNNING_COMMANDS.has(command.type)
+  private timeoutFor(command: RpcCommand, longRunning = false): number {
+    return LONG_RUNNING_COMMANDS.has(command.type) || longRunning
       ? Math.max(this.requestTimeoutMs, LONG_REQUEST_TIMEOUT_MS)
       : this.requestTimeoutMs;
   }
 
   /** Send a command and await its correlated response. */
-  send(command: RpcCommand): Promise<RpcResponse> {
+  send(
+    command: RpcCommand,
+    options?: { longRunning?: boolean },
+  ): Promise<RpcResponse> {
     if (this.exitError) {
       return Promise.reject(this.exitError);
     }
@@ -143,15 +149,16 @@ export class RpcClient {
     }
     const id = `req_${++this.requestSeqId}`;
     const request = { ...command, id };
+    const timeoutMs = this.timeoutFor(command, options?.longRunning);
     return new Promise<RpcResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(
           new Error(
-            `Timeout waiting for response to "${command.type}" after ${Math.round(this.timeoutFor(command) / 1000)}s. ${this.tailStderr()}`,
+            `Timeout waiting for response to "${command.type}" after ${Math.round(timeoutMs / 1000)}s. ${this.tailStderr()}`,
           ),
         );
-      }, this.timeoutFor(command));
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
         this.proc.write(request);
@@ -164,8 +171,11 @@ export class RpcClient {
   }
 
   /** Send a command and unwrap `data`, throwing on failure. */
-  async call<T = unknown>(command: RpcCommand): Promise<T> {
-    const response = await this.send(command);
+  async call<T = unknown>(
+    command: RpcCommand,
+    options?: { longRunning?: boolean },
+  ): Promise<T> {
+    const response = await this.send(command, options);
     if (!response.success) {
       throw new Error(response.error || `Command "${command.type}" failed`);
     }
@@ -182,13 +192,17 @@ export class RpcClient {
     message: string,
     images?: unknown[],
     streamingBehavior?: PromptStreamingBehavior,
+    options?: { longRunning?: boolean },
   ): Promise<PromptDisposition | undefined> {
-    const data = await this.call<{ disposition?: PromptDisposition }>({
-      type: 'prompt',
-      message,
-      images,
-      streamingBehavior,
-    });
+    const data = await this.call<{ disposition?: PromptDisposition }>(
+      {
+        type: 'prompt',
+        message,
+        images,
+        streamingBehavior,
+      },
+      options,
+    );
     return data?.disposition;
   }
   async steer(message: string, images?: unknown[]): Promise<void> {
