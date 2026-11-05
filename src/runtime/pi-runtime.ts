@@ -1,3 +1,4 @@
+import { resolve as resolvePath } from 'node:path';
 import { RpcClient } from '../rpc/rpc-client';
 import { parseCommandInvocation } from '../../shared/command-invocation';
 import {
@@ -29,6 +30,21 @@ export interface Logger {
 type Listener<T> = (value: T) => void;
 
 /**
+ * How long {@link PiRuntime.landedOn} waits for a `get_state` after a `switch_session` that did not
+ * answer. It only has to catch a switch that succeeded but whose response got lost — a pi old
+ * enough to hang on the command will not answer `get_state` any faster, so a short budget keeps the
+ * `--session` fallback as snappy as it was before.
+ */
+const STATE_PROBE_TIMEOUT_MS = 2_000;
+
+function sameSessionFile(
+  sessionFile: string | undefined,
+  sessionPath: string,
+): boolean {
+  return !!sessionFile && resolvePath(sessionFile) === resolvePath(sessionPath);
+}
+
+/**
  * A single pi runtime bound to one working directory. Owns the RpcClient,
  * applies startup settings, tracks status, and provides basic crash recovery.
  */
@@ -41,7 +57,18 @@ export class PiRuntime {
   private disposed = false;
   private starting: Promise<void> | null = null;
   private restartAttempts = 0;
-  /** Session path to resume on the next start(); survives a crash-recovery restart so the bypass isn't lost. */
+  /**
+   * Session file the loaded child reported (`get_state.sessionFile`), but only while it has
+   * content. This is what {@link restart} and crash recovery resume, so an intentional stop — a
+   * setting change, a pi update, a package reload — no longer drops the conversation the human is
+   * reading and boots a brand-new session.
+   */
+  private loadedSessionPath: string | undefined;
+  /**
+   * Session file the next {@link doStart} must resume. Set when a resume is requested and cleared
+   * once the child reports what it actually loaded, so it survives a crash inside the resume
+   * window — including the `--session` fallback of {@link switchSession}.
+   */
   private pendingSessionPath: string | undefined;
   /** Cached `pi --version`, re-resolved only when the resolved binary changes. */
   private agentVersion = '';
@@ -90,8 +117,26 @@ export class PiRuntime {
     return () => this.statusListeners.delete(listener);
   }
 
+  /** The session file a respawn of this runtime should resume, if there is one worth resuming. */
+  getSessionPath(): string | undefined {
+    return this.resumeTarget();
+  }
+
+  /**
+   * Bring the child up, resuming `sessionPath` when given.
+   *
+   * A request that arrives while a start is already in flight is folded into that start, then
+   * routed through {@link switchSession} if it wanted a different session — otherwise the first
+   * caller's argument would silently win, which used to mean "resume nothing".
+   */
   async start(sessionPath?: string): Promise<void> {
-    if (this.starting) return this.starting;
+    if (this.starting) {
+      await this.starting;
+      if (sessionPath && this.isReady && this.resumeTarget() !== sessionPath) {
+        await this.switchSession(sessionPath);
+      }
+      return;
+    }
     if (this.isReady && !sessionPath) return;
     this.starting = this.doStart(sessionPath);
     try {
@@ -103,6 +148,7 @@ export class PiRuntime {
 
   private async doStart(sessionPath?: string): Promise<void> {
     const config = this.getConfig();
+    if (sessionPath) this.pendingSessionPath = sessionPath;
     const resolved = resolveBinaryPath(config.binaryPath);
     // Re-resolve the version only when the binary path actually changes, so a
     // restart with the same binary doesn't pay for another `pi --version` spawn.
@@ -140,17 +186,25 @@ export class PiRuntime {
     client.onExtensionUiRequest((req) => {
       for (const l of this.uiListeners) l(req);
     });
-    client.onExit((code, signal) => this.handleExit(code, signal));
+    // Identity guard: an intentional stop nulls `this.client` before killing the child, so the
+    // exit of a superseded process must not re-enter crash recovery. It used to — `stop()` only
+    // waits 1.5s and can resolve on the SIGKILL timeout, and a late exit landing while a new
+    // child is already ready nulled the client and spawned a *second* live child for this cwd.
+    client.onExit((code, signal) => {
+      if (client !== this.client) return;
+      this.handleExit(code, signal);
+    });
 
     client.start();
 
     try {
       // Confirm the process is live and apply session settings.
       const state = await client.getState();
+      this.rememberSession(state);
       await this.applySettings(client, config);
       this.restartAttempts = 0;
-      // Session successfully loaded; drop the pending path so a later
-      // crash-recovery restart doesn't re-resume an outdated session file.
+      // The loaded file is the resume target now; drop the request so a later crash-recovery
+      // restart doesn't re-resume a session file this child has already moved past.
       this.pendingSessionPath = undefined;
       this.setStatus({
         phase: 'ready',
@@ -158,7 +212,9 @@ export class PiRuntime {
         cwd: this.cwd,
       });
       this.log.info(
-        `pi runtime ready. Model: ${state.model?.name ?? '(none)'}.`,
+        `pi runtime ready. Model: ${state.model?.name ?? '(none)'}. Session: ${
+          this.loadedSessionPath ?? '(new)'
+        }`,
       );
       // Prime the extension-command names this process registered: the host has to know them
       // before it routes text (`isExtensionCommand`), and a command is worthless if the
@@ -179,6 +235,14 @@ export class PiRuntime {
     }
   }
 
+  /**
+   * Push the settings that are wire state rather than spawn arguments.
+   *
+   * `amulet.defaultModel` is deliberately absent: it is the model a *new* session starts on and is
+   * applied as a spawn argument (see `buildStartupArgs`). A resumed session keeps the model its own
+   * file records — re-pinning it here would change the model mid-conversation, which makes pi drop
+   * the replayed thinking blocks and invalidate the provider prompt cache for the whole context.
+   */
   private async applySettings(
     client: RpcClient,
     config: PiConfig,
@@ -221,16 +285,28 @@ export class PiRuntime {
       this.log.info(
         `Auto-restarting pi runtime (attempt ${this.restartAttempts})…`,
       );
-      void this.start(this.pendingSessionPath).catch(() => undefined);
+      void this.start(this.resumeTarget()).catch(() => undefined);
     }
   }
 
+  /**
+   * Stop the child and bring it back on the *same* session.
+   *
+   * Every restart trigger in the extension is a settings or package change — none of them is a
+   * request to forget the conversation. Before, `start()` ran with no resume path, so an edited
+   * setting booted a fresh session while the webview kept painting the old history.
+   */
   async restart(): Promise<void> {
     this.restartAttempts = 0;
+    const resume = this.resumeTarget();
     await this.stopClient();
-    await this.start();
+    await this.start(resume);
   }
 
+  /**
+   * Retire the current client. Nulling `this.client` *before* the kill is what makes the exit
+   * handler's identity check recognise this as an intentional stop.
+   */
   private async stopClient(): Promise<void> {
     const client = this.client;
     this.client = null;
@@ -312,9 +388,13 @@ export class PiRuntime {
     return this.requireClient().compact(customInstructions);
   }
   async newSession(): Promise<void> {
-    // Starting a fresh session drops any pending resume path.
+    const client = this.requireClient();
+    // A brand-new session replaces the file a respawn would resume, so both the request and the
+    // remembered file have to go before the command runs.
     this.pendingSessionPath = undefined;
-    await this.requireClient().newSession();
+    this.loadedSessionPath = undefined;
+    await client.newSession();
+    await this.rememberCurrentSession(client);
   }
   setSessionName(name: string): Promise<unknown> {
     return this.requireClient().setSessionName(name);
@@ -322,16 +402,61 @@ export class PiRuntime {
   getMessages(): Promise<unknown[]> {
     return this.requireClient().getMessages();
   }
+  /**
+   * Load another session file.
+   *
+   * pi >= 1.4 answers `switch_session` in-process — verified against 1.5.0, where it returns
+   * `{cancelled:false}` immediately and the next `get_state` reports the new `sessionFile` from the
+   * same child. That keeps the warm process: the HTTP connection pool, the resolved model, thinking
+   * level and tool loadout that all sit at the front of the cached prompt prefix, and it stops
+   * aborting a running turn just to change files. pi 0.80.x never answered the command at all, so
+   * the old "kill the child, respawn with `--session`" route stays as the fallback.
+   */
   async switchSession(sessionPath: string): Promise<{ cancelled?: boolean }> {
-    // Bypass: pi 0.80.x's `switch_session` RPC handler hangs (never responds).
-    // Restart the child with `--session <path>`, which loads the session file
-    // in ~1-2s and responds normally. Verified against get_state.
-    // Stash the path so a crash-recovery restart (handleExit) preserves it.
+    const client = this.client;
+    if (client?.running) {
+      try {
+        const result = await client.switchSession(sessionPath);
+        if (!result.cancelled) await this.rememberCurrentSession(client);
+        this.log.info(
+          `Switched session in-process${result.cancelled ? ' (cancelled by an extension)' : ''}: ${sessionPath}`,
+        );
+        return result;
+      } catch (err) {
+        // A slow switch can still have landed; only respawn when it did not.
+        if (await this.landedOn(client, sessionPath)) {
+          await this.rememberCurrentSession(client);
+          return { cancelled: false };
+        }
+        this.log.warn(
+          `switch_session did not answer (${err instanceof Error ? err.message : String(err)}); ` +
+            `respawning pi with --session instead.`,
+        );
+      }
+    }
+    // Stash the path so a crash during the respawn still lands on this session.
     this.pendingSessionPath = sessionPath;
     this.restartAttempts = 0;
     await this.stopClient();
     await this.start(sessionPath);
     return {};
+  }
+
+  /** Whether this child has already loaded `sessionPath`, bounded so a wedged child can't stall it. */
+  private landedOn(client: RpcClient, sessionPath: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), STATE_PROBE_TIMEOUT_MS);
+      client.getState().then(
+        (state) => {
+          clearTimeout(timer);
+          resolve(sameSessionFile(state.sessionFile, sessionPath));
+        },
+        () => {
+          clearTimeout(timer);
+          resolve(false);
+        },
+      );
+    });
   }
   fork(entryId: string): Promise<{ text?: string; cancelled?: boolean }> {
     return this.requireClient().fork(entryId);
@@ -375,6 +500,30 @@ export class PiRuntime {
 
   // --- Internal ------------------------------------------------------------
 
+  /** What a respawn should resume: the loaded file, or the one a resume is mid-flight for. */
+  private resumeTarget(): string | undefined {
+    return this.loadedSessionPath ?? this.pendingSessionPath;
+  }
+
+  /**
+   * Record the session a respawn should resume. A session file with no messages is not worth
+   * resuming — pi boots an empty context either way — so it is not remembered.
+   */
+  private rememberSession(state: SessionState): void {
+    this.loadedSessionPath =
+      state.sessionFile && state.messageCount > 0
+        ? state.sessionFile
+        : undefined;
+  }
+
+  private async rememberCurrentSession(client: RpcClient): Promise<void> {
+    if (!client.running) return;
+    try {
+      this.rememberSession(await client.getState());
+    } catch {
+      // The child is going away; whatever it last reported stands.
+    }
+  }
   private dispatchEvent(event: RpcEvent): void {
     for (const l of this.eventListeners) l(event);
   }

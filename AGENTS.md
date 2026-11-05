@@ -171,6 +171,31 @@ parked on an answer. Rules worth keeping:
   the cursor, no items) must leave the `contextmenu` event alone so the native menu still appears, and the
   selection is snapshotted at right-click time because clicking a menu item destroys it.
 - The webview cannot access the microphone, filesystem, or Node APIs directly — everything goes through the host bridge.
+- **Session lifetime is a prompt-cache asset.** pi rebuilds the model context from the session file
+  before *every* request, so the conversation itself never depends on the child process staying up —
+  but everything in front of it is cached by the provider: the system prompt sections, the tool
+  definitions, the model and the thinking level. Four rules keep that prefix intact (owning code in
+  [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)):
+  - switching sessions is the `switch_session` **command**, not a process restart — pi >= 1.4 answers
+    it in-process (verified against 1.5.0: `{ cancelled: false }`, same PID, new `sessionFile`). The
+    old "kill the child, respawn with `--session`" route survives only as the fallback for a runtime
+    that does not answer, because pi 0.80.x never replied to that command.
+  - `restart()`, `restartAll()` and crash recovery **resume the loaded session** (`resumeTarget()` ←
+    `get_state.sessionFile`), because every restart trigger in the extension is a settings or package
+    change, never a request to forget the conversation. An empty session file is deliberately not
+    resumed.
+  - `amulet.defaultModel` is a spawn argument for a **fresh** session only (`buildStartupArgs`).
+    Command-line argv overrides the model recorded in the session file, and a model change makes pi
+    drop the replayed thinking blocks — so pinning it on a resume silently moves an ongoing
+    conversation to another model and forces a full prefill.
+  - `client.onExit` is identity-guarded (`if (client !== this.client) return`): `stopClient()` nulls the
+    client before killing it, so the exit of an intentionally retired child never enters crash recovery.
+    Without it, `RpcProcess.stop()` resolving on its SIGKILL timeout lets a late exit null the current
+    client and spawn a **second** live child for the same cwd — two processes appending to one session
+    file and one context window.
+  `SYSTEM.md`, `APPEND_SYSTEM.md`, `AGENTS.md` and installed packages/skills are therefore cache-bearing:
+  pi re-reads them per prompt and folds a change into the head of the request, which costs a full
+  prefill of the whole context on the next message.
 - Compaction reports itself over **events**, not over the command that started it: pi answers `compact`
   only when the summarisation LLM call resolves (minutes on a large window), so the RPC client gives
   `compact`/`fork` a longer response budget (`LONG_RUNNING_COMMANDS`) and the UI drives progress and

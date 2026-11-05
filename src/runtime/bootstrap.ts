@@ -19,7 +19,10 @@ export const ENV_AGENT_DIR = 'PI_CODING_AGENT_DIR';
  * An inherited `PI_CODING_AGENT_DIR` is never consulted: some other pi extension could have exported
  * it, and it would point the readers at a different install than the one this extension spawns.
  */
-export function resolveAgentDir(configuredAgentDir: string, cwd?: string): string {
+export function resolveAgentDir(
+  configuredAgentDir: string,
+  cwd?: string,
+): string {
   if (!configuredAgentDir) return join(homedir(), '.pi', 'agent');
   const expanded =
     configuredAgentDir === '~' || configuredAgentDir.startsWith('~/')
@@ -138,11 +141,16 @@ export function buildStartupArgs(
 ): string[] {
   const args: string[] = [];
   if (sessionPath) {
-    // Resume a specific session file by path. Bypasses the `switch_session`
-    // RPC handler, which hangs in pi 0.80.x (never sends a response).
+    // Resume a specific session file by path. This is the fallback route only: pi >= 1.4 answers
+    // `switch_session` in-process, and pi 0.80.x (whose handler never responded) is the reason the
+    // respawn exists at all. See `PiRuntime.switchSession`.
     args.push('--session', sessionPath);
   }
-  if (config.defaultModel) {
+  if (config.defaultModel && !sessionPath) {
+    // `amulet.defaultModel` is the model a *new* session starts on. Command line wins over what
+    // the session file records, so passing it on a resume would silently move an ongoing
+    // conversation to another model — which drops the thinking blocks pi replayed and busts the
+    // provider prompt cache for the whole context. A resumed session keeps its own model.
     args.push('--model', config.defaultModel);
   }
   if (config.extraArgs.length > 0) {

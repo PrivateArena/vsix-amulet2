@@ -1052,6 +1052,13 @@ export class ChatBridge implements vscode.Disposable {
       this.log.warn(`Refused to switch session outside sessions dir: ${path}`);
       return;
     }
+    if (await this.isCurrentSession(resolved)) {
+      // Already loaded. An in-process switch still aborts a running turn and makes pi re-read every
+      // prompt source, and the `--session` fallback it degrades to kills the warm child outright —
+      // so refresh this surface instead of switching to what is already on screen.
+      await this.pushSnapshot();
+      return;
+    }
     const result = await runtime.switchSession(resolved);
     if (result.cancelled) {
       // Nothing was loaded, but a cancelled switch can have taken a branch summary with it —

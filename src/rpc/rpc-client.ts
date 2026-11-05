@@ -260,6 +260,14 @@ export class RpcClient {
   async setAutoRetry(enabled: boolean): Promise<void> {
     await this.call({ type: 'set_auto_retry', enabled });
   }
+  /**
+   * Load another session file in the live process.
+   *
+   * Answers `{cancelled}` and stays inside the default response budget on purpose: pi >= 1.4
+   * replies as soon as it has loaded the file (measured sub-second on 1.5.0), so a timeout means
+   * this runtime does not implement the command — which is what pi 0.80.x did — and the caller
+   * should fall back to respawning with `--session` rather than wait out a long budget.
+   */
   switchSession(sessionPath: string): Promise<{ cancelled?: boolean }> {
     return this.call<{ cancelled?: boolean }>({
       type: 'switch_session',
