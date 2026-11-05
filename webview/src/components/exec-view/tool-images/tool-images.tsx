@@ -3,6 +3,7 @@ import { LuImage, LuMaximize2, LuTriangleAlert } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
 import type { ToolImageRef } from '../../../../../shared/protocol';
 import { formatByteSize } from '../../../utils/format';
+import { useRedact } from '../../../stores/privacy-store';
 import { basename } from '../tool-display';
 import './tool-images.scss';
 
@@ -78,7 +79,11 @@ export function needsToolImage(
 
 function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
   const { path, mimeType, dataUrl, error } = image;
-  const label = path ? basename(path) : mimeType;
+  // Only what the tile *says* about the file is censored: `path` still goes to the host as written,
+  // or the bytes would be read from a file that does not exist.
+  const redact = useRedact();
+  const label = path ? redact(basename(path)) : redact(mimeType);
+  const caption = path ? redact(path) : undefined;
 
   useEffect(() => {
     if (path && needsToolImage(image, expanded)) {
@@ -90,7 +95,7 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
 
   if (error) {
     return (
-      <div className="exec-image-state is-error" title={path ?? undefined}>
+      <div className="exec-image-state is-error" title={caption}>
         <LuTriangleAlert className="exec-image-state-icon" aria-hidden />
         <span className="exec-image-state-text">{error}</span>
       </div>
@@ -99,7 +104,7 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
 
   if (!dataUrl) {
     return (
-      <div className="exec-image-state" title={path ?? undefined}>
+      <div className="exec-image-state" title={caption}>
         <LuImage className="exec-image-state-icon" aria-hidden />
         <span className="exec-image-state-text">
           {label}
@@ -118,7 +123,7 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
 
   return (
     <figure className="exec-image">
-      <div className="exec-image-frame" title={path ?? label}>
+      <div className="exec-image-frame" title={caption ?? label}>
         <img
           src={dataUrl}
           alt={label}
@@ -136,7 +141,7 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
         )}
       </div>
       <figcaption className="exec-image-caption">
-        <span className="exec-image-name" title={path ?? undefined}>
+        <span className="exec-image-name" title={caption}>
           {label}
         </span>
         <span className="exec-image-meta">

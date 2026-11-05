@@ -8,6 +8,7 @@ import {
   textOfContent,
 } from '../../../../shared/blocks';
 import { useChatState } from '../../contexts/chat-context';
+import { useRedact } from '../../stores/privacy-store';
 import type { ToolExec, UiMessage } from '../../store';
 import { registerCopySource } from '../../utils/md-units';
 import { formatByteSize } from '../../utils/format';
@@ -23,6 +24,9 @@ interface MessageViewProps {
 }
 
 function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
+  // A picked file is named the way a path is, so the tile says the censored name while the
+  // attachment itself keeps the real one for the runtime.
+  const redact = useRedact();
   return (
     <div className="entry-attachments">
       {attachments.map((att) => (
@@ -30,7 +34,7 @@ function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
           {att.dataUrl ? (
             <img
               src={att.dataUrl}
-              alt={att.name}
+              alt={redact(att.name)}
               className="entry-attachment-image"
             />
           ) : (
@@ -39,8 +43,10 @@ function AttachmentGallery({ attachments }: { attachments: Attachment[] }) {
                 {att.name.split('.').pop()?.toUpperCase() ?? '?'}
               </span>
               <div className="entry-attachment-info">
-                <span className="entry-attachment-name" title={att.name}>
-                  {att.name}
+                <span
+                  className="entry-attachment-name"
+                  title={redact(att.name)}>
+                  {redact(att.name)}
                 </span>
                 <span className="entry-attachment-size">
                   {formatByteSize(att.size)}

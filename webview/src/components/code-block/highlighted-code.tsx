@@ -1,5 +1,6 @@
 import hljs from 'highlight.js/lib/common';
 import { useMemo } from 'react';
+import { useRedact } from '../../stores/privacy-store';
 
 /** Map a file extension to a highlight.js language id (common bundle only). */
 const EXT_LANG: Record<string, string> = {
@@ -92,11 +93,15 @@ interface HighlightedCodeProps {
  * fails or the content is very large.
  */
 export function CodeBlock({
-  code,
+  code: coded,
   path,
   language,
   className,
 }: HighlightedCodeProps) {
+  // Censor before highlighting: a tokenizer splits a path across spans, and a rule cannot see across
+  // them — so the text has to be rewritten while it is still one string.
+  const redact = useRedact();
+  const code = redact(coded);
   const { html, lang } = useMemo(() => {
     if (code.length > MAX_HIGHLIGHT_CHARS)
       return { html: null, lang: undefined };

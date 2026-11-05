@@ -34,10 +34,12 @@ import {
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
   EXPAND_THINKING_KEY,
+  PRIVACY_KEYS,
   THINKING_LEVEL_KEY,
   affectsSetting,
   readConfig,
   setExpandThinking,
+  setPrivacyMode,
   webviewConfig,
 } from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
@@ -246,8 +248,11 @@ export class ChatBridge implements vscode.Disposable {
     // Mirror setting changes made here (or in the Settings editor, or in another
     // panel) into every connected webview.
     const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (affectsSetting(e, EXPAND_THINKING_KEY)) {
-        this.post({ type: 'config', config: webviewConfig() });
+      if (
+        affectsSetting(e, EXPAND_THINKING_KEY) ||
+        PRIVACY_KEYS.some((key) => affectsSetting(e, key))
+      ) {
+        this.postConfig();
       }
       if (affectsSetting(e, THINKING_LEVEL_KEY)) {
         void this.applyThinkingLevelSetting();
@@ -255,7 +260,7 @@ export class ChatBridge implements vscode.Disposable {
     });
     this.subscriptions.push(() => configSub.dispose());
 
-    this.post({ type: 'config', config: webviewConfig() });
+    this.postConfig();
     this.post({ type: 'runtimeStatus', status: runtime.getStatus() });
 
     try {
@@ -273,6 +278,27 @@ export class ChatBridge implements vscode.Disposable {
     } catch {
       // Status already reflects the error.
     }
+  }
+
+  private privacyIssuesReported = '';
+
+  /**
+   * Forward the view-side settings, naming any censoring rule that had to be dropped: a rule the
+   * human wrote and that silently does nothing is how a secret ends up in a screenshot.
+   */
+  private postConfig(): void {
+    const config = webviewConfig();
+    const issues = config.privacyRuleIssues ?? [];
+    const fingerprint = issues.join('\n');
+    // The same settings are pushed on every connect, restart and unrelated toggle, and once per
+    // open surface — so a broken rule is named once, not on every echo.
+    if (fingerprint && fingerprint !== this.privacyIssuesReported) {
+      this.privacyIssuesReported = fingerprint;
+      for (const issue of issues) {
+        this.log.warn(`amulet.privacyRules — ${issue}`);
+      }
+    }
+    this.post({ type: 'config', config });
   }
 
   /**
@@ -556,7 +582,13 @@ export class ChatBridge implements vscode.Disposable {
           // Purely a webview rendering preference; `config` is echoed back so the
           // UI reflects the write even if the change event is suppressed.
           await setExpandThinking(message.enabled);
-          this.post({ type: 'config', config: webviewConfig() });
+          this.postConfig();
+          return;
+        case 'setPrivacyMode':
+          // Also purely a webview rendering preference, and the same echo: the censoring is
+          // decided in the webview, so the runtime is never restarted for it.
+          await setPrivacyMode(message.enabled);
+          this.postConfig();
           return;
         case 'openPiFolder': {
           const dir = path.join(os.homedir(), '.pi');

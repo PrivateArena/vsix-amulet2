@@ -51,6 +51,8 @@ export const actions = {
     postMessage({ type: 'setAutoCompaction', enabled }),
   setExpandThinking: (enabled: boolean) =>
     postMessage({ type: 'setExpandThinking', enabled }),
+  setPrivacyMode: (enabled: boolean) =>
+    postMessage({ type: 'setPrivacyMode', enabled }),
 
   // sessions
   newChat: () => postMessage({ type: 'newChat' }),

@@ -1,4 +1,11 @@
+import * as os from 'node:os';
 import * as vscode from 'vscode';
+import {
+  builtinPrivacyRules,
+  compilePrivacyRules,
+  describePrivacyIssue,
+  type PrivacyRule,
+} from '../shared/privacy';
 import type { ThinkingLevelSetting, WebviewConfig } from '../shared/protocol';
 
 export interface PiConfig {
@@ -11,6 +18,10 @@ export interface PiConfig {
   autoRetry: boolean;
   /** Webview-only: render new reasoning blocks expanded. */
   expandThinking: boolean;
+  /** Webview-only: censor configured text in the chat view (menu: "Privacy mode"). */
+  privacyMode: boolean;
+  /** Webview-only: the censoring rules, applied after the built-ins. */
+  privacyRules: PrivacyRule[];
   extraArgs: string[];
 }
 
@@ -53,6 +64,8 @@ export function readConfig(): PiConfig {
     autoCompact: get<boolean>('autoCompact', true),
     autoRetry: get<boolean>('autoRetry', true),
     expandThinking: get<boolean>('expandThinking', false),
+    privacyMode: get<boolean>('privacyMode', false),
+    privacyRules: get<PrivacyRule[]>('privacyRules', []),
     extraArgs: get<string[]>('extraArgs', []),
   };
 }
@@ -81,14 +94,72 @@ export function notifySettings(): NotifySettings {
   };
 }
 
+/**
+ * The user name the built-in privacy rule censors. `os.userInfo()` is the only portable source (a
+ * Windows service can have neither `USER` nor `LOGNAME`), and a machine that cannot say who is
+ * running gets no built-in rule rather than a crash at activation.
+ *
+ * Remembered for the life of the extension host: the call can go through NSS or LDAP, and the
+ * settings are read again on every connect, every attached surface and every toggle echo.
+ */
+let cachedUserName: string | undefined;
+
+function currentUserName(): string {
+  if (cachedUserName === undefined) {
+    try {
+      cachedUserName = os.userInfo().username ?? '';
+    } catch {
+      cachedUserName = process.env.USER ?? process.env.USERNAME ?? '';
+    }
+  }
+  return cachedUserName;
+}
+
+/** Compiled privacy payload, reused while the declared rules are the same list. */
+interface PrivacyPayload {
+  declared: string;
+  rules: PrivacyRule[];
+  issues: string[];
+}
+
+let cachedPrivacy: PrivacyPayload | undefined;
+
+function privacyPayload(declaredRules: PrivacyRule[]): PrivacyPayload {
+  const declared = JSON.stringify(declaredRules ?? []);
+  if (cachedPrivacy?.declared === declared) return cachedPrivacy;
+  // Compiled here so a broken rule is named in the host log rather than vanishing inside the webview.
+  const { rules, issues } = compilePrivacyRules([
+    ...builtinPrivacyRules(currentUserName()),
+    ...declaredRules,
+  ]);
+  cachedPrivacy = {
+    declared,
+    rules: rules.map((rule) => rule.source),
+    issues: issues.map(describePrivacyIssue),
+  };
+  return cachedPrivacy;
+}
+
 /** The subset of settings the webview renders. */
 export function webviewConfig(): WebviewConfig {
-  const { expandThinking } = readConfig();
-  return { expandThinking };
+  const { expandThinking, privacyMode, privacyRules } = readConfig();
+  const { rules, issues } = privacyPayload(privacyRules);
+  return {
+    expandThinking,
+    privacyMode,
+    privacyRules: rules,
+    privacyRuleIssues: issues,
+  };
 }
 
 /** Config key behind the webview's "Uncollapse thinking" toggle. */
 export const EXPAND_THINKING_KEY = `${SECTION}.expandThinking`;
+
+/** Config keys behind the "Privacy mode" toggle and its rules. */
+export const PRIVACY_KEYS = [
+  `${SECTION}.privacyMode`,
+  `${SECTION}.privacyRules`,
+];
 
 /** Config key behind the "approval waiting" status-bar entry (see `src/notify`). */
 export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
@@ -101,6 +172,13 @@ export async function setExpandThinking(enabled: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration(SECTION)
     .update('expandThinking', enabled, vscode.ConfigurationTarget.Global);
+}
+
+/** Persist {@link PiConfig.privacyMode} so the preference survives reloads. */
+export async function setPrivacyMode(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('privacyMode', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /** Config keys whose change should trigger a runtime restart. */

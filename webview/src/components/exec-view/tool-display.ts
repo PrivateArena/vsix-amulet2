@@ -18,6 +18,7 @@ import {
 } from 'react-icons/lu';
 import type { IconBaseProps } from 'react-icons';
 import type { ToolExec } from '../../store';
+import { redactText } from '../../stores/privacy-store';
 
 export const TOOL_ICONS: Record<string, ComponentType<IconBaseProps>> = {
   bash: LuTerminal,
@@ -46,7 +47,7 @@ export function asRecord(v: unknown): Record<string, unknown> {
 }
 
 /** One-line argument preview, keyed by what identifies the call per tool. */
-export function summarize(name: string, args: Record<string, unknown>): string {
+function summarizeValue(name: string, args: Record<string, unknown>): string {
   const first = (...keys: string[]) => {
     for (const k of keys) {
       const v = args[k];
@@ -79,6 +80,15 @@ export function summarize(name: string, args: Record<string, unknown>): string {
         'task',
       );
   }
+}
+
+/**
+ * The identifying argument of a call, with Privacy mode applied. This is the one string a card shows
+ * for a path, a command or a task, so censoring it here covers the header, the previews, the tooltips
+ * and the Copy button of every tool row at once.
+ */
+export function summarize(name: string, args: Record<string, unknown>): string {
+  return redactText(summarizeValue(name, args));
 }
 
 /**
@@ -207,13 +217,15 @@ export function toolPreview(name: string, args: unknown): string {
  */
 export function toolFullText(name: string, args: unknown): string {
   const record = asRecord(args);
-  const preview = summarize(name, record);
-  if (preview) return preview;
-  if (typeof args === 'string') return args;
+  // Gated on the uncensored summary: a rule that empties it must not silently hand the hover text
+  // over to the whole argument object below.
+  const identified = summarizeValue(name, record);
+  if (identified) return redactText(identified);
+  if (typeof args === 'string') return redactText(args);
   const keys = Object.keys(record);
   if (!keys.length) return '';
   try {
-    return JSON.stringify(record, null, 2) ?? '';
+    return redactText(JSON.stringify(record, null, 2) ?? '');
   } catch {
     return keys.join(', ');
   }

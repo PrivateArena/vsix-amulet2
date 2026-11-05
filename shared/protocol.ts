@@ -16,6 +16,8 @@
 // pi content blocks & messages
 // ============================================================================
 
+import type { PrivacyRule } from './privacy';
+
 /**
  * Thinking levels known to the pi runtime (mirrors pi's own `ThinkingLevel`).
  * Which subset applies to the current model is decided by pi, from the model's
@@ -855,6 +857,8 @@ export type WebviewMessage =
   | { type: 'setAutoCompaction'; enabled: boolean }
   /** Persist the "Uncollapse thinking" preference (`amulet.expandThinking`). */
   | { type: 'setExpandThinking'; enabled: boolean }
+  /** Persist the "Privacy mode" preference (`amulet.privacyMode`). */
+  | { type: 'setPrivacyMode'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
@@ -1100,5 +1104,14 @@ export interface PackageOpResult {
 export interface WebviewConfig {
   /** Render reasoning blocks expanded unless the user overrode one locally. */
   expandThinking: boolean;
+  /** The chat-view censoring switch (menu: **Privacy mode**, `amulet.privacyMode`). */
+  privacyMode: boolean;
+  /**
+   * Censoring rules to apply to displayed text: the built-ins plus `amulet.privacyRules`, already
+   * checked by the host, so an entry that cannot compile never reaches the webview.
+   */
+  privacyRules: PrivacyRule[];
+  /** Why a declared rule is missing from {@link privacyRules} — logged host-side, never silent. */
+  privacyRuleIssues?: string[];
   autoExpandEditLineThreshold?: number;
 }

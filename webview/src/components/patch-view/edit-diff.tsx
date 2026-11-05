@@ -1,4 +1,5 @@
 import './edit-diff.scss';
+import { useRedact } from '../../stores/privacy-store';
 
 interface Edit {
   oldText: string;
@@ -49,6 +50,7 @@ function linesOf(text: string): string[] {
 }
 
 function DiffBlock({ oldText, newText }: Edit) {
+  const redact = useRedact();
   const { context, removed, added } = diffLines(oldText, newText);
   // A whole-file addition is a new file, not a change to one: it gets the softer palette
   // and the square corners a `write` card expects.
@@ -59,17 +61,17 @@ function DiffBlock({ oldText, newText }: Edit) {
       {context.map((l, i) => (
         <div key={`c${i}`} className="patch-line patch-line-context">
           {' '}
-          {l}
+          {redact(l)}
         </div>
       ))}
       {removed.map((l, i) => (
         <div key={`d${i}`} className="patch-line patch-line-del">
-          - {l}
+          - {redact(l)}
         </div>
       ))}
       {added.map((l, i) => (
         <div key={`a${i}`} className="patch-line patch-line-add">
-          + {l}
+          + {redact(l)}
         </div>
       ))}
     </pre>

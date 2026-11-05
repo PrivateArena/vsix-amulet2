@@ -98,7 +98,22 @@ suite built from such a capture.
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+
+`privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
+(`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
+
+- **Censoring is rendering, never data.** The rules run on the string a component is about to paint, so
+  chat state, the session file, `export_html` and every string sent to pi stay untouched. Anything that
+  goes *back* into the run — Branch from here, Quote, Reply, an image's real path, a fork's message text —
+  must read the untouched source (`rawSourceOf` in [`webview/src/utils/md-units.ts`](webview/src/utils/md-units.ts)),
+  never what was shown. Text with no registered source (a terminal `<pre>`) is only ever available censored.
+- **New rules are settings, not code.** [`shared/privacy.ts`](shared/privacy.ts) owns the rule shape, the
+  compile (an unparseable entry is reported, never silently dropped) and `redactWithRules`; a new text leaf
+  only calls `useRedact()` / `redactText()` from
+  [`webview/src/stores/privacy-store.ts`](webview/src/stores/privacy-store.ts). Censor **before** any
+  tokenizer runs (highlight.js splits a path across spans, so a rule cannot match afterwards) — that is why
+  `MdRender` and `CodeBlock` rewrite their source rather than their output.
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 

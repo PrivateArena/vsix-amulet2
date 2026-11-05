@@ -14,10 +14,16 @@ export const COPY_UNIT_SELECTOR = '[data-copy-unit], pre';
 
 /** The markdown a unit was rendered from, keyed by the element showing it. */
 interface UnitSource {
-  /** The text the unit renders. */
+  /** The text the unit renders — censored while Privacy mode is on. */
   text: string;
   /** True when the unit is preformatted, so whitespace is content, not layout. */
   pre?: boolean;
+  /**
+   * The text before Privacy mode touched it. Copy and screenshots want {@link text}; a path that leads
+   * somewhere — Branch from here, Quote, Reply — must keep the original, or the runtime is handed a
+   * sentence about a file that does not exist. Absent when nothing was censored.
+   */
+  raw?: string;
 }
 
 const sources = new WeakMap<Element, UnitSource>();
@@ -26,9 +32,12 @@ const sources = new WeakMap<Element, UnitSource>();
 export function registerCopySource(
   el: Element | null | undefined,
   text: string,
-  options: { pre?: boolean } = {},
+  options: { pre?: boolean; raw?: string } = {},
 ): void {
-  if (el) sources.set(el, { text, pre: options.pre });
+  if (!el) return;
+  const raw =
+    options.raw !== undefined && options.raw !== text ? options.raw : undefined;
+  sources.set(el, { text, pre: options.pre, raw });
 }
 
 /** The source of a registered unit, or `undefined` for DOM-only content. */
@@ -36,6 +45,17 @@ export function copySourceOf(
   el: Element | null | undefined,
 ): string | undefined {
   return el ? sources.get(el)?.text : undefined;
+}
+
+/**
+ * The untouched source of a registered unit, for the menu items whose text goes back to the runtime
+ * instead of onto the clipboard.
+ */
+export function rawSourceOf(
+  el: Element | null | undefined,
+): string | undefined {
+  const unit = el ? sources.get(el) : undefined;
+  return unit ? (unit.raw ?? unit.text) : undefined;
 }
 
 /** Text of a target, in both flavours, plus where the text came from. */

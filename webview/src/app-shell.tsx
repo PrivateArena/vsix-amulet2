@@ -6,6 +6,7 @@ import { composer } from './stores/composer-store';
 import { projectFiles } from './stores/project-files-store';
 import { useCompactionHistoryStore } from './stores/compaction-history-store';
 import { usePackagesStore } from './stores/packages-store';
+import { applyPrivacyConfig } from './stores/privacy-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -60,6 +61,12 @@ export function Shell() {
       packages: (message) => usePackagesStore.getState().acceptList(message),
       packageOpResult: (message) =>
         usePackagesStore.getState().acceptOp(message.result),
+      // `config` carries a store flag (expandThinking) and the censoring rules together, and the rules
+      // are rendering state rather than chat state: they never enter the transcript, only its painting.
+      config: (message) => {
+        applyPrivacyConfig(message.config);
+        dispatch({ type: 'host', message });
+      },
     };
 
     const off = onHostMessage((message: HostMessage) => {

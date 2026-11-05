@@ -14,6 +14,8 @@ const config = (binaryPath: string): PiConfig => ({
   autoCompact: true,
   autoRetry: true,
   expandThinking: false,
+  privacyMode: false,
+  privacyRules: [],
   extraArgs: [],
 });
 

@@ -1,5 +1,6 @@
 import { actions } from '../../../apis/actions';
 import type { CompactionRun } from '../../../store';
+import { useRedact } from '../../../stores/privacy-store';
 import { formatDuration } from '../../exec-view/tool-display';
 import { useTickingClock } from '../../../hooks/use-ticking-clock';
 import { Button } from '../../ui/button';
@@ -17,6 +18,7 @@ import './compaction-card.scss';
  */
 export function CompactionProgress({ run }: { run: CompactionRun }) {
   const now = useTickingClock(true);
+  const redact = useRedact();
   const elapsed = formatDuration(Math.max(0, now - run.startedAt));
 
   return (
@@ -26,7 +28,7 @@ export function CompactionProgress({ run }: { run: CompactionRun }) {
       <span className="compaction-time">{elapsed}</span>
       <span
         className={`compaction-hint${run.retry ? ' is-retry' : ''}`}
-        title={run.retry?.errorMessage}>
+        title={run.retry ? redact(run.retry.errorMessage ?? '') : undefined}>
         {run.retry
           ? `attempt ${run.retry.attempt}${run.retry.maxAttempts ? ` of ${run.retry.maxAttempts}` : ''} failed — ${compactionHint(run)}`
           : compactionHint(run)}

@@ -56,7 +56,14 @@ describe('reducer — host state messages', () => {
     expect(
       reducer(
         { ...initialState, expandThinking: true },
-        host({ type: 'config', config: { expandThinking: false } }),
+        host({
+          type: 'config',
+          config: {
+            expandThinking: false,
+            privacyMode: false,
+            privacyRules: [],
+          },
+        }),
       ).expandThinking,
     ).toBe(false);
   });

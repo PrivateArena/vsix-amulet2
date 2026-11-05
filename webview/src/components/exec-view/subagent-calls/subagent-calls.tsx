@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LuCheck, LuX } from 'react-icons/lu';
 import type { ToolExec } from '../../../store';
+import { useRedact } from '../../../stores/privacy-store';
 import { useStickToBottom } from '../../../hooks/use-stick-to-bottom';
 import { useTickingClock } from '../../../hooks/use-ticking-clock';
 import { MdRender } from '../../md-render';
@@ -128,11 +129,15 @@ function NestedCallRow({
     tool.status === 'running' && tool.startedAt != null,
   );
   const children = childCalls(tool, tools);
+  const redact = useRedact();
   const preview = toolRowPreview(tool);
   const fullText = toolFullText(tool.toolName, tool.args);
+  const result = redact(tool.resultText ?? '');
   const duration = toolDuration(tool, now);
   const label = TOOL_LABELS[tool.toolName] ?? tool.toolName;
   const images = tool.images;
+  // Gated on the stored text, not on its censored copy: a rule that empties an output must not take
+  // the row's own disclosure away with it (the body below still renders the censored text).
   const expandable =
     !!tool.resultText || !!images?.length || children.length > 0;
   const hasTip = !!(fullText || preview || tool.resultText);
@@ -167,7 +172,7 @@ function NestedCallRow({
             <NestedCallTip
               label={label}
               command={tipHead(fullText || preview)}
-              output={tool.resultText}
+              output={result}
               isError={tool.isError}
             />
           )}
@@ -184,7 +189,7 @@ function NestedCallRow({
           className={`sub-call-output${
             tool.isError ? ' sub-call-output-error' : ''
           }`}>
-          {tool.resultText}
+          {result}
         </pre>
       )}
       {/* The row is this call's disclosure, so it gates the read the same way the card

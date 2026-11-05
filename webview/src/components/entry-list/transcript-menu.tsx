@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import { LuCopy, LuGitBranch, LuQuote, LuReply } from 'react-icons/lu';
 import { actions } from '../../apis/actions';
 import { composer } from '../../stores/composer-store';
+import { usePrivacyMode } from '../../stores/privacy-store';
 import {
   copySnapshotFor,
-  copySourceOf,
+  rawSourceOf,
   type CopyText,
 } from '../../utils/md-units';
 import { ContextMenuItem, useCtxMenu } from '../ui/ctx-menu';
@@ -39,7 +40,7 @@ const OPEN_ATTRIBUTE = 'data-ctx-open';
  */
 function branchTextOf(unit: HTMLElement): string | undefined {
   const owner = unit.closest<HTMLElement>('[data-branch]');
-  return owner ? copySourceOf(owner)?.trim() || undefined : undefined;
+  return owner ? rawSourceOf(owner)?.trim() || undefined : undefined;
 }
 
 /**
@@ -54,6 +55,7 @@ export function useTranscriptMenu(
   listRef: RefObject<HTMLElement | null>,
 ): TranscriptMenu {
   const [flash, setFlash] = useState<Flash | null>(null);
+  const privacyMode = usePrivacyMode();
   const flashTimer = useRef<ReturnType<typeof setTimeout>>();
   const openUnit = useRef<HTMLElement | null>(null);
 
@@ -74,6 +76,16 @@ export function useTranscriptMenu(
 
       const { clientX: x, clientY: y } = e;
       const target: CopyText = snapshot.selection ?? snapshot.block;
+      // Text that goes back into the run — a quote, a reply, a fork — must be what the runtime said,
+      // not what Privacy mode showed: a censored path here would be sent to pi as a real one. The
+      // registry holds the untouched source of every block that has one, and only a partial selection
+      // has none, because it never had a source of its own to begin with.
+      const sourceOf = (fallback: string) =>
+        rawSourceOf(snapshot.unit) ?? fallback;
+      // Quote and Reply hand text back to the model, so they are offered only where the original is
+      // still recoverable: a block with no registered source — a terminal `<pre>`, a patch — has
+      // nothing but its censored rendering, and quoting that would ask pi about a path it never wrote.
+      const quotable = !privacyMode || rawSourceOf(snapshot.unit) !== undefined;
       const copy = (text: string, label: string) => {
         const trimmed = text.trim();
         if (!trimmed) return;
@@ -106,19 +118,24 @@ export function useTranscriptMenu(
           onSelect: () => copy(target.markdown, 'Copied as Markdown'),
         });
       }
-      items.push({
-        label: 'Quote',
-        icon: LuQuote,
-        hint: snapshot.selection ? 'selection' : 'block',
-        separatorBefore: true,
-        onSelect: () => quote(target.markdown),
-      });
-      items.push({
-        label: 'Reply',
-        icon: LuReply,
-        hint: 'full block',
-        onSelect: () => quote(snapshot.block.markdown),
-      });
+      if (quotable) {
+        items.push({
+          label: 'Quote',
+          icon: LuQuote,
+          hint: snapshot.selection ? 'selection' : 'block',
+          separatorBefore: true,
+          onSelect: () =>
+            quote(
+              snapshot.selection ? target.markdown : sourceOf(target.markdown),
+            ),
+        });
+        items.push({
+          label: 'Reply',
+          icon: LuReply,
+          hint: 'full block',
+          onSelect: () => quote(sourceOf(snapshot.block.markdown)),
+        });
+      }
 
       const branch = branchTextOf(snapshot.unit);
       if (branch) {
@@ -136,7 +153,7 @@ export function useTranscriptMenu(
       snapshot.unit.setAttribute(OPEN_ATTRIBUTE, '');
       return items;
     },
-    [listRef, showFlash],
+    [listRef, showFlash, privacyMode],
   );
 
   const ctx = useCtxMenu(buildItems, {

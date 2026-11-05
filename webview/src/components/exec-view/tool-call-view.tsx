@@ -13,6 +13,7 @@ import { useCopyFeedback } from '../../hooks/use-copy-feedback';
 import { useStreamingToolArgs } from '../../hooks/use-streaming-tool-args';
 import { useTickingClock } from '../../hooks/use-ticking-clock';
 import type { ToolExec, ToolStatus } from '../../store';
+import { useRedact } from '../../stores/privacy-store';
 import { PatchView } from '../patch-view';
 import { CodeBlock } from '../code-block';
 import { Tooltip } from '../ui/tooltip';
@@ -103,10 +104,14 @@ export function ExecBlock({
   // recovered from the streamed JSON buffer, and `typing` is the matching state of that
   // same frame. Once the runtime reports the call, its parsed arguments take over.
   const { args: streamedArgs, typing } = useStreamingToolArgs(partialArgs);
+  const redact = useRedact();
   const effectiveArgs = asRecord(tool?.args ?? args ?? streamedArgs);
   const status: ToolStatus = tool?.status ?? 'running';
   const running = status === 'running';
-  const result = tool?.resultText ?? '';
+  const result = redact(tool?.resultText ?? '');
+  // The follow is driven by the bytes that arrived, not by their censored rendering: flipping
+  // Privacy mode rewrites the text and would otherwise look like new output and yank the card down.
+  const resultBytes = tool?.resultText?.length ?? 0;
   const isError = tool?.isError ?? false;
 
   // A subagent card is identified by the `details` payload the tool reports, not by
@@ -160,10 +165,7 @@ export function ExecBlock({
   // preview phase is left to the command box's own follow. `live`, not merely `running`, because
   // a call the runtime never reported on has no output coming and reads from its head.
   const followOutput = name === 'bash' && live && !typing;
-  const scroller = useStickToBottom<HTMLDivElement>(
-    result.length,
-    followOutput,
-  );
+  const scroller = useStickToBottom<HTMLDivElement>(resultBytes, followOutput);
   // That layer outlives the run, so it has to be handed back: a card that had been following
   // its output would otherwise reopen parked at the end of it, where a finished call reads from
   // its command down.
@@ -364,6 +366,7 @@ function ToolBody({
   toolCallId,
   expanded,
 }: BodyProps) {
+  const redact = useRedact();
   const imageTiles = images?.length ? (
     <ToolImages toolCallId={toolCallId} images={images} expanded={expanded} />
   ) : null;
@@ -386,7 +389,9 @@ function ToolBody({
   }
   if (name === 'bash') {
     const command =
-      typeof args.command === 'string' ? String(args.command) : undefined;
+      typeof args.command === 'string'
+        ? redact(String(args.command))
+        : undefined;
     // A heredoc makes this argument a whole file, and only its end is arriving, so while the
     // model types it the card shows a followed tail window (`CommandStream`) instead of the head
     // of a command the reader cannot reach the end of. Once the command is typed the body reads
@@ -478,7 +483,7 @@ function ToolBody({
     <>
       {imageTiles}
       {Object.keys(args).length > 1 && (
-        <pre className="exec-args">{JSON.stringify(args, null, 2)}</pre>
+        <pre className="exec-args">{redact(JSON.stringify(args, null, 2))}</pre>
       )}
       {result ? (
         <pre className={`exec-output${isError ? ' exec-output-error' : ''}`}>

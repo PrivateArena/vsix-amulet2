@@ -3,6 +3,7 @@ import { LuChevronRight, LuMinimize2 } from 'react-icons/lu';
 import type { CompactionInfo } from '../../../store';
 import { compactionStats, compactionTitle } from './compaction-display';
 import { MdRender } from '../../md-render';
+import { useRedact } from '../../../stores/privacy-store';
 import './compaction-card.scss';
 
 interface CompactionCardProps {
@@ -28,6 +29,7 @@ export function CompactionCard({
 }: CompactionCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const summary = info.summary?.trim();
+  const redact = useRedact();
   // pi also appends `<read-files>`/`<modified-files>` blocks to the summary text itself, but
   // markdown rendering drops unknown raw HTML, so those tags are invisible here — the list
   // rebuilt from `details` is the only readable form, and it is what a boundary opened from the
@@ -55,7 +57,7 @@ export function CompactionCard({
         </span>
       </button>
       {info.outcome === 'failed' && info.error && (
-        <div className="compaction-error">{info.error}</div>
+        <div className="compaction-error">{redact(info.error ?? '')}</div>
       )}
       {expanded && hasBody && (
         <div className="compaction-body">
@@ -65,7 +67,7 @@ export function CompactionCard({
               {files.map((f) => (
                 <li key={`${f.label}:${f.path}`}>
                   <span className="compaction-file-kind">{f.label}</span>
-                  <code>{f.path}</code>
+                  <code>{redact(f.path)}</code>
                 </li>
               ))}
             </ul>

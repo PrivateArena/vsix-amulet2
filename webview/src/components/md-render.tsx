@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { postMessage } from '../apis/vscode';
+import { useRedact } from '../stores/privacy-store';
 import { registerCopySource } from '../utils/md-units';
 
 interface MarkdownProps {
@@ -11,10 +12,17 @@ interface MarkdownProps {
 
 export const MdRender = memo(function MdRender({ children }: MarkdownProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Privacy mode rewrites the source, not the DOM: highlighting, the right-click copy and the
+  // serialized selection all then agree on what the reader was shown.
+  const redact = useRedact();
+  const source = redact(children);
 
   // Publish the source, not the rendering, so a right-click "Copy as Markdown" on an
   // assistant paragraph or a subagent report gives back exactly what was rendered.
-  useEffect(() => registerCopySource(rootRef.current, children), [children]);
+  useEffect(
+    () => registerCopySource(rootRef.current, source, { raw: children }),
+    [source, children],
+  );
 
   return (
     <div className="entry-content-md" ref={rootRef} data-copy-unit="md">
@@ -65,7 +73,7 @@ export const MdRender = memo(function MdRender({ children }: MarkdownProps) {
           th: ({ children }) => <th>{children}</th>,
           td: ({ children }) => <td>{children}</td>,
         }}>
-        {children}
+        {source}
       </ReactMarkdown>
     </div>
   );

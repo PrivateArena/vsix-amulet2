@@ -2,6 +2,7 @@ import {
   LuCircleArrowUp,
   LuChevronsUpDown,
   LuDownload,
+  LuEyeOff,
   LuFileText,
   LuFolderOpen,
   LuInfo,
@@ -14,6 +15,7 @@ import {
 } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
+import { usePrivacyMode, usePrivacyStore } from '../../../stores/privacy-store';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { openSessionInfo } from '../../../stores/session-info-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
@@ -22,6 +24,10 @@ const REPO_URL = 'https://github.com/gunir/vsix-amulet2';
 
 export function SettingsMenu() {
   const { session, expandThinking } = useChatState();
+  const privacyMode = usePrivacyMode();
+  // A rule that cannot compile is a secret that stays visible, so the menu says it rather than
+  // leaving the human to find out from the output channel.
+  const badRules = usePrivacyStore((s) => s.issues).length;
 
   const autoCompactionEnabled = session?.autoCompactionEnabled ?? true;
 
@@ -55,6 +61,15 @@ export function SettingsMenu() {
       label: 'Show session info',
       icon: LuInfo,
       onSelect: () => openSessionInfo(),
+    },
+    {
+      label: badRules
+        ? `Privacy mode (${badRules} rule${badRules > 1 ? 's' : ''} unusable)`
+        : 'Privacy mode',
+      icon: LuEyeOff,
+      onSelect: () => actions.setPrivacyMode(!privacyMode),
+      kind: 'toggle',
+      checked: privacyMode,
     },
     {
       label: 'Uncollapse thinking',

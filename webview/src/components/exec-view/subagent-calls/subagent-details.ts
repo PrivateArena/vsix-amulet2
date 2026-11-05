@@ -7,6 +7,7 @@
  * typed as `unknown` in the protocol — so it is narrowed here and nowhere else.
  */
 import { asRecord, oneLine } from '../tool-display';
+import { redactText } from '../../../stores/privacy-store';
 
 /** Card header text while the child runs; the role name goes in the meta line. */
 export const SUBAGENT_TITLE = 'Launch Subagent';
@@ -105,9 +106,9 @@ export function subagentPrompt(
   const record = asRecord(args);
   for (const key of ['task', 'prompt', 'message', 'instruction']) {
     const text = str(record[key]);
-    if (text) return text;
+    if (text) return redactText(text);
   }
-  return details?.subtitle ?? '';
+  return redactText(details?.subtitle ?? '');
 }
 
 /**
@@ -147,7 +148,7 @@ export function subagentMetaLine(
   }
   if (details.tokens) parts.push(details.tokens);
   if (details.model) parts.push(details.model);
-  return parts.join(' · ');
+  return redactText(parts.join(' · '));
 }
 
 /**

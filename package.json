@@ -225,22 +225,62 @@
           "order": 6,
           "markdownDescription": "Show reasoning (thinking) blocks expanded instead of collapsed. Toggle this from the chat menu: **Uncollapse thinking**. Individual blocks can always be collapsed or expanded by clicking their header."
         },
+        "amulet.privacyMode": {
+          "type": "boolean",
+          "default": false,
+          "order": 7,
+          "markdownDescription": "Censor sensitive text in the chat view: your user name inside paths, plus everything listed in `amulet.privacyRules`. Toggle this from the chat menu: **Privacy mode**. Only what the chat paints is rewritten, so a screenshot, a selection copy and a pasted excerpt all stay clean — while the conversation itself, the session file and every string sent back to pi keep their original text (Branch, Quote and the runtime still see the real paths)."
+        },
+        "amulet.privacyRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Optional name, used only to report a rule that could not be applied."
+              },
+              "search": {
+                "type": "string",
+                "description": "Literal text to replace. No regular expression, so `$`, `.` and `\\` are ordinary characters."
+              },
+              "pattern": {
+                "type": "string",
+                "description": "JavaScript regular expression to match instead of a literal `search` (it wins when both are set). Always matched globally."
+              },
+              "flags": {
+                "type": "string",
+                "description": "Flags for `pattern`, for example `i`. `g` is always on and `y` is ignored."
+              },
+              "replace": {
+                "type": "string",
+                "description": "Replacement text. `$1`-style group references work with `pattern` and are literal with `search`."
+              }
+            },
+            "required": [
+              "replace"
+            ]
+          },
+          "default": [],
+          "order": 8,
+          "markdownDescription": "Search/replace pairs **Privacy mode** applies to the chat text, in order, after its built-in rule (a user name used as a path segment becomes `username`). Each entry needs `replace` plus either `search` or `pattern`:\n\n```jsonc\n[\n  { \"search\": \"/media/jang/home/PortableApp\", \"replace\": \"/media/user/home/PortableApp\" },\n  { \"label\": \"api keys\", \"pattern\": \"sk-[A-Za-z0-9]{16,}\", \"replace\": \"sk-REDACTED\" }\n]\n```\n\nA rule that cannot be compiled is skipped and reported in the Amulet output channel; the other rules still apply."
+        },
         "amulet.notifyOnTurnDone": {
           "type": "boolean",
           "default": true,
-          "order": 7,
+          "order": 9,
           "markdownDescription": "Notify me when a run finishes writing its final report, so the chat can be in the background while the agent works."
         },
         "amulet.notifyOnApproval": {
           "type": "boolean",
           "default": true,
-          "order": 8,
+          "order": 10,
           "markdownDescription": "Notify me when a pi extension is parked waiting for an answer — a tool-approval prompt (for example `pi-gate`), a subagent asking for more turn/time budget, or any other dialog that blocks the run. While one is unanswered, a status-bar entry keeps counting them; the notification itself disappears, the question does not."
         },
         "amulet.notifySystem": {
           "type": "boolean",
           "default": true,
-          "order": 9,
+          "order": 11,
           "markdownDescription": "Also deliver notifications to the operating system's notification centre while this VS Code window is not focused (`notify-send` on Linux, `display notification` on macOS, a balloon tip on Windows). Nothing is ever run through a shell: the notifier is spawned with an argument array, and a missing one falls back to VS Code's own notification."
         },
         "amulet.extraArgs": {
@@ -249,7 +289,7 @@
             "type": "string"
           },
           "default": [],
-          "order": 10,
+          "order": 12,
           "scope": "machine",
           "markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
         }

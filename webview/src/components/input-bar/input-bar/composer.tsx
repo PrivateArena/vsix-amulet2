@@ -24,6 +24,7 @@ import { commandName, invocationOf } from '../../../utils/slash-command';
 import { mentionInsertion } from '../../../utils/at-mention';
 import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
+import { useRedact } from '../../../stores/privacy-store';
 import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
 import { ContextMeter } from '../ctx-meter';
@@ -343,6 +344,9 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     );
 
     const hasAttachments = pendingAttachments.length > 0;
+    // A picked file is named the way a path is, so the chip shows the censored name — the attachment
+    // itself keeps the real one, and so does the gallery once the message is on its way.
+    const redact = useRedact();
 
     return (
       <div className="input-bar" ref={rootRef}>
@@ -353,7 +357,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                 {att.dataUrl ? (
                   <img
                     src={att.dataUrl}
-                    alt={att.name}
+                    alt={redact(att.name)}
                     className="attach-thumb"
                   />
                 ) : (
@@ -362,8 +366,8 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                   </span>
                 )}
                 <span className="attach-info">
-                  <span className="attach-name" title={att.name}>
-                    {att.name}
+                  <span className="attach-name" title={redact(att.name)}>
+                    {redact(att.name)}
                   </span>
                   <span className="attach-size">
                     {formatByteSize(att.size)}

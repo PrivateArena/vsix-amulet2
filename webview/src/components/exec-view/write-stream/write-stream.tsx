@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { useStickToBottom } from '../../../hooks/use-stick-to-bottom';
+import { useRedact } from '../../../stores/privacy-store';
 import { buildStreamTail } from '../stream-tail';
 import './write-stream.scss';
 
@@ -25,7 +26,8 @@ export const WriteStream = memo(function WriteStream({
   content,
   streaming,
 }: WriteStreamProps) {
-  const preview = buildStreamTail(content);
+  const redact = useRedact();
+  const preview = buildStreamTail(redact(content));
   // Follow the body while it streams, and hand the scroll back the moment the reader looks
   // at an earlier part of the file. The revision counts characters, not rendered lines: a long
   // line grows below the fold too, and the caret must not leave the screen. `streaming` holds

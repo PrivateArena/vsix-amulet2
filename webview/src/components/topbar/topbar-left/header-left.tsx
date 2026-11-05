@@ -12,6 +12,7 @@ import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import type { UiMessage } from '../../../store';
 import { transcript, useTurnNavStore } from '../../../stores/turn-nav-store';
+import { redactText, useRedact } from '../../../stores/privacy-store';
 import { clockTime } from '../../../utils/time';
 import { LogoIcon } from '../../logo-icon';
 import { IconButton } from '../../ui/button';
@@ -76,7 +77,7 @@ function transcriptAsText(messages: UiMessage[]): string {
     .filter(({ text }) => text.length > 0)
     .map(
       ({ m, text }) =>
-        `### ${m.role === 'assistant' ? 'Pi' : m.role.charAt(0).toUpperCase()}${m.role.slice(1)}\n\n${text}`,
+        `### ${m.role === 'assistant' ? 'Pi' : m.role.charAt(0).toUpperCase()}${m.role.slice(1)}\n\n${redactText(text)}`,
     )
     .join('\n\n');
 }
@@ -92,6 +93,8 @@ function transcriptAsText(messages: UiMessage[]): string {
 export function TopbarLeft() {
   const { session, messages } = useChatState();
   const activeUid = useTurnNavStore((s) => s.activeUid);
+  // The header names and copies a prompt; "Branch from here" still hands pi the original text.
+  const redact = useRedact();
 
   const prompts = useMemo(() => promptRefs(messages), [messages]);
   const found = prompts.findIndex((p) => p.uid === activeUid);
@@ -99,8 +102,10 @@ export function TopbarLeft() {
   const activeIndex = found >= 0 ? found : prompts.length - 1;
   const current = activeIndex >= 0 ? prompts[activeIndex] : null;
 
-  const sessionName = deriveSessionTitle(session?.sessionName, messages);
-  const label = current ? oneLine(current.text, 120) : sessionName;
+  const sessionName = redact(
+    deriveSessionTitle(session?.sessionName, messages),
+  );
+  const label = current ? oneLine(redact(current.text), 120) : sessionName;
 
   const jumpTo = (index: number) => {
     const target = prompts[index];
@@ -113,7 +118,7 @@ export function TopbarLeft() {
         label: 'Copy prompt',
         icon: LuCopy,
         disabled: !current,
-        onSelect: () => current && actions.copyText(current.text),
+        onSelect: () => current && actions.copyText(redact(current.text)),
       },
       {
         label: 'Branch from here',
@@ -130,7 +135,7 @@ export function TopbarLeft() {
         onSelect: () => actions.copyText(transcriptAsText(messages)),
       },
     ],
-    [current, messages],
+    [current, messages, redact],
   );
   const ctx = useCtxMenu(menuItems, { minWidth: 210 });
 
@@ -214,7 +219,9 @@ export function TopbarLeft() {
                   close();
                 }}>
                 <span className="turn-nav-index">{p.ordinal}</span>
-                <span className="turn-nav-text">{oneLine(p.text, 140)}</span>
+                <span className="turn-nav-text">
+                  {oneLine(redact(p.text), 140)}
+                </span>
                 {p.timestamp != null && (
                   <span className="turn-nav-time">
                     {clockTime(p.timestamp)}
