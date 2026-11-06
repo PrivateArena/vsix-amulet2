@@ -6,7 +6,13 @@ import type {
   SessionInfo,
 } from '../../shared/protocol';
 import { textOfContent } from '../../shared/blocks';
-import { branchEntries } from '../../shared/session-entries';
+import { CONTEXT_OMIT_PLACEHOLDER } from '../../shared/bridge-protocol';
+import {
+  branchEntries,
+  collectContextEdits,
+  isBeforeCompactionCutoff,
+  type SessionEntryLike,
+} from '../../shared/session-entries';
 import { resolveAgentDir } from '../runtime/bootstrap';
 
 /**
@@ -35,6 +41,18 @@ const ENTRY_LINK_RE =
 
 /** What a persisted compaction line starts with, in pi's own write order. */
 const COMPACTION_LINE_RE = /^\{\s*"type"\s*:\s*"compaction"/;
+
+/**
+ * The kind of one persisted line, decided from its head: pi always writes `type` first, so this
+ * replaces a `JSON.parse` of every line — including the megabyte-sized ones a tool result writes.
+ */
+const ENTRY_TYPE_RE = /^\{\s*"type"\s*:\s*"(\w+)"/;
+
+/**
+ * The same latency bound as {@link COMPACTION_READ_LIMIT_BYTES}, for its own reason: the edit list is
+ * read on every history push, so it must not turn a snapshot into a full-file parse.
+ */
+const CONTEXT_EDIT_READ_LIMIT_BYTES = 16 * 1024 * 1024;
 
 /** One file's boundaries, remembered until the file itself changes. */
 interface CachedBoundaries {
@@ -149,6 +167,207 @@ function scanBranchCompactions(filePath: string): CompactionEntry[] {
   return branchEntries(refs, leaf)
     .map((node) => compactions.get(node.id))
     .filter((entry): entry is CompactionEntry => entry !== undefined);
+}
+
+/**
+ * What the model may no longer re-read, as the session file records it: one durable `context_edit` of
+ * the branch this file currently ends on, with the *original* content of its target attached.
+ *
+ * The projection has already applied the edit, so `get_messages` cannot report it: an omitted tool
+ * result is simply missing from the history and a replaced one is indistinguishable from the real
+ * output. The transcript needs both halves — the original to keep showing the card, the edit to badge
+ * it — and only the file still has them.
+ */
+export interface ContextEditRecord {
+  /** pi's entry id the edit targets. */
+  targetId: string;
+  kind: 'omitted' | 'replaced';
+  /** What the model reads now, for a replacement. */
+  replacementText?: string;
+  /** What is really persisted, which is what the card must keep showing. */
+  originalText: string;
+  /** Set for the edit of a tool result: the id a card in the webview is keyed by. */
+  originalToolCallId?: string;
+  /** Also for a tool result: a restored card of a failed call must not look like a success. */
+  originalIsError?: boolean;
+  originalRole: 'user' | 'assistant' | 'toolResult';
+  timestamp: string;
+  /** The newest compaction on the branch already summarised this target away. */
+  preCompaction: boolean;
+}
+
+/** A scanned line, as far as the branch walk and the two entry kinds we care about are concerned. */
+interface ScannedEntry extends SessionEntryLike {
+  timestamp?: string;
+}
+
+/** The message an edit was aimed at, as persisted (an edit never rewrites its target). */
+interface EditTarget {
+  role: 'user' | 'assistant' | 'toolResult';
+  text: string;
+  toolCallId?: string;
+  isError?: boolean;
+}
+
+interface CachedEdits {
+  mtimeMs: number;
+  size: number;
+  edits: ContextEditRecord[];
+}
+
+/** Same LRU-by-read discipline as the boundaries: every surface of one session asks for the same list. */
+const editCache = new Map<string, CachedEdits>();
+const EDIT_CACHE_SIZE = 8;
+
+/**
+ * The durable context edits of the branch a session file currently ends on.
+ *
+ * Deliberately a second reader beside {@link readBranchCompactions} rather than one shared scan: the
+ * two lists answer different questions and are pushed at different moments, and a compaction list that
+ * disappeared because of an edit reader would be a regression nobody asked for.
+ */
+export async function readBranchContextEdits(
+  filePath: string | null | undefined,
+): Promise<ContextEditRecord[]> {
+  if (!filePath) return [];
+  try {
+    const stats = statSync(filePath);
+    if (!stats.isFile()) return [];
+    const cached = editCache.get(filePath);
+    if (
+      cached &&
+      cached.mtimeMs === stats.mtimeMs &&
+      cached.size === stats.size
+    ) {
+      editCache.delete(filePath);
+      editCache.set(filePath, cached);
+      return cached.edits;
+    }
+    if (stats.size > CONTEXT_EDIT_READ_LIMIT_BYTES) return [];
+    const edits = scanBranchEdits(filePath);
+    editCache.set(filePath, {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      edits,
+    });
+    while (editCache.size > EDIT_CACHE_SIZE) {
+      const oldest = editCache.keys().next();
+      if (oldest.done) break;
+      editCache.delete(oldest.value);
+    }
+    return edits;
+  } catch {
+    return [];
+  }
+}
+
+/** One pass for the branch and the edits, then a targeted second pass for the edited messages. */
+function scanBranchEdits(filePath: string): ContextEditRecord[] {
+  const lines = readFileSync(filePath, 'utf8').split('\n');
+  const refs: ScannedEntry[] = [];
+  for (const line of lines) {
+    if (!line.startsWith('{')) continue;
+    const link = entryLink(line);
+    if (!link) continue;
+    const type = ENTRY_TYPE_RE.exec(line)?.[1] ?? 'unknown';
+    if (type !== 'context_edit' && type !== 'compaction') {
+      refs.push({ ...link, type });
+      continue;
+    }
+    // The link is pushed whatever happens, exactly as `scanBranchCompactions` does: a torn line at the
+    // tail must not make the two readers disagree about where the branch ends.
+    refs.push({ ...link, type });
+    try {
+      const entry = JSON.parse(line) as ScannedEntry;
+      refs[refs.length - 1] = { ...link, ...entry, type };
+    } catch {
+      // A partially written trailing line: the entry stays a bare link in the walk.
+    }
+  }
+  const leaf = refs.at(-1)?.id ?? null;
+  const edits = collectContextEdits(refs, leaf);
+  if (!edits.size) return [];
+
+  const records: ContextEditRecord[] = [];
+  for (const [targetId, edit] of edits) {
+    const target = findMessageEntry(lines, targetId);
+    if (!target) continue;
+    const replacement = edit.replacement;
+    const replacementText = replacement
+      ? textOfContent(replacement.content, '\n').trim()
+      : undefined;
+    // A restore is itself a `context_edit` — pi's edit log is append-only, so undoing one appends the
+    // original content back. An edit that changes nothing must badge nothing.
+    if (replacement && replacementText === target.text) continue;
+    // An omitted tool result is stored as the bridge's placeholder answer, not as a deletion, because the
+    // call may not be left without one. That placeholder is what makes the record an omission again — and
+    // the reason the transcript can show the real output while the model reads the stub.
+    const kind =
+      !replacement || replacementText === CONTEXT_OMIT_PLACEHOLDER
+        ? 'omitted'
+        : 'replaced';
+    records.push({
+      targetId,
+      kind,
+      replacementText,
+      originalText: target.text,
+      originalToolCallId: target.toolCallId,
+      originalIsError: target.isError,
+      originalRole: target.role,
+      timestamp: edit.timestamp ?? '',
+      preCompaction: isBeforeCompactionCutoff(refs, leaf, targetId),
+    });
+  }
+  return records;
+}
+
+/**
+ * The persisted message behind an edit, parsed only for the ids that need it. The prefilter is a
+ * substring test on a line pi always starts with `"type":"message"` — a file whose tool results are
+ * megabytes wide must not be `JSON.parse`d to answer one question.
+ */
+function findMessageEntry(
+  lines: string[],
+  targetId: string,
+): EditTarget | undefined {
+  const needle = `"id":"${targetId}"`;
+  for (const line of lines) {
+    if (!line.startsWith('{') || !line.includes(needle)) continue;
+    let entry:
+      | {
+          id?: string;
+          message?: {
+            role?: string;
+            toolCallId?: string;
+            isError?: boolean;
+            content?: unknown;
+          };
+        }
+      | undefined;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (entry?.id !== targetId) continue;
+    const message = entry.message;
+    const role = message?.role;
+    // `appendContextEdit` also allows a `custom_message` target, but that entry has no `message` and no
+    // tool call, so there is no card to badge and no text to restore: reported as nothing. A context
+    // edit of an injected extension message is therefore invisible here — and still fully in effect.
+    if (role !== 'user' && role !== 'assistant' && role !== 'toolResult')
+      return undefined;
+    return {
+      role,
+      text: textOfContent(message?.content, '\n').trim(),
+      toolCallId: role === 'toolResult' ? message?.toolCallId : undefined,
+      // Only a real failure is recorded: an absent flag already means "not an error", and a key that
+      // says nothing would show up in every record the tests compare against.
+      isError:
+        role === 'toolResult' && message?.isError === true ? true : undefined,
+    };
+  }
+  return undefined;
 }
 
 /** Parse one session file into metadata, or null if unreadable / not a session. */

@@ -34,6 +34,7 @@ const config = (binaryPath: string): PiConfig => ({
   expandThinking: false,
   privacyMode: false,
   privacyRules: [],
+  contextEditing: true,
   extraArgs: [],
 });
 

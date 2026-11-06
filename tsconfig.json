@@ -18,6 +18,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src", "webview/src", "shared", "esbuild.mjs"],
+  "include": ["src", "webview/src", "shared", "pi-bridge", "esbuild.mjs"],
   "exclude": ["node_modules", "dist"]
 }

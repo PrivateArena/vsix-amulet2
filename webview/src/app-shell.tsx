@@ -3,8 +3,10 @@ import type { HostMessage } from '../../shared/protocol';
 import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
+import { contextSurgery } from './stores/context-surgery-store';
 import { projectFiles } from './stores/project-files-store';
 import { useCompactionHistoryStore } from './stores/compaction-history-store';
+import { useContextSurgeryStore } from './stores/context-surgery-store';
 import { usePackagesStore } from './stores/packages-store';
 import { applyPrivacyConfig } from './stores/privacy-store';
 import { useSessionInfoStore } from './stores/session-info-store';
@@ -61,6 +63,19 @@ export function Shell() {
       packages: (message) => usePackagesStore.getState().acceptList(message),
       packageOpResult: (message) =>
         usePackagesStore.getState().acceptOp(message.result),
+      // An edit list is both a badge update (the reducer) and the proof that any operation this panel
+      // asked for has landed — which is what releases a card's in-flight mark. The host pushes it after
+      // every history snapshot and after every op, so no timer has to guess.
+      contextEdits: (message) => {
+        contextSurgery.clearInFlight();
+        dispatch({ type: 'host', message });
+      },
+      // The transcript row is the host's `notice`; this is only the panel's way back, and only while the
+      // offer is live — a refused revert leaves nothing to undo.
+      revertResult: (message) => {
+        contextSurgery.setUndoRevert(message.result.ok ? message.result : null);
+        dispatch({ type: 'host', message });
+      },
       // `config` carries a store flag (expandThinking) and the censoring rules together, and the rules
       // are rendering state rather than chat state: they never enter the transcript, only its painting.
       config: (message) => {
@@ -94,6 +109,22 @@ export function Shell() {
       !packagesOpen,
   );
 
+  // The revert this panel may still take back. The host owns the truth (`ChatState.lastRevert`, cleared
+  // at `agent_settled`); this copy only exists to render the way back, and it expires as soon as a run
+  // starts — undoing a rewind after the conversation moved on would strand what the user has written.
+  const undoRevert = useContextSurgeryStore((s) => s.undoRevert);
+  useEffect(() => {
+    if (state.streaming && undoRevert) contextSurgery.setUndoRevert(null);
+  }, [state.streaming, undoRevert]);
+
+  // A different session is a different conversation: an undo offer, or a card waiting on an operation,
+  // cannot survive the move. The host stops offering it on its side (`lastRevert` is cleared on switch and
+  // on new chat); this is the panel forgetting the same thing at the same moment.
+  const sessionId = state.session?.sessionId;
+  useEffect(() => {
+    contextSurgery.clearAll();
+  }, [sessionId]);
+
   // Stay on the splash until the runtime is actually up. The runtime reports
   // `stopped` before `start()` runs (its initial status), so treating anything
   // other than `starting` as "ready" would flash the empty chat screen during
@@ -108,6 +139,28 @@ export function Shell() {
     <div className="shell">
       <ChatScreen />
 
+      {undoRevert && (
+        <div className="gh-fork">
+          <span>
+            {`Conversation rewound — ${undoRevert.abandonedCount} later ${
+              undoRevert.abandonedCount === 1 ? 'entry is' : 'entries are'
+            } out of the context.`}
+          </span>
+          <button
+            className="ext-link"
+            onClick={() => {
+              contextSurgery.setUndoRevert(null);
+              actions.undoRevert();
+            }}>
+            Undo revert
+          </button>
+          <button
+            className="ext-link"
+            onClick={() => contextSurgery.setUndoRevert(null)}>
+            Keep it this way
+          </button>
+        </div>
+      )}
       {forkMode && (
         <div className="gh-fork">
           <span>

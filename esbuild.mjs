@@ -61,16 +61,38 @@ const webviewConfig = {
   plugins: [stylePlugin],
 };
 
+// The pi extension Amulet ships (`pi-bridge/`): loaded by the *child* process with `pi -e`, so it is a
+// separate bundle. pi itself is external and never bundled — the extension API is injected by pi's own
+// loader, and a second copy of the runtime inside the child would be a second session writer.
+const bridgeConfig = {
+  ...common,
+  entryPoints: [join(__dirname, 'pi-bridge/amulet-bridge.ts')],
+  outfile: join(__dirname, 'dist/pi-bridge/amulet-bridge.mjs'),
+  platform: 'node',
+  // ESM, and `.mjs`: pi loads the file through jiti, which hands a real-ESM file to Node's own loader.
+  // A CJS-shaped bundle is not usable — jiti's `import(path, { default: true })` then resolves to the
+  // export namespace instead of the factory, and pi refuses to load the extension.
+  format: 'esm',
+  target: 'node20',
+  external: [
+    '@earendil-works/pi-coding-agent',
+    '@earendil-works/pi-ai',
+    '@earendil-works/pi-tui',
+  ],
+};
+
 async function run() {
   if (watch) {
     const hostCtx = await esbuild.context(hostConfig);
     const webCtx = await esbuild.context(webviewConfig);
-    await Promise.all([hostCtx.watch(), webCtx.watch()]);
+    const bridgeCtx = await esbuild.context(bridgeConfig);
+    await Promise.all([hostCtx.watch(), webCtx.watch(), bridgeCtx.watch()]);
     console.log('[esbuild] watching…');
   } else {
     await Promise.all([
       esbuild.build(hostConfig),
       esbuild.build(webviewConfig),
+      esbuild.build(bridgeConfig),
     ]);
     console.log('[esbuild] build complete');
   }

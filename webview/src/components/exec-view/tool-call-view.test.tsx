@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, beforeEach, expect, it, vi } from 'vitest';
 import type { ToolExec } from '../../store';
 
 // Every chat component reaches the host boundary through `apis/actions`, and that module
@@ -10,7 +10,30 @@ vi.stubGlobal('acquireVsCodeApi', () => ({
   getState: () => undefined,
   setState: () => {},
 }));
+
+/**
+ * The card's context menu reads the shared chat state (availability, streaming, the live record of the
+ * call), and this suite has no provider. A hoisted mutable fake is enough: nothing here dispatches, and
+ * a test that wants a badge or an enabled menu sets the fields it cares about first.
+ */
+const { chat } = vi.hoisted(() => ({
+  chat: {
+    streaming: false,
+    bridge: { available: false },
+    tools: {},
+  } as unknown as Record<string, unknown>,
+}));
+vi.mock('../../contexts/chat-context', () => ({
+  useChatState: () => chat,
+  useChatDispatch: () => () => {},
+  useReady: () => true,
+}));
 const { ExecBlock } = await import('./tool-call-view');
+
+/** What the reducer would hold for a card under test. */
+function setState(over: Record<string, unknown>): void {
+  Object.assign(chat, over);
+}
 
 /**
  * Render-time checks for the streaming tool card. They run through `react-dom/server`
@@ -375,5 +398,90 @@ describe('read card for an image', () => {
     });
     expect(html).toContain('exec-output-error');
     expect(html).toContain('ENOENT');
+  });
+});
+
+describe('card context menu and badge', () => {
+  const ctxTool = (over: Partial<ToolExec> = {}): ToolExec => ({
+    toolCallId: 'call_ctx',
+    toolName: 'read',
+    status: 'done',
+    resultText: 'the output the model may stop reading',
+    ...over,
+  });
+
+  const live = (tool: ToolExec, bridge = true) =>
+    setState({
+      streaming: false,
+      bridge: { available: bridge },
+      tools: { [tool.toolCallId]: tool },
+    });
+
+  beforeEach(() => {
+    setState({ streaming: false, bridge: { available: false }, tools: {} });
+  });
+
+  it('marks the card with the call id the menu needs to address it', () => {
+    const tool = ctxTool();
+    live(tool);
+    expect(card({ name: 'read', tool })).toContain(
+      'data-tool-call-id="call_ctx"',
+    );
+  });
+
+  it('offers nothing where the bridge is not loaded', () => {
+    const tool = ctxTool();
+    card({ name: 'read', tool });
+    setState({
+      bridge: { available: false },
+      tools: { [tool.toolCallId]: tool },
+    });
+    expect(card({ name: 'read', tool })).not.toContain('exec-ctx-trigger');
+  });
+
+  it('offers the group when the runtime can honour it', () => {
+    const tool = ctxTool();
+    live(tool);
+    const html = card({ name: 'read', tool });
+    expect(html).toContain('exec-ctx-trigger');
+    expect(html).toContain('aria-haspopup="menu"');
+    // The menu itself is anchored on click, so it is not in the markup of a static render.
+    expect(html).not.toContain('ctx-menu');
+  });
+
+  it('badges an omitted result and says what it means', () => {
+    const tool = ctxTool({ ctxEdit: { kind: 'omitted' } });
+    live(tool);
+    const html = card({ name: 'read', tool });
+    expect(html).toContain('exec-ctx-badge');
+    expect(html).toContain('Omitted from context');
+    // The card still paints the real output — the badge is about the model, not about the transcript.
+    expect(html).toContain('the output the model may');
+  });
+
+  it('badges a replacement apart from an omission, and a refusal apart from both', () => {
+    const replaced = ctxTool({
+      ctxEdit: { kind: 'replaced', replacementText: 'edited text' },
+    });
+    live(replaced);
+    expect(card({ name: 'read', tool: replaced })).toContain(
+      'Edited in context',
+    );
+
+    const failed = ctxTool({
+      ctxEdit: { kind: 'failed', error: 'pi is working' },
+    });
+    live(failed);
+    const html = card({ name: 'read', tool: failed });
+    expect(html).toContain('Could not edit');
+    expect(html).toContain('is-failed');
+    expect(html).not.toContain('Omitted from context');
+  });
+
+  it('shows no badge for a card the model still reads as written', () => {
+    live(ctxTool());
+    expect(card({ name: 'read', tool: ctxTool() })).not.toContain(
+      'exec-ctx-badge',
+    );
   });
 });

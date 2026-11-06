@@ -39,6 +39,29 @@ export const actions = {
   compact: () => postMessage({ type: 'compact' }),
   editAndFork: (entryId: string, text: string) =>
     postMessage({ type: 'editAndFork', entryId, text }),
+  // context surgery — the three edit operations all address a **tool call id**, the id a card already
+  // has; the bridge resolves it to pi's session entries. They change what the *model* re-reads on the
+  // next request, never the transcript, the session file or the text handed back to pi. None of them
+  // answers a reply message: the result arrives as a `contextEdits` push (the badge list), so a caller
+  // marks its row in flight and waits for that list — see `stores/context-surgery-store.ts`.
+  /** Stop sending this call's output to the model; the card keeps showing it. */
+  omitFromContext: (toolCallId: string) =>
+    postMessage({ type: 'omitFromContext', toolCallId }),
+  /** Replace the text the model reads for this call, for all future requests. */
+  replaceContextContent: (toolCallId: string, content: string) =>
+    postMessage({ type: 'replaceContextContent', toolCallId, content }),
+  /** Undo an omission or a replacement: the model reads the original again. */
+  restoreContextEntry: (toolCallId: string) =>
+    postMessage({ type: 'restoreContextEntry', toolCallId }),
+  /**
+   * Rewind the conversation to one user message: everything after it leaves the context. Same session
+   * file, unlike a fork — which is what keeps this a different action from `forkFromMessage`.
+   * `occurrence` picks which copy of a repeated text is meant; the host resolves newest when absent.
+   */
+  revertToMessage: (text: string, occurrence?: 'newest' | number) =>
+    postMessage({ type: 'revertToMessage', text, occurrence }),
+  /** Go back to the leaf the last successful revert abandoned. */
+  undoRevert: () => postMessage({ type: 'undoRevert' }),
 
   // model / thinking config
   setModel: (provider: string, modelId: string) =>

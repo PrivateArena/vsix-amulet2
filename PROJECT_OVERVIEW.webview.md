@@ -22,16 +22,18 @@ webview/src/apis/               vscode.ts (postMessage/onHostMessage), actions.t
 webview/src/contexts/           chat-context.tsx (useReducer(state, dispatch) + useChatState)
 webview/src/screens/            splash-screen.tsx (no runtime/auth), session-screen.tsx
 webview/src/stores/             zustand: composer-store, confirm-store, provider-login-store,
-                                session-info-store, compaction-history-store, turn-nav-store
+                                session-info-store, compaction-history-store, turn-nav-store,
+                                context-surgery-store (in-flight op, live undo-revert offer)
 webview/src/components/entry-list/    message-list.tsx (scroll + stick-to-bottom host)
 webview/src/components/entry-view/    agent-timeline.tsx (blocks -> rows), message-view.tsx
-webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, stream-tail.ts, subagent-calls/,
+webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, stream-tail.ts, card-menu.ts, subagent-calls/,
                                       write-stream/, command-stream/, tool-images/
 webview/src/components/input-bar/     input-bar/composer.tsx, model-picker/, ctx-meter/,
                                       compaction-history/, cmd-menu/, file-menu/, reasoning-select/
 webview/src/components/topbar/        topbar/, topbar-left/, topbar-right/, settings-menu/
 webview/src/components/ui/            permission-prompt/, auth-dialog/, session-info-dialog/,
-                                      compaction-dialog/, modal/, flyout/, tooltip/, ctx-menu/,
+                                      compaction-dialog/, context-editor-dialog/, modal/, flyout/,
+                                      tooltip/, ctx-menu/,
                                       button/, menu-item/, ld/
 webview/src/components/chat-find/     chat-find.tsx, transcript-index.ts, find-query (utils)
 webview/src/components/               code-block/, patch-view/, reasoning-block/, progress-bar/,
@@ -144,6 +146,16 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
     reducer may retire a `dataUrl` the reader stopped looking at (`retainNewestImages`) — a card that
     remembered its own requests would then wait forever on a fetch nobody is making.
 
+11. **A context badge describes the model, never the transcript.** `ToolExec.ctxEdit` (applied by
+    `applyContextEdits` from the host's `contextEdits` push) says what the *model* may re-read: an omitted
+    result keeps its full card and gains a pill, because the host re-inserted what pi's projection dropped.
+    The reducer only patches that one field and returns the same state object when nothing differs — a card
+    rebuilt by the next `tool_execution_update` must not lose its badge, and the timeline compares cards by
+    identity. Nothing that goes back into the run (an edit's initial text, a Quote, a Reply) may read the
+    badge or the censored rendering: it reads `ToolExec.resultText`, which is the untouched source. Editing a
+    message mid-conversation is a **provider-cache event** (AGENTS.md "Context surgery"), which is why the edit
+    dialog says so.
+
 ## Read Triggers
 
 | If you need to...                                             | Open these files                                                                                                                                                                                                                                                                                                        |
@@ -152,6 +164,7 @@ webview/src/{hooks,utils,constants,libs}/ + assets/css/  (--amulet-* tokens, per
 | Add a message/tool render style                               | `components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`, `exec-view/tool-display.ts`, matching `.scss`                                                                                                                                                                                               |
 | Show what a tool call is doing before it runs                 | `shared/tool-args.ts` (partial `toolcall_delta` text), `webview/src/hooks/use-streaming-tool-args.ts`, `components/exec-view/write-stream/`, `components/exec-view/command-stream/`, `components/exec-view/stream-tail.ts`; `agent-timeline.tsx` decides which cards get `partialArgs`                                  |
 | Show an image a tool returned, or change when its bytes load  | `components/exec-view/tool-images/` (`needsToolImage` is the gate), `components/exec-view/tool-call-view.tsx`, `store.ts` (`ToolExec.images`, `toolImage` case, `retainNewestImages`); host `src/webview/tool-image.ts`                                                                                                 |
+| Change **Omit / Edit context content / Revert** in the UI  | `store.ts` (`applyContextEdits`, `ToolExec.ctxEdit`, `ChatState.bridge`), `stores/context-surgery-store.ts`, `components/exec-view/card-menu.ts` + `tool-call-view.tsx`, `components/entry-list/transcript-menu.tsx`, `components/ui/context-editor-dialog/`; host side is `src/webview/chat-bridge.ts` + `pi-bridge/` (AGENTS.md “Context surgery”) |
 | Add a host message type                                       | `shared/protocol.ts` (`HostMessage`), `webview/src/store.ts`, `apis/vscode.ts` consumer                                                                                                                                                                                                                                 |
 | Send something new to the host                                | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), host `chat-bridge.handleMessage`                                                                                                                                                                                                                |
 | Change composer behaviour (slash cmds, attachments, steering) | `components/input-bar/input-bar/composer.tsx`, `cmd-menu/slash-command-menu.tsx`, `stores/composer-store.ts`, `hooks/use-slash-commands.ts`, `utils/prompt-chain.ts`, `utils/slash-command.ts`                                                                                                                          |

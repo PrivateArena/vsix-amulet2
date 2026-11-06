@@ -4,19 +4,32 @@ import {
   LuCheck,
   LuChevronRight,
   LuCopy,
+  LuEllipsisVertical,
   LuSquare,
   LuWrench,
 } from 'react-icons/lu';
 import { actions } from '../../apis/actions';
+import { useChatState } from '../../contexts/chat-context';
 import { useStickToBottom } from '../../hooks/use-stick-to-bottom';
 import { useCopyFeedback } from '../../hooks/use-copy-feedback';
 import { useStreamingToolArgs } from '../../hooks/use-streaming-tool-args';
 import { useTickingClock } from '../../hooks/use-ticking-clock';
 import type { ToolExec, ToolStatus } from '../../store';
-import { useRedact } from '../../stores/privacy-store';
+import {
+  contextSurgery,
+  useContextSurgeryStore,
+} from '../../stores/context-surgery-store';
+import { usePrivacyMode, useRedact } from '../../stores/privacy-store';
 import { PatchView } from '../patch-view';
 import { CodeBlock } from '../code-block';
+import { CtxMenu, type ContextMenuItem } from '../ui/ctx-menu';
+import { ContextEditorDialog } from '../ui/context-editor-dialog';
 import { Tooltip } from '../ui/tooltip';
+import {
+  CONTEXT_EDIT_DIALOG_SUBTITLE,
+  cardMenuOf,
+  type ContextOp,
+} from './card-menu';
 import {
   FILE_TOOLS,
   TOOL_ICONS,
@@ -91,6 +104,130 @@ interface NestedView {
   nestedComplete?: boolean;
   /** False for a list that came back from the runtime's persisted record. */
   outputsStored: boolean;
+}
+
+/** What a card states about what the model reads. The card itself always shows the real output. */
+const CTX_BADGE: Record<NonNullable<ToolExec['ctxEdit']>['kind'], string> = {
+  omitted: 'Omitted from context',
+  replaced: 'Edited in context',
+  applying: 'Hiding from context…',
+  failed: 'Could not edit',
+};
+
+function ContextBadge({ edit }: { edit: NonNullable<ToolExec['ctxEdit']> }) {
+  const tip =
+    edit.kind === 'failed'
+      ? edit.error || 'The runtime refused this edit.'
+      : edit.kind === 'replaced'
+        ? `The model now reads: ${edit.replacementText?.trim() || '(empty)'}`
+        : 'The model no longer reads this output. The transcript still shows what really happened.';
+  return (
+    <Tooltip
+      content={
+        edit.preCompaction
+          ? 'This message was already summarised out of the context by compaction — use Compact instead.'
+          : tip
+      }
+      side="bottom"
+      align="end">
+      <span className={`exec-ctx-badge is-${edit.kind}`}>
+        {CTX_BADGE[edit.kind]}
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
+ * The card's context menu: hide this output from the model, replace its text, or undo either.
+ *
+ * A child component rather than part of {@link ExecBlock} on purpose: it reads the shared chat state
+ * (availability, streaming, in-flight), and cards are rebuilt from every streamed delta — so the reads
+ * that move with the run belong to the small node allowed to re-render, not to the card the timeline
+ * compares by identity.
+ */
+function CardMenu({ tool }: { tool: ToolExec }) {
+  const state = useChatState();
+  const inFlight = useContextSurgeryStore((s) => s.inFlight[tool.toolCallId]);
+  const privacyMode = usePrivacyMode();
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  // The live record rather than the one this card was rendered with: after a reload the badge that
+  // history restored is what has to offer the way back.
+  const current = state.tools[tool.toolCallId] ?? tool;
+  const items = cardMenuOf({
+    hasEdit: !!current.ctxEdit,
+    streaming: state.streaming,
+    available: state.bridge.available,
+    inFlight,
+  });
+  if (!items.length) return null;
+
+  const run = (op: ContextOp) => {
+    // The dialog is a replace's confirmation step: in-flight starts when the text is really sent, so
+    // cancelling cannot strand the card in a state nothing will ever clear.
+    if (op === 'replace') {
+      setEditing(true);
+      return;
+    }
+    contextSurgery.setInFlight(tool.toolCallId, op);
+    if (op === 'omit') actions.omitFromContext(tool.toolCallId);
+    else actions.restoreContextEntry(tool.toolCallId);
+  };
+  const menu: ContextMenuItem[] = items.map((item) => ({
+    label: item.label,
+    disabled: item.disabled,
+    separatorBefore: item.separatorBefore,
+    onSelect: () => run(item.op),
+  }));
+
+  return (
+    <>
+      <Tooltip content="Context" side="bottom" align="end">
+        {/* Its own button, outside the disclosure: opening a menu must not fold the card it is on. */}
+        <button
+          type="button"
+          className="exec-action exec-ctx-trigger"
+          aria-label="Context actions for this result"
+          aria-haspopup="menu"
+          aria-expanded={!!anchor}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const box = e.currentTarget.getBoundingClientRect();
+            setAnchor({ x: box.right, y: box.bottom + 4 });
+          }}>
+          <LuEllipsisVertical aria-hidden />
+        </button>
+      </Tooltip>
+      {anchor && (
+        <CtxMenu
+          x={anchor.x}
+          y={anchor.y}
+          items={menu}
+          minWidth={216}
+          onClose={() => setAnchor(null)}
+        />
+      )}
+      {editing && (
+        <ContextEditorDialog
+          title="Edit what the model reads"
+          subtitle={CONTEXT_EDIT_DIALOG_SUBTITLE}
+          initial={current.resultText ?? ''}
+          privacyNote={
+            privacyMode
+              ? 'Privacy mode is on: the chat may be censoring this output on screen, but the text below is what the model will be given.'
+              : undefined
+          }
+          onCancel={() => setEditing(false)}
+          onConfirm={(text) => {
+            setEditing(false);
+            contextSurgery.setInFlight(tool.toolCallId, 'replace');
+            actions.replaceContextContent(tool.toolCallId, text);
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 export function ExecBlock({
@@ -242,6 +379,9 @@ export function ExecBlock({
   return (
     <div
       className={`exec-block ${statusClass(status)}${isError ? ' error' : ''}${name === 'write' ? ' exec-write' : ''}${images?.length ? ' exec-has-image' : ''}`}
+      // The transcript's right-click menu resolves its target from the DOM, exactly the way it finds
+      // the markdown unit a Quote has to come back from.
+      {...(tool ? { 'data-tool-call-id': tool.toolCallId } : {})}
       {...(expanded ? ({ open: true } as Record<string, unknown>) : {})}>
       <div className="exec-header">
         {/* The disclosure is the summary, not the whole row: the row also carries the
@@ -267,7 +407,7 @@ export function ExecBlock({
             )}
           </button>
         </Tooltip>
-        {(duration || copyText || live || writeCount) && (
+        {(duration || copyText || live || writeCount || tool) && (
           <span className="exec-actions">
             {writeCount && (
               <span className="exec-write-counts">{writeCount}</span>
@@ -305,8 +445,10 @@ export function ExecBlock({
                 </button>
               </Tooltip>
             )}
+            {tool && <CardMenu tool={tool} />}
           </span>
         )}
+        {tool?.ctxEdit && <ContextBadge edit={tool.ctxEdit} />}
         <span className="exec-chevron" aria-hidden>
           <LuChevronRight />
         </span>

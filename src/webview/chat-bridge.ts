@@ -2,17 +2,20 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import type { BridgeTargetView } from '../../shared/bridge-protocol';
 import type {
   Attachment,
   CommandInfo,
   CompactionEndEvent,
   CompactionStartEvent,
+  ContextEditView,
   ExtensionUiRequest,
   HistoryMessage,
   HostMessage,
   PackageScope,
   ProviderLoginRequest,
   PromptDisposition,
+  RevertResult,
   RpcEvent,
   RuntimeStatus,
   SessionStats,
@@ -62,9 +65,14 @@ import type { SessionManager } from '../session/session-manager';
 import {
   listSessions,
   readBranchCompactions,
+  readBranchContextEdits,
   sessionsDirForCwd,
+  type ContextEditRecord,
 } from '../session/session-store';
-import { handleExtensionUiRequest } from './extension-ui';
+import { handleExtensionUiRequest, isBridgeAck } from './extension-ui';
+import { appliedEdits } from './context-edit-views';
+import { restoreOmittedToolResults } from './history-repair';
+import { BridgeClient } from './bridge-client';
 import { listProjectFiles } from './project-files';
 import {
   isSupportedImage,
@@ -182,6 +190,17 @@ export class ChatBridge implements vscode.Disposable {
   private visibleOutput = 0;
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
   private readonly unregisterSurface: () => void;
+  /**
+   * The host side of the pi extension Amulet ships (`pi-bridge/`), for this surface alone: it owns the
+   * `reqId`s this surface issued, which is what lets one reply be claimed by the caller that waits for
+   * it while N surfaces share one runtime. Bound lazily because {@link runtime} moves on `connect()`.
+   */
+  private readonly bridge: BridgeClient;
+  /**
+   * What the last successful revert abandoned. Only this run may undo it: once the conversation has
+   * moved on, "back to the old leaf" would strand what the user has since written.
+   */
+  private lastRevert: { revertedFrom: string } | undefined;
 
   constructor(
     private readonly sessions: SessionManager,
@@ -192,6 +211,8 @@ export class ChatBridge implements vscode.Disposable {
     // Field initializers run before parameter properties are assigned under ES2022 class fields,
     // so the registration that reads `this.options` has to happen here.
     this.unregisterSurface = registerUiSurface(this.asUiSurface());
+    // ...and the same for a client that has to hold the real logger, not an undefined stand-in.
+    this.bridge = new BridgeClient(() => this.runtime, this.log);
   }
 
   /** This bridge's entry in the dialog surface registry. */
@@ -363,6 +384,13 @@ export class ChatBridge implements vscode.Disposable {
       void this.pushState();
       void this.pushThinkingLevels();
     }
+    // A run settling is the last chance a `turn_end` draft had to land, so the badges can move from
+    // "the bridge is holding this" to "the session file records this". It is also the end of the undo
+    // window: past this point the conversation has been continued, not just paused.
+    if (event.type === 'agent_settled') {
+      this.lastRevert = undefined;
+      void this.pushContextEdits();
+    }
   }
 
   /**
@@ -373,12 +401,78 @@ export class ChatBridge implements vscode.Disposable {
    * Compaction boundaries come out too: pi projects only the newest one, at the head of the list,
    * which reads as a card that lost its place. Every boundary of the branch is served on demand
    * by `requestCompactions` instead — see {@link pushCompactions}.
+   *
+   * And a tool result the user omitted is put back: `get_messages` answers with the model-context
+   * projection, in which that result no longer exists, so without the repair the card disappears from
+   * a transcript the user never deleted. The edit list goes out with it, which is what badges the card
+   * (plan F-4).
    */
-  private postHistory(messages: HistoryMessage[]): void {
+  private async postHistory(
+    messages: HistoryMessage[],
+    sessionFile?: string | null,
+  ): Promise<void> {
+    const file =
+      sessionFile === undefined ? await this.sessionFileOf() : sessionFile;
+    const edits = await this.contextEdits(file);
     this.post({
       type: 'history',
-      messages: stripHistoryImagePayloads(stripCompactionBoundaries(messages)),
+      messages: stripHistoryImagePayloads(
+        restoreOmittedToolResults(stripCompactionBoundaries(messages), edits),
+      ),
     });
+    this.post({
+      type: 'contextEdits',
+      edits: this.contextEditViews(file, edits),
+    });
+  }
+
+  /** The session file the loaded child is writing, or null for a session with no file yet. */
+  private async sessionFileOf(): Promise<string | null> {
+    try {
+      return (await this.runtime?.getState())?.sessionFile ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The durable context edits of one session file, and never a thrown history push. */
+  private async contextEdits(
+    sessionFile: string | null | undefined,
+  ): Promise<ContextEditRecord[]> {
+    try {
+      return await readBranchContextEdits(sessionFile);
+    } catch (err) {
+      this.log.warn(
+        `Failed to read the context edits: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Re-push the edit list on its own: after an operation the badges move while the transcript itself
+   * did not change, and reading the projection again would cost a round trip for nothing.
+   */
+  private async pushContextEdits(sessionFile?: string | null): Promise<void> {
+    const file =
+      sessionFile === undefined ? await this.sessionFileOf() : sessionFile;
+    this.post({
+      type: 'contextEdits',
+      edits: this.contextEditViews(file, await this.contextEdits(file)),
+    });
+  }
+
+  /**
+   * The badges to show: what the session file records, plus what this host asked for and pi has not
+   * written yet. The merge lives in {@link appliedEdits} rather than in this bridge because N surfaces
+   * share one runtime, and every one of them must be able to say the same thing about a card
+   * (plan F-5).
+   */
+  private contextEditViews(
+    sessionFile: string | null,
+    records: ContextEditRecord[],
+  ): ContextEditView[] {
+    return appliedEdits.merge(sessionFile, records.map(contextEditViewOf));
   }
 
   private async pushSnapshot(): Promise<void> {
@@ -391,7 +485,10 @@ export class ChatBridge implements vscode.Disposable {
         runtime.getState(),
       ]);
       this.post({ type: 'models', models });
-      this.postHistory(messages as HistoryMessage[]);
+      await this.postHistory(
+        messages as HistoryMessage[],
+        state.sessionFile ?? null,
+      );
       this.post({ type: 'state', state });
       await Promise.all([
         this.pushThinkingLevels(),
@@ -567,6 +664,25 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'editAndFork':
           await this.editAndFork(message.entryId, message.text);
+          return;
+        case 'omitFromContext':
+          await this.runContextOp('omit', message.toolCallId);
+          return;
+        case 'replaceContextContent':
+          await this.runContextOp(
+            'replace',
+            message.toolCallId,
+            message.content,
+          );
+          return;
+        case 'restoreContextEntry':
+          await this.runContextOp('restore', message.toolCallId);
+          return;
+        case 'revertToMessage':
+          await this.revertToMessage(message.text, message.occurrence);
+          return;
+        case 'undoRevert':
+          await this.undoRevert();
           return;
         case 'exportChat':
           await this.exportChat();
@@ -986,6 +1102,37 @@ export class ChatBridge implements vscode.Disposable {
     } catch {
       /* ignore */
     }
+    // `get_commands` is what makes the bridge's command name known, so availability can only be
+    // decided after it — which is also why a runtime that loaded the bridge mid-life flips to true
+    // here without any restart.
+    await this.pushBridgeStatus();
+  }
+
+  /**
+   * Say which of the context-surgery actions this child can actually honour, so the menu hides what it
+   * cannot do rather than failing when the human clicks it (plan F-1).
+   */
+  private async pushBridgeStatus(): Promise<void> {
+    const available = this.bridge.isAvailable();
+    this.post({
+      type: 'bridgeStatus',
+      available,
+      capabilities: this.bridge.capabilities(),
+    });
+    if (!available) return;
+    const capabilities = await this.bridge.refreshCapabilities();
+    if (!capabilities) return;
+    this.post({
+      type: 'bridgeStatus',
+      available: true,
+      capabilities: {
+        ...capabilities,
+        // The child reports its own capabilities; the version is the host's fact (`pi --version`).
+        piVersion:
+          capabilities.piVersion ||
+          (this.runtime?.getStatus().agentVersion ?? ''),
+      },
+    });
   }
 
   /**
@@ -1046,6 +1193,9 @@ export class ChatBridge implements vscode.Disposable {
   private async switchSession(path: string): Promise<void> {
     const runtime = this.runtime;
     if (!runtime?.isReady) return;
+    // Whatever this surface could still undo belongs to the session it is leaving, not the one it is
+    // opening — and an entry id of another file must never be sent into this one.
+    this.lastRevert = undefined;
     // SECURITY: confine switch to the sessions dir; the webview is untrusted.
     const resolved = this.assertSessionPath(path);
     if (!resolved) {
@@ -1085,6 +1235,9 @@ export class ChatBridge implements vscode.Disposable {
       return;
     }
     await runtime.newSession();
+    // A new session is a different conversation: the tail a revert abandoned in the old one is not
+    // something this panel may still offer to bring back.
+    this.lastRevert = undefined;
     this.post({ type: 'history', messages: [] });
     await this.pushSnapshot();
   }
@@ -1269,10 +1422,212 @@ export class ChatBridge implements vscode.Disposable {
     }
     // Refresh history to reflect the truncated branch, then send the edited text.
     const messages = await runtime.getMessages();
-    this.postHistory(messages as HistoryMessage[]);
+    await this.postHistory(messages as HistoryMessage[]);
     // A fork starts a new session, which re-resolves the model and its levels.
     void this.pushThinkingLevels();
     await this.submitText(runtime, text, 'send');
+  }
+
+  // --- Context surgery: Omit / Edit context content / Revert -------------------
+
+  /**
+   * One Omit / Edit / Restore, asked of the bridge and reported back to this surface.
+   *
+   * Deliberately not routed through {@link submitText}: a button click is not a command the human
+   * typed, and the `notify` ack would then be scored as user-visible output (or announced as silence).
+   * The answer arrives on {@link BridgeClient.handleNotify}, correlated by reqId, and never reaches the
+   * transcript as text.
+   */
+  private async runContextOp(
+    op: 'omit' | 'replace' | 'restore',
+    toolCallId: string,
+    content?: string,
+  ): Promise<void> {
+    if (!(await this.bridgeGate())) return;
+    const sessionFile = await this.sessionFileOf();
+    const reply = await this.bridge.call(
+      op,
+      content === undefined
+        ? { handle: { kind: 'toolCall' as const, toolCallId } }
+        : { handle: { kind: 'toolCall' as const, toolCallId }, content },
+    );
+    if (reply.ok) {
+      // The bridge holds the edit in memory from this moment, so the next request already reflects it,
+      // and the durable `context_edit` follows at the next turn boundary. No history re-push on purpose:
+      // the live card already shows the real output, and the projection has nothing better to say.
+      this.rememberAppliedEdit(sessionFile, op, reply.targets, content);
+    } else {
+      // One-shot: the card says what failed and why, and the next push of the list retires the claim.
+      appliedEdits.remember(
+        sessionFile,
+        {
+          // A refused op never named an entry id — the identity that matters is the tool call's.
+          entryId: toolCallId,
+          toolCallId,
+          kind: 'failed',
+          originalText: '',
+          error: reply.error,
+        },
+        false,
+      );
+      void vscode.window.showWarningMessage(`Amulet: ${reply.error}`);
+    }
+    await this.pushContextEdits(sessionFile);
+  }
+
+  /** Remember what left context, per card, until the session file records it. */
+  private rememberAppliedEdit(
+    sessionFile: string | null,
+    op: 'omit' | 'replace' | 'restore',
+    targets: BridgeTargetView[] | undefined,
+    content?: string,
+  ): void {
+    const ids: (string | undefined)[] = [];
+    for (const target of targets ?? []) {
+      ids.push(target.toolCallId);
+      // Only a result has a card to badge; the other entries of the group are reported so the human can
+      // see what else left context, and the rule behind it.
+      if (target.role !== 'toolResult') continue;
+      if (op === 'restore') continue;
+      appliedEdits.remember(sessionFile, {
+        entryId: target.entryId,
+        toolCallId: target.toolCallId,
+        kind: op === 'replace' ? 'replaced' : 'omitted',
+        replacementText: op === 'replace' ? content : undefined,
+        // The transcript already holds the real output while the card is alive; after a reload the
+        // durable record supplies it again, together with the same badge.
+        originalText: '',
+      });
+    }
+    // A restore's success means *no badge*: the model reads the original again, and the durable list
+    // deliberately skips a no-op edit, so anything left claiming otherwise would never be corrected.
+    if (op === 'restore') appliedEdits.forget(sessionFile, ...ids);
+  }
+
+  /**
+   * Ready, idle and bridge-loaded, or a refusal the human can read. The bridge checks idleness again on
+   * its side: it is the authority, this is only the fast path that keeps a click from looking dead.
+   *
+   * Every refusal pushes the edit list before returning, because the panel marked this card as waiting
+   * when it sent the click and the list is the only thing that releases it — a gate that said "no" only
+   * in a toast would leave the card spinning until some unrelated refresh.
+   */
+  private async bridgeGate(): Promise<boolean> {
+    const runtime = this.runtime;
+    if (!runtime?.isReady) {
+      await this.pushContextEdits();
+      return false;
+    }
+    if (!this.bridge.isAvailable()) {
+      this.post({ type: 'bridgeStatus', available: false });
+      void vscode.window.showWarningMessage(
+        'Amulet: context editing is unavailable here. It needs pi 1.4 or newer with "amulet.contextEditing" on.',
+      );
+      await this.pushContextEdits();
+      return false;
+    }
+    const state = await runtime.getState().catch(() => undefined);
+    if (state?.isStreaming || state?.isCompacting) {
+      void vscode.window.showWarningMessage(
+        'Amulet: wait for the run to finish — pi can only change the conversation while it is idle.',
+      );
+      await this.pushContextEdits();
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Rewind the conversation to one user message, keeping the session file (pi's `navigateTree`).
+   *
+   * The webview has no entry id for a live message, so the text is resolved against
+   * `get_fork_messages` — the same idiom "Branch from here" uses, newest match first — and the bridge
+   * then moves the leaf. Unlike {@link forkFromMessage} there is no quick-pick fallback: a revert that
+   * picked the wrong message would throw away real work.
+   */
+  private async revertToMessage(
+    text: string,
+    occurrence?: 'newest' | number,
+  ): Promise<void> {
+    if (!(await this.bridgeGate())) return;
+    const runtime = this.runtime;
+    const needle = normalizeEntryText(text);
+    const forkable = (await runtime?.getForkMessages().catch(() => [])) ?? [];
+    const matches = forkable.filter(
+      (m) => normalizeEntryText(m.text) === needle,
+    );
+    const target =
+      typeof occurrence === 'number' ? matches[occurrence] : matches.at(-1);
+    if (!target) {
+      this.postRevert({
+        ok: false,
+        revertedFrom: '',
+        abandonedCount: 0,
+        message: 'Amulet: could not find that message in this session.',
+      });
+      return;
+    }
+    await this.runRevert('revert', target.entryId);
+  }
+
+  /** Back to the leaf the last revert abandoned — valid until this run settles. */
+  private async undoRevert(): Promise<void> {
+    const abandoned = this.lastRevert?.revertedFrom;
+    if (!abandoned) {
+      this.postRevert({
+        ok: false,
+        revertedFrom: '',
+        abandonedCount: 0,
+        message:
+          'Amulet: nothing to undo — that revert is already part of the conversation.',
+      });
+      return;
+    }
+    if (!(await this.bridgeGate())) return;
+    await this.runRevert('undo-revert', abandoned);
+  }
+
+  private async runRevert(
+    op: 'revert' | 'undo-revert',
+    entryId: string,
+  ): Promise<void> {
+    const reply = await this.bridge.call(op, { entryId, summarize: false });
+    if (!reply.ok) {
+      // Keep the undo target: a refusal changed nothing, so the offer must survive it.
+      this.postRevert({
+        ok: false,
+        revertedFrom: '',
+        abandonedCount: 0,
+        message: `Amulet: ${reply.error}`,
+      });
+      return;
+    }
+    if (op === 'revert') {
+      this.lastRevert = reply.revertedFrom
+        ? { revertedFrom: reply.revertedFrom }
+        : undefined;
+    } else {
+      this.lastRevert = undefined;
+    }
+    // Nothing on the wire says the leaf moved — `session_tree` is not an RPC event — so the host
+    // re-reads everything it shows (plan F-11).
+    await this.pushSnapshot();
+    const abandoned = reply.abandonedCount ?? 0;
+    this.postRevert({
+      ok: true,
+      revertedFrom: reply.revertedFrom ?? '',
+      abandonedCount: abandoned,
+      message:
+        op === 'revert'
+          ? `Reverted to that message: ${abandoned} later ${abandoned === 1 ? 'entry is' : 'entries are'} out of the conversation.`
+          : 'Restored the conversation to where it was before the revert.',
+    });
+  }
+
+  /** One line of history the human can read, plus the machine-readable answer the panel needs. */
+  private postRevert(result: RevertResult): void {
+    this.post({ type: 'revertResult', result });
+    this.post({ type: 'notice', text: result.message });
   }
 
   private async exportChat(): Promise<void> {
@@ -1867,20 +2222,35 @@ export class ChatBridge implements vscode.Disposable {
    * when a *different* surface or VS Code's native dialog is the one that answered.
    */
   private async onUiRequest(req: ExtensionUiRequest): Promise<void> {
-    // First, before any early return: whatever the routing decides, this request was seen here.
-    if (isUserVisibleUiMethod(req.method)) this.visibleOutput++;
+    // First, before any early return: whatever the routing decides, this request was seen here. A bridge ack
+    // is the one exception — it is machine-readable text, and counting it as something the human read would
+    // let a concurrent operation silence `reportSilentCommand`'s honest "nothing happened" notice.
+    if (
+      isUserVisibleUiMethod(req.method) &&
+      !(req.method === 'notify' && isBridgeAck(String(req.message ?? '')))
+    ) {
+      this.visibleOutput++;
+    }
     const runtime = this.runtime;
     if (!runtime) return;
 
     if (!isModalUiMethod(req.method)) {
-      const response = await handleExtensionUiRequest(req, this.log);
+      // The bridge's ack travels as a notify, so this is the one place that can hand it back to the
+      // operation waiting for it — before anything can turn that text into a toast.
+      const response = await handleExtensionUiRequest(
+        req,
+        this.log,
+        (message) => this.bridge.handleNotify(message),
+      );
       if (response && !this.disposed) runtime.respondToExtensionUi(response);
       return;
     }
 
     const deps: DialogDeps = {
       fallbackToNative: (request) =>
-        handleExtensionUiRequest(request, this.log),
+        handleExtensionUiRequest(request, this.log, (message) =>
+          this.bridge.handleNotify(message),
+        ),
       respond: (response) => {
         // Deliberately *not* gated on `disposed`: `dispose()` cancels the dialogs this surface was showing,
         // and pi has to hear that or the tool call stays parked behind a question nobody can answer. The
@@ -1907,10 +2277,17 @@ export class ChatBridge implements vscode.Disposable {
   private detach(): void {
     for (const unsub of this.subscriptions) unsub();
     this.subscriptions = [];
+    // `connect()` calls this first, so this also runs when the surface moves to another runtime: a call
+    // waiting on the child we are leaving would never be answered by the one we are getting.
+    this.bridge.cancelOutstanding(
+      'The chat reconnected before the bridge answered.',
+    );
   }
 
   dispose(): void {
     this.disposed = true;
+    // Any bridge call still waiting for an ack belongs to a webview that is gone.
+    this.bridge.dispose();
     // A package install/remove still running belongs to a webview that is gone; its output had
     // exactly one reader.
     this.packageOp?.abort();
@@ -1978,4 +2355,20 @@ function getMimeType(ext: string, isImage: boolean): string {
 /** Whitespace-insensitive comparison key for a session entry's text. */
 function normalizeEntryText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * One durable edit as the webview renders it. The two extra kinds of {@link ContextEditView.kind} —
+ * `applying` and `failed` — are the state of an operation this host just ran, and are merged over
+ * these by the caller that ran it: the file only ever knows what pi has already written.
+ */
+function contextEditViewOf(record: ContextEditRecord): ContextEditView {
+  return {
+    entryId: record.targetId,
+    kind: record.kind,
+    toolCallId: record.originalToolCallId,
+    replacementText: record.replacementText,
+    originalText: record.originalText,
+    preCompaction: record.preCompaction || undefined,
+  };
 }

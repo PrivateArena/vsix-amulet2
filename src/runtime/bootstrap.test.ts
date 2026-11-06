@@ -22,6 +22,7 @@ function config(overrides: Partial<PiConfig> = {}): PiConfig {
     expandThinking: false,
     privacyMode: false,
     privacyRules: [],
+    contextEditing: true,
     extraArgs: [],
     ...overrides,
   };

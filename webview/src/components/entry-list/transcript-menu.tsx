@@ -1,8 +1,20 @@
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LuCopy, LuGitBranch, LuQuote, LuReply } from 'react-icons/lu';
+import {
+  LuCopy,
+  LuEyeOff,
+  LuGitBranch,
+  LuQuote,
+  LuReply,
+  LuUndo2,
+} from 'react-icons/lu';
 import { actions } from '../../apis/actions';
+import { useChatState } from '../../contexts/chat-context';
 import { composer } from '../../stores/composer-store';
+import {
+  contextSurgery,
+  useContextSurgeryStore,
+} from '../../stores/context-surgery-store';
 import { usePrivacyMode } from '../../stores/privacy-store';
 import {
   copySnapshotFor,
@@ -10,6 +22,12 @@ import {
   type CopyText,
 } from '../../utils/md-units';
 import { ContextMenuItem, useCtxMenu } from '../ui/ctx-menu';
+import { ContextEditorDialog } from '../ui/context-editor-dialog';
+import {
+  CONTEXT_EDIT_DIALOG_SUBTITLE,
+  cardMenuOf,
+  type ContextOp,
+} from '../exec-view/card-menu';
 import './transcript-menu.scss';
 
 /** How long the "Copied" confirmation floats. */
@@ -56,7 +74,22 @@ export function useTranscriptMenu(
 ): TranscriptMenu {
   const [flash, setFlash] = useState<Flash | null>(null);
   const privacyMode = usePrivacyMode();
+  // Read at right-click time only (the menu is built inside `buildItems`), so the transcript re-renders
+  // no more often than it already does for the streaming run it is showing.
+  const chat = useChatState();
+  const [editing, setEditing] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  /** The same sends the card's own overflow button makes, so both surfaces mean the same thing. */
+  const runOp = useCallback((op: ContextOp, toolCallId: string) => {
+    if (op === 'replace') {
+      setEditing(toolCallId);
+      return;
+    }
+    contextSurgery.setInFlight(toolCallId, op);
+    if (op === 'omit') actions.omitFromContext(toolCallId);
+    else actions.restoreContextEntry(toolCallId);
+  }, []);
   const openUnit = useRef<HTMLElement | null>(null);
 
   useEffect(() => () => clearTimeout(flashTimer.current), []);
@@ -146,6 +179,39 @@ export function useTranscriptMenu(
           separatorBefore: true,
           onSelect: () => actions.forkFromMessage(branch),
         });
+        // The other way back through a conversation, on the same text: a fork writes a new file and
+        // restores the prompt, a revert rewinds this one and keeps the prompt where it is.
+        items.push({
+          label: 'Revert to this message',
+          hint: chat.bridge.available ? 'drop the tail' : undefined,
+          icon: LuUndo2,
+          disabled: !chat.bridge.available || chat.streaming,
+          onSelect: () => actions.revertToMessage(branch, 'newest'),
+        });
+      }
+
+      // The same three actions the card's own overflow button offers, resolved from the DOM the card
+      // renders (`data-tool-call-id`) — the transcript has no other way to name a tool call.
+      const card = (e.target as HTMLElement).closest?.('[data-tool-call-id]');
+      const toolCallId = card?.getAttribute('data-tool-call-id');
+      if (toolCallId) {
+        const ctxItems = cardMenuOf({
+          hasEdit: !!chat.tools[toolCallId]?.ctxEdit,
+          streaming: chat.streaming,
+          available: chat.bridge.available,
+          inFlight: useContextSurgeryStore.getState().inFlight[toolCallId],
+        });
+        for (const item of ctxItems) {
+          items.push({
+            label: item.label,
+            hint: undefined,
+            icon: item.op === 'restore' ? LuUndo2 : LuEyeOff,
+            disabled: item.disabled,
+            // The card's group already opens with a separator; inside this menu it follows the fork group.
+            separatorBefore: items.length > 0,
+            onSelect: () => runOp(item.op, toolCallId),
+          });
+        }
       }
 
       openUnit.current?.removeAttribute(OPEN_ATTRIBUTE);
@@ -153,7 +219,7 @@ export function useTranscriptMenu(
       snapshot.unit.setAttribute(OPEN_ATTRIBUTE, '');
       return items;
     },
-    [listRef, showFlash, privacyMode],
+    [listRef, showFlash, privacyMode, chat, runOp],
   );
 
   const ctx = useCtxMenu(buildItems, {
@@ -179,6 +245,25 @@ export function useTranscriptMenu(
             </div>,
             document.body,
           )}
+        {editing && (
+          <ContextEditorDialog
+            title="Edit what the model reads"
+            subtitle={CONTEXT_EDIT_DIALOG_SUBTITLE}
+            initial={chat.tools[editing]?.resultText ?? ''}
+            privacyNote={
+              privacyMode
+                ? 'Privacy mode is on: the chat may be censoring this output on screen, but the text below is what the model will be given.'
+                : undefined
+            }
+            onCancel={() => setEditing(null)}
+            onConfirm={(text) => {
+              const toolCallId = editing;
+              setEditing(null);
+              contextSurgery.setInFlight(toolCallId, 'replace');
+              actions.replaceContextContent(toolCallId, text);
+            }}
+          />
+        )}
       </>
     ),
   };

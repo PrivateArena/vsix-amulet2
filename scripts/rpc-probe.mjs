@@ -8,12 +8,16 @@ const binary = process.env.PI_BIN || 'pi';
 const cwd = process.env.PROBE_CWD || process.cwd();
 const promptText = process.argv[2] || 'Reply with exactly: OK';
 const logPath = process.env.PROBE_LOG || 'tmp/rpc-events.jsonl';
+/** Extra spawn argv, e.g. `PROBE_ARGS_JSON='["-e","dist/pi-bridge/amulet-bridge.js"]'`. */
+const extraArgs = process.env.PROBE_ARGS_JSON
+  ? JSON.parse(process.env.PROBE_ARGS_JSON)
+  : [];
 
 try {
   writeFileSync(logPath, '');
 } catch {}
 const lines = [];
-const child = spawn(binary, ['--mode', 'rpc'], {
+const child = spawn(binary, ['--mode', 'rpc', ...extraArgs], {
   cwd,
   stdio: ['pipe', 'pipe', 'pipe'],
 });

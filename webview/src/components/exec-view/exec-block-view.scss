@@ -740,3 +740,51 @@ body.animations-disabled .exec-stream-caret {
     opacity: 1;
   }
 }
+
+/*
+ * A context edit is a fact about the model's view, not about this transcript, and it has to be
+ * readable with the card collapsed: an output that is quietly missing from the next request is the
+ * bug a user must never be able to mistake for a broken card.
+ */
+.exec-header .exec-ctx-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-left: 6px;
+  padding: 0 7px;
+  min-height: var(--amulet-tool-summary-control-height);
+  border: 1px solid var(--amulet-border-subtle);
+  border-radius: var(--amulet-radius-pill);
+  background: var(--amulet-surface-subtle);
+  color: var(--amulet-muted);
+  font-size: var(--amulet-tool-summary-label-size);
+  line-height: var(--amulet-line-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+
+.exec-header .exec-ctx-badge.is-omitted {
+  color: var(--amulet-fg-faint);
+  border-style: dashed;
+}
+
+.exec-header .exec-ctx-badge.is-replaced {
+  color: var(--amulet-link);
+  border-color: var(--amulet-accent-line);
+}
+
+/* A refused edit is the one badge that must stand out, because the card looks untouched. */
+.exec-header .exec-ctx-badge.is-failed {
+  color: var(--amulet-error);
+  border-color: var(--amulet-error-border);
+}
+
+/* The menu is anchored on this button, so it stays lit while its menu is open. */
+.exec-header .exec-action[aria-expanded='true'] {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--amulet-fg);
+  background: var(--amulet-surface-hover);
+}

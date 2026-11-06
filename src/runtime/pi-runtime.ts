@@ -7,6 +7,7 @@ import {
   getAgentVersion,
   resolveBinaryPath,
 } from './bootstrap';
+import { bridgeSpawnArgs } from './bridge-args';
 import type { PiConfig } from '../config';
 import type {
   ExtensionUiRequest,
@@ -85,6 +86,11 @@ export class PiRuntime {
     readonly cwd: string,
     private readonly getConfig: () => PiConfig,
     private readonly log: Logger,
+    /**
+     * Installed extension directory, which is where the context-surgery bridge bundle lives. Empty in
+     * a runtime built outside the extension host, and then the bridge is simply not loaded.
+     */
+    private readonly extensionDir = '',
   ) {}
 
   getStatus(): RuntimeStatus {
@@ -146,6 +152,21 @@ export class PiRuntime {
     }
   }
 
+  /**
+   * The `pi -e` fragment that loads Amulet's context-surgery bridge, or `[]`.
+   *
+   * Decided per spawn against the version this child reports: the flag is argv, so a `pi update` that
+   * lands while the runtime is up cannot silently start loading an extension into an older process.
+   */
+  private bridgeArgs(config: PiConfig): string[] {
+    return bridgeSpawnArgs({
+      extensionDir: this.extensionDir,
+      enabled: config.contextEditing,
+      agentVersion: this.agentVersion,
+      log: (message) => this.log.info(message),
+    });
+  }
+
   private async doStart(sessionPath?: string): Promise<void> {
     const config = this.getConfig();
     if (sessionPath) this.pendingSessionPath = sessionPath;
@@ -177,7 +198,7 @@ export class PiRuntime {
     const client = new RpcClient({
       binaryPath: resolved.command,
       cwd: this.cwd,
-      args: buildStartupArgs(config, sessionPath),
+      args: buildStartupArgs(config, sessionPath, this.bridgeArgs(config)),
       env: buildSpawnEnv(config),
     });
     this.client = client;

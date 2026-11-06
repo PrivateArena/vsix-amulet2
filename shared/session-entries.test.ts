@@ -7,10 +7,15 @@ import type {
 } from './protocol';
 import {
   branchEntries,
+  collectContextEdits,
   compactionBoundaryList,
   compactionBoundaryOf,
   compactionDetailOf,
+  isBeforeCompactionCutoff,
+  isContextEditEntry,
+  newestCompactionCutoff,
   stripCompactionBoundaries,
+  type SessionEntryLike,
 } from './session-entries';
 
 /**
@@ -186,5 +191,110 @@ describe('compactionBoundaryList', () => {
 
   it('is empty for a session that never compacted', () => {
     expect(compactionBoundaryList([])).toEqual([]);
+  });
+});
+
+const line = (
+  id: string,
+  parentId: string | null,
+  over: Partial<SessionEntryLike> = {},
+): SessionEntryLike => ({
+  type: 'message',
+  id,
+  parentId,
+  ...over,
+});
+
+const edit = (
+  id: string,
+  parentId: string | null,
+  targetId: string,
+  replacement: { content?: unknown } | null,
+): SessionEntryLike =>
+  line(id, parentId, { type: 'context_edit', targetId, replacement });
+
+describe('collectContextEdits', () => {
+  it('keeps the newest edit of one target, in branch order', () => {
+    // Omit, then restore: the second line is what the projection of the branch says.
+    const entries = [
+      line('u1', null),
+      line('a1', 'u1'),
+      edit('e1', 'a1', 'a1', null),
+      line('u2', 'e1'),
+      edit('e2', 'u2', 'a1', { content: 'back again' }),
+    ];
+    const edits = collectContextEdits(entries, 'e2');
+    expect([...edits.keys()]).toEqual(['a1']);
+    expect(edits.get('a1')?.id).toBe('e2');
+    expect(edits.get('a1')?.replacement).toEqual({ content: 'back again' });
+  });
+
+  it('ignores an edit on a branch the conversation did not take', () => {
+    // `x2` is where the user forked away, so the omission made on the other branch is not part of
+    // this history — and the one made here is.
+    const entries = [
+      line('u1', null),
+      line('a1', 'u1'),
+      edit('e1', 'a1', 'a1', null),
+      line('u2', 'e1'),
+      line('x1', 'u1'),
+      line('x2', 'x1'),
+      edit('e9', 'x2', 'x1', null),
+    ];
+    expect([...collectContextEdits(entries, 'u2').keys()]).toEqual(['a1']);
+    expect([...collectContextEdits(entries, 'e9').keys()]).toEqual(['x1']);
+  });
+
+  it('skips a line that claims to be an edit but names no target', () => {
+    const broken = line('e1', null, { type: 'context_edit' });
+    expect(isContextEditEntry(broken)).toBe(false);
+    expect(collectContextEdits([broken], 'e1').size).toBe(0);
+  });
+});
+
+describe('newestCompactionCutoff / isBeforeCompactionCutoff', () => {
+  const branch = [
+    line('u1', null),
+    edit('e1', 'u1', 'u1', null),
+    line('u2', 'e1'),
+    line('c1', 'u2', { type: 'compaction', firstKeptEntryId: 'u2' }),
+    line('u3', 'c1'),
+    line('c2', 'u3', { type: 'compaction', firstKeptEntryId: 'u3' }),
+  ];
+
+  it('is undefined for a branch that never compacted', () => {
+    expect(
+      newestCompactionCutoff([line('u1', null), line('a1', 'u1')], 'a1'),
+    ).toBeUndefined();
+    expect(isBeforeCompactionCutoff([line('u1', null)], 'u1', 'u1')).toBe(
+      false,
+    );
+  });
+
+  it('names the newest boundary and the entries it summarised away', () => {
+    expect(newestCompactionCutoff(branch, 'c2')).toBe('c2');
+    // The newest boundary kept from `u3`, so both edits older than that are out of context.
+    expect(isBeforeCompactionCutoff(branch, 'c2', 'u1')).toBe(true);
+    expect(isBeforeCompactionCutoff(branch, 'c2', 'e1')).toBe(true);
+    expect(isBeforeCompactionCutoff(branch, 'c2', 'u3')).toBe(false);
+    expect(isBeforeCompactionCutoff(branch, 'c2', 'c2')).toBe(false);
+    // An id from an abandoned branch is not "compacted away", it is just not here.
+    expect(isBeforeCompactionCutoff(branch, 'c2', 'nope')).toBe(false);
+  });
+
+  it('treats a self-retaining boundary as keeping nothing older', () => {
+    const selfRetained = [
+      line('u1', null),
+      line('c1', 'u1', { type: 'compaction', firstKeptEntryId: null }),
+    ];
+    expect(isBeforeCompactionCutoff(selfRetained, 'c1', 'u1')).toBe(true);
+    expect(isBeforeCompactionCutoff(selfRetained, 'c1', 'c1')).toBe(false);
+  });
+
+  it('judges by the branch, not by the file', () => {
+    const withSideBranch = [...branch, line('x1', 'u1')];
+    // The old boundary `c1` is the newest one on the branch that ends at `x1`, and it kept `u2`.
+    expect(newestCompactionCutoff(withSideBranch, 'x1')).toBeUndefined();
+    expect(isBeforeCompactionCutoff(withSideBranch, 'x1', 'u1')).toBe(false);
   });
 });

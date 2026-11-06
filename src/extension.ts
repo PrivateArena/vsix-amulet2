@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const appVersion: string = context.extension.packageJSON.version ?? '';
 
-  const sessions = new SessionManager(log);
+  const sessions = new SessionManager(log, context.extensionUri.fsPath);
   context.subscriptions.push({ dispose: () => void sessions.dispose() });
 
   const provider = new PiSidebarProvider(

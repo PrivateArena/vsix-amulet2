@@ -138,6 +138,7 @@ export function getAgentVersion(binaryPath: string): string {
 export function buildStartupArgs(
   config: PiConfig,
   sessionPath?: string,
+  bridgeArgs: string[] = [],
 ): string[] {
   const args: string[] = [];
   if (sessionPath) {
@@ -153,6 +154,9 @@ export function buildStartupArgs(
     // provider prompt cache for the whole context. A resumed session keeps its own model.
     args.push('--model', config.defaultModel);
   }
+  // The bridge goes in before the user's own arguments: `amulet.extraArgs` is the last word on how
+  // the child starts, and a flag appended after it could be swallowed by a value-style argument.
+  args.push(...bridgeArgs);
   if (config.extraArgs.length > 0) {
     args.push(...config.extraArgs);
   }

@@ -110,3 +110,106 @@ export function compactionBoundaryList(
 ): CompactionBoundary[] {
   return entries.map(compactionBoundaryOf).reverse();
 }
+
+// ---------------------------------------------------------------------------
+// Context edits (Omit / Edit context content)
+// ---------------------------------------------------------------------------
+
+/**
+ * One persisted entry, reduced to the fields the two context-surgery questions need.
+ *
+ * A reader that scans a session file for `context_edit` and `compaction` lines can hand this to the
+ * helpers below without modelling every entry type pi writes — the file also carries model changes,
+ * usage rows and custom entries, and none of them matters here.
+ */
+export interface SessionEntryLike extends SessionEntryRef {
+  type: string;
+  /** Every persisted entry carries one; a reader that only walks ids can leave it out. */
+  timestamp?: string;
+  /** `context_edit`: the entry whose model-context contribution this line replaces. */
+  targetId?: string;
+  /** `context_edit`: null omits the target, a value replaces only its content. */
+  replacement?: { content?: unknown } | null;
+  /** `compaction`: first entry of the range the projection kept; null keeps nothing older. */
+  firstKeptEntryId?: string | null;
+}
+
+/** A {@link SessionEntryLike} that is definitely a context edit (validated by {@link isContextEditEntry}). */
+export interface ContextEditEntryLike extends SessionEntryLike {
+  type: 'context_edit';
+  targetId: string;
+}
+
+/** Whether one persisted line is the append-only context edit the surgery feature writes. */
+export function isContextEditEntry(
+  entry: SessionEntryLike,
+): entry is ContextEditEntryLike {
+  return (
+    entry.type === 'context_edit' &&
+    typeof entry.targetId === 'string' &&
+    entry.targetId.length > 0
+  );
+}
+
+/**
+ * The context edits that apply to the branch ending at `leafId`, keyed by their target.
+ *
+ * "Latest edit on the active branch wins" is pi's own projection rule — it folds the branch's edits
+ * into a map in file order, so a second omit or a restore of the same entry supersedes the first.
+ * Walking the branch instead of the file is what keeps an edit made before a fork (or on a branch
+ * the user abandoned) from describing the conversation the user is reading.
+ */
+export function collectContextEdits(
+  entries: SessionEntryLike[],
+  leafId: string | null,
+): Map<string, ContextEditEntryLike> {
+  const edits = new Map<string, ContextEditEntryLike>();
+  for (const entry of branchEntries(entries, leafId)) {
+    if (isContextEditEntry(entry)) edits.set(entry.targetId, entry);
+  }
+  return edits;
+}
+
+/**
+ * The newest compaction boundary on the branch ending at `leafId`, or undefined when the branch
+ * never compacted. Its `firstKeptEntryId` is what the projection kept from before it — null means
+ * the boundary retains nothing older than itself.
+ */
+export function newestCompactionCutoff(
+  entries: SessionEntryLike[],
+  leafId: string | null,
+): string | undefined {
+  const path = branchEntries(entries, leafId);
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].type === 'compaction') return path[i].id;
+  }
+  return undefined;
+}
+
+/**
+ * Whether one entry of this branch is already out of the model's context because the newest
+ * compaction summarised past it. The first kept entry and everything after it count as kept, so an
+ * edit aimed at them still reaches the model; an id that is not on the branch is not reported as
+ * compacted away, because "use Compact instead" would be a lie about a row the user cannot see.
+ */
+export function isBeforeCompactionCutoff(
+  entries: SessionEntryLike[],
+  leafId: string | null,
+  entryId: string,
+): boolean {
+  const path = branchEntries(entries, leafId);
+  const boundaryIndex = path.reduce(
+    (found, entry, index) => (entry.type === 'compaction' ? index : found),
+    -1,
+  );
+  if (boundaryIndex < 0) return false;
+  const entryIndex = path.findIndex((entry) => entry.id === entryId);
+  if (entryIndex < 0) return false;
+  const keptId = path[boundaryIndex].firstKeptEntryId;
+  // `null` is a self-retaining boundary: it keeps no preceding entry at all.
+  const keptIndex =
+    keptId === undefined || keptId === null
+      ? boundaryIndex
+      : path.findIndex((entry) => entry.id === keptId);
+  return entryIndex < (keptIndex < 0 ? boundaryIndex : keptIndex);
+}

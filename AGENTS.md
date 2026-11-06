@@ -43,6 +43,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Commands / config                               | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                                                                                                                                                     |
 | "Look at this" notifications (host-side)        | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar)                      |
 | pi package manager (installed list, enable/disable, install/remove) | [`src/packages/`](src/packages/) — `package-settings.ts` reads/edits the `packages` arrays of pi's `settings.json`, `package-catalog.ts` resolves a source to its on-disk package, `package-service.ts` runs the `pi install`/`pi remove` child; state in [`webview/src/stores/packages-store.ts`](webview/src/stores/packages-store.ts), UI in [`webview/src/components/ui/packages-dialog/`](webview/src/components/ui/packages-dialog/), shared source rules in [`shared/pi-packages.ts`](shared/pi-packages.ts) |
+| Context surgery (Omit from context / Edit context content / Revert to this message) | contract [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · the pi extension Amulet ships: [`pi-bridge/`](pi-bridge/) (`amulet-bridge.ts` command + hooks, `target-resolver.ts` handle→entry ids, `pending-store.ts` override map + sidecar) · loaded by [`src/runtime/bridge-args.ts`](src/runtime/bridge-args.ts) (`pi -e`) · host client [`src/webview/bridge-client.ts`](src/webview/bridge-client.ts) (reqId↔ack, 15 s watchdog) · durable state reader [`src/session/session-store.ts`](src/session/session-store.ts) (`readBranchContextEdits`) · transcript repair [`src/webview/history-repair.ts`](src/webview/history-repair.ts) · badges `ToolExec.ctxEdit` in [`webview/src/store.ts`](webview/src/store.ts), menu rules [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) |
 | React app root + state                          | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                                                                                                                                                               |
 | React components                                | [`webview/src/components/`](webview/src/components/)                                                                                                                                                                                                                                                       |
 
@@ -98,7 +99,7 @@ suite built from such a capture.
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the context-surgery bridge, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
 (`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
@@ -154,6 +155,53 @@ parked on an answer. Rules worth keeping:
   which is why it is per-runtime: a restart of one workspace folder must not silence a question another is
   still parked on), because a notification expires and an unanswered dialog does not; a dialog whose extension times out on its own (pi-subagent's 5-minute ceiling) is dropped when it
   does. `Amulet: Test Notification` proves which channel the machine actually has.
+
+## Context surgery: Amulet ships and owns a pi extension
+
+**Omit from context**, **Edit context content** and **Revert to this message** are not RPC features: `pi --mode rpc`
+exposes a closed set of commands and not one of them mutates an existing session entry. They are reachable only
+from inside the child process, so Amulet ships a pi extension — `pi-bridge/`, bundled by esbuild, loaded with
+`pi -e <bundle>` at spawn (see `bridgeSpawnArgs` in `src/runtime/bridge-args.ts`, gated on `amulet.contextEditing`
+and on `pi >= 1.4`). Read this before changing any of it:
+
+- **The bridge is the only writer; Amulet is the only reader of intent.** Never append to pi's session file from
+  the host (or from the bridge): a concurrent append branches off a stale leaf and silently loses the edit. The
+  bridge only *proposes* `context_edit` drafts at `turn_end`; pi writes them.
+- **`context` for now, `turn_end` for later.** A durable edit cannot exist before the next turn boundary, but the
+  first provider request of the next run happens *before* any of its boundaries — so the immediate effect comes
+  from `PendingStore.applyTo` in the `context` hook and the persistence from `PendingStore.drafts`. Dropping the
+  hook would make an idle omission apply to the very request the user was protecting.
+- **Transport is `prompt "/amulet <json>"` + a `notify` ack**, because an extension command's response carries only
+  `{disposition}`. `BridgeClient` correlates by `reqId` (per bridge — N surfaces, one runtime, no double-apply) and
+  `handleExtensionUiRequest` swallows the text before it can become a toast, on every surface, owned or not.
+- **An omitted result is a placeholder, not a deletion.** A `toolCall` may not be left without its result, so hiding one
+  output writes a replacement reading `CONTEXT_OMIT_PLACEHOLDER` and keeps the reply, its thinking and the sibling results
+  in context — and in the transcript after a reload. `expandOmitGroup` therefore returns one entry for a tool result, and
+  the whole turn only when the target *is* the assistant reply (mirroring pi's own `_omitRecoveryAttempt`). The host turns
+  that exact placeholder text back into an `omitted` badge and paints the original output again, so nothing a user only
+  hid from the model ever disappears from their screen.
+- **A pending edit must never outlive its branch.** `PendingStore.prune` forgets an edit whose target is no longer on the
+  branch, as well as one the file already records: `appendContextEdit` **throws** for an off-branch target, and pi discards
+  the whole boundary proposal when any draft fails — which would silently void every later turn's drafts, Amulet's and
+  other extensions', for the life of the child.
+- **Idle-only.** `navigateTree` throws during a run and a `context_edit` has no boundary to land in, so both the
+  host gate (`bridgeGate`, the menu's `streaming` rule) and the bridge (`not-idle`) refuse mid-run.
+- **Revert is `navigateTree(entryId, { summarize: false })`** — same session file, unlike `fork` (which is what
+  "Branch from here" means). `summarize: true` would append content and cost an LLM call, which is exactly the
+  cache argument below.
+- **Cache rule (this one is load-bearing):** the bridge registers *no* tool, prompt section or system-prompt edit,
+  so its presence costs one prefix that never changes. A **context edit** is a cache *event*: it changes bytes
+  behind the head, so the provider re-prefills everything after the edited entry — say so in any dialog that makes
+  one. A **revert** re-prefills strictly less, because what it retains is a shorter prefix of what was already
+  sent, and the abandoned tail is never re-sent.
+- **The transcript shows the truth.** `get_messages` answers with the model-context projection, in which an omitted
+  tool result carries the placeholder and a replaced one is indistinguishable from the real output — so
+  `restoreOmittedToolResults` substitutes or re-inserts the original text from the session file
+  (`readBranchContextEdits`) and the badge comes from the `contextEdits` push. Anything sent *back* into the run
+  (Quote, Reply, an edit's initial text) reads the untouched value in reducer state, never the badge.
+- **A provisional badge belongs to a session file, not to a surface** (`src/webview/context-edit-views.ts`): N surfaces
+  share one runtime and only the requester sees the ack, so the pending list is shared and retires itself when the durable
+  record arrives. A refusal is posted **once** — a transient `not-idle` painted permanently onto a card is its own wrong.
 
 ## Gotchas
 
@@ -252,3 +300,11 @@ parked on an answer. Rules worth keeping:
   identity (npm name, git host/path, resolved local path) with project-before-user precedence, so rows
   carry `identity` and `shadowed`: a row pi will ignore is marked and its controls disabled.
 - `dist/` is a build artifact (git-ignored) — never edit it by hand.
+- **The bridge bundle must be ESM (`.mjs`).** pi loads an extension with `jiti.import(path, { default: true })`, and
+  an esbuild `format: 'cjs'` bundle resolves to the export *namespace* instead of the factory, so pi refuses to
+  load it (`Extension does not export a valid factory function`). `dist/pi-bridge/amulet-bridge.mjs` is the shape
+  that works; verify any change with `node scripts/bridge-probe.mjs`, which drives a real child without VS Code.
+- A context edit is invisible in `get_messages` from the moment it is durable, and the in-memory override that
+  makes it immediate lives in the **child**: a runtime restart re-reads the bridge's sidecar
+  (`amulet-context-overrides--<session>.json`, written next to the session file, never a `.jsonl`), so an edit that
+  was never persisted keeps applying until its `turn_end` draft lands.

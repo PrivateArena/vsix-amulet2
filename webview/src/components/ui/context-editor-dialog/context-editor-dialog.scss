@@ -1,0 +1,111 @@
+/* Context editor — the same surface language as the other panel dialogs, scoped to ce-*.
+   No transitions: this dialog opens so a person can type in it, so it appears where it was aimed. */
+
+.ce-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--amulet-bg) 55%, transparent);
+}
+
+.ce-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 12px 14px 14px;
+  border: 1px solid
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
+  box-shadow:
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+}
+
+.ce-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ce-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.ce-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.ce-subtitle {
+  font-size: 0.8rem;
+  color: var(--amulet-muted);
+  overflow-wrap: anywhere;
+}
+
+.ce-area {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34vh;
+  max-height: 58vh;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-fg);
+  font-family: var(--amulet-monospace);
+  font-size: var(--amulet-type-sm);
+  line-height: 1.45;
+}
+
+.ce-area:focus-visible {
+  outline: 1px solid var(--amulet-focus-ring);
+  outline-offset: -1px;
+}
+
+.ce-note {
+  padding-left: 8px;
+  border-left: 2px solid var(--amulet-warning);
+  font-size: 0.8rem;
+  color: var(--amulet-muted);
+}
+
+.ce-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ce-count {
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+}
+
+.ce-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

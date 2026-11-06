@@ -11,7 +11,11 @@ import { readConfig } from '../config';
 export class SessionManager implements vscode.Disposable {
   private readonly runtimes = new Map<string, PiRuntime>();
 
-  constructor(private readonly log: Logger) {}
+  constructor(
+    private readonly log: Logger,
+    /** Where the bridge bundle ships from; see {@link PiRuntime}'s `extensionDir`. */
+    private readonly extensionDir = '',
+  ) {}
 
   /** The cwd for the active workspace (first folder), falling back to home. */
   activeCwd(): string {
@@ -26,7 +30,12 @@ export class SessionManager implements vscode.Disposable {
   getRuntime(cwd: string): PiRuntime {
     let runtime = this.runtimes.get(cwd);
     if (!runtime) {
-      runtime = new PiRuntime(cwd, () => readConfig(), this.log);
+      runtime = new PiRuntime(
+        cwd,
+        () => readConfig(),
+        this.log,
+        this.extensionDir,
+      );
       this.runtimes.set(cwd, runtime);
     }
     return runtime;

@@ -22,6 +22,11 @@ export interface PiConfig {
   privacyMode: boolean;
   /** Webview-only: the censoring rules, applied after the built-ins. */
   privacyRules: PrivacyRule[];
+  /**
+   * Load the context-surgery bridge into the child (`pi -e`), which is what makes Omit / Edit context
+   * content / Revert possible at all. Spawn-time, so it is a restart key.
+   */
+  contextEditing: boolean;
   extraArgs: string[];
 }
 
@@ -66,6 +71,7 @@ export function readConfig(): PiConfig {
     expandThinking: get<boolean>('expandThinking', false),
     privacyMode: get<boolean>('privacyMode', false),
     privacyRules: get<PrivacyRule[]>('privacyRules', []),
+    contextEditing: get<boolean>('contextEditing', true),
     extraArgs: get<string[]>('extraArgs', []),
   };
 }
@@ -187,6 +193,8 @@ export const RESTART_KEYS = [
   `${SECTION}.agentDir`,
   `${SECTION}.defaultModel`,
   `${SECTION}.extraArgs`,
+  // Like `extraArgs`, this one is spawn argv: the bridge is loaded by the child at startup only.
+  `${SECTION}.contextEditing`,
 ];
 
 /** {@link key} and, for a namespaced key, its pre-rebrand {@link LEGACY_SECTION} twin. */

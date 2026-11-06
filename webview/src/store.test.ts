@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   AppMessage,
   Attachment,
+  ContextEditView,
   HostMessage,
+  RevertResult,
   SessionState,
 } from '../../shared/protocol';
 import { asToolCall } from '../../shared/blocks';
 import { parseStreamingToolArgs } from '../../shared/tool-args';
-import { initialState, reducer } from './store';
+import { applyContextEdits, initialState, reducer } from './store';
 
 const host = (message: HostMessage) => ({ type: 'host' as const, message });
 
@@ -1631,5 +1633,261 @@ describe('reducer — compaction', () => {
       { type: 'text', text: 'earlier' },
       { type: 'text', text: 'after' },
     ]);
+  });
+});
+
+describe('reducer — context surgery', () => {
+  /** One context edit, as the host's `contextEdits` list reports it. */
+  const edit = (
+    toolCallId: string | undefined,
+    kind: ContextEditView['kind'],
+    extra: Partial<ContextEditView> = {},
+  ): ContextEditView => ({
+    entryId: extra.entryId ?? `entry-${toolCallId ?? 'no-card'}`,
+    toolCallId,
+    kind,
+    originalText: extra.originalText ?? 'the real output',
+    ...extra,
+  });
+
+  const edits = (...views: ContextEditView[]) =>
+    host({ type: 'contextEdits', edits: views });
+
+  const event = (e: Record<string, unknown>) =>
+    host({ type: 'rpcEvent', event: e as never });
+
+  /** A reloaded session holding one finished `bash` card — the thing a badge sticks to. */
+  const HISTORY = [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'toolCall',
+          id: 't1',
+          name: 'bash',
+          arguments: { command: 'ls' },
+        },
+      ],
+    },
+    {
+      role: 'toolResult',
+      toolCallId: 't1',
+      toolName: 'bash',
+      content: [{ type: 'text', text: 'the real output' }],
+    },
+  ] as never;
+
+  const history = () => host({ type: 'history', messages: HISTORY });
+
+  const oneCard = () => reducer(initialState, history());
+
+  it('carries ctxEdit across every event that rebuilds the card', () => {
+    let s = reducer(oneCard(), edits(edit('t1', 'omitted')));
+    expect(s.tools.t1.ctxEdit).toMatchObject({ kind: 'omitted' });
+
+    // A re-execution, a progress heartbeat and the end event each build a whole new `ToolExec`,
+    // so each of them is a chance to silently drop a flag no wire event ever reports.
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_start',
+        toolCallId: 't1',
+        toolName: 'bash',
+        args: { command: 'ls' },
+      }),
+    );
+    expect(s.tools.t1.ctxEdit?.kind).toBe('omitted');
+
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_update',
+        toolCallId: 't1',
+        toolName: 'bash',
+        partialResult: { content: [{ type: 'text', text: '…' }] },
+      }),
+    );
+    expect(s.tools.t1.ctxEdit?.kind).toBe('omitted');
+
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: 't1',
+        toolName: 'bash',
+        isError: false,
+        result: { content: [{ type: 'text', text: 'the real output' }] },
+      }),
+    );
+    expect(s.tools.t1.status).toBe('done');
+    expect(s.tools.t1.ctxEdit).toMatchObject({ kind: 'omitted' });
+    // And the badge is only a badge: the card keeps the real output, which is what the user asked for.
+    expect(s.tools.t1.resultText).toBe('the real output');
+  });
+
+  it('ignores an edit no card can show, and changes nothing for a list it already had', () => {
+    // An edit of a user message carries no `toolCallId` at all, and one for an id the transcript
+    // never showed has no card to badge: both are stored and address nothing.
+    const base = reducer(oneCard(), edits(edit('t1', 'omitted')));
+    const withUnknown = reducer(
+      base,
+      edits(edit('t1', 'omitted'), edit('gone', 'omitted')),
+    );
+    expect(withUnknown.ctxEdits).toHaveLength(2);
+    expect(Object.keys(withUnknown.tools)).toEqual(['t1']);
+    // No card changed, so no card moved: unrelated cards keep their identity for the memo comparator.
+    expect(withUnknown).not.toBe(base);
+    expect(withUnknown.tools).toBe(base.tools);
+
+    const noCard = reducer(
+      oneCard(),
+      edits(edit('t1', 'omitted'), edit(undefined, 'omitted')),
+    );
+    expect(noCard.tools.t1.ctxEdit).toMatchObject({ kind: 'omitted' });
+
+    // The same list pushed again — a fresh array of equal content, which is exactly what a re-push
+    // of the same session file is — must not move the state at all.
+    expect(
+      reducer(noCard, edits(edit('t1', 'omitted'), edit(undefined, 'omitted'))),
+    ).toBe(noCard);
+  });
+
+  it('keeps a failed edit distinguishable from an omission', () => {
+    // The two read as different sentences, so they may not collapse into one badge.
+    const failed = reducer(
+      oneCard(),
+      edits(edit('t1', 'failed', { error: 'already compacted away' })),
+    );
+    expect(failed.tools.t1.ctxEdit?.kind).toBe('failed');
+    expect(failed.tools.t1.ctxEdit?.error).toBe('already compacted away');
+    expect(failed.ctxEdits[0].kind).toBe('failed');
+
+    const omitted = reducer(failed, edits(edit('t1', 'omitted')));
+    expect(omitted.tools.t1.ctxEdit?.kind).toBe('omitted');
+    expect(omitted.tools.t1.ctxEdit?.error).toBeUndefined();
+  });
+
+  it('takes the badge away when the new list no longer mentions the call', () => {
+    const replaced = reducer(
+      oneCard(),
+      edits(
+        edit('t1', 'replaced', { replacementText: 'what the model reads now' }),
+      ),
+    );
+    expect(replaced.tools.t1.ctxEdit).toMatchObject({
+      kind: 'replaced',
+      replacementText: 'what the model reads now',
+    });
+
+    const restored = reducer(replaced, edits());
+    expect(restored.tools.t1.ctxEdit).toBeUndefined();
+    // The key is deleted, not set to undefined: a card the list never touched must not look different.
+    expect('ctxEdit' in restored.tools.t1).toBe(false);
+    // …and restoring changes nothing about the output the card shows.
+    expect(restored.tools.t1.resultText).toBe('the real output');
+  });
+
+  it('re-applies the badges from a history push, without waiting for a second contextEdits', () => {
+    // After a reconnect the two pushes can land in either order, and a badge that flashes away
+    // while the cards are rebuilt reads as a broken card.
+    const edited = reducer(oneCard(), edits(edit('t1', 'omitted')));
+    const reloaded = reducer(edited, history());
+    expect(reloaded.tools.t1.ctxEdit).toMatchObject({ kind: 'omitted' });
+    expect(reloaded.ctxEdits).toEqual(edited.ctxEdits);
+
+    // The inverse: a list that cleared the edit must not be re-applied by the next snapshot.
+    const cleared = reducer(edited, edits());
+    expect(reducer(cleared, history()).tools.t1.ctxEdit).toBeUndefined();
+  });
+
+  it('exports the badge patch as a helper over the tool table alone', () => {
+    const badged = {
+      t1: {
+        toolCallId: 't1',
+        toolName: 'bash',
+        status: 'done' as const,
+        ctxEdit: { kind: 'omitted' as const },
+      },
+    };
+    // Same content: the very same map back, so an unrelated caller sees no change.
+    expect(applyContextEdits(badged, [edit('t1', 'omitted')])).toBe(badged);
+    // A card the list dropped: a new map, without the key.
+    const cleared = applyContextEdits(badged, []);
+    expect(cleared).not.toBe(badged);
+    expect('ctxEdit' in cleared.t1).toBe(false);
+    // An edit for an id with no card is dropped rather than inventing one.
+    const clean = {
+      t2: { toolCallId: 't2', toolName: 'read', status: 'done' as const },
+    };
+    expect(applyContextEdits(clean, [edit('gone', 'omitted')])).toBe(clean);
+  });
+
+  it('tracks the bridge capabilities and drops a push that says the same thing', () => {
+    const capabilities = {
+      contextEdit: true,
+      navigateTree: true,
+      piVersion: '1.5.0',
+    };
+    const on = reducer(
+      initialState,
+      host({ type: 'bridgeStatus', available: true, capabilities }),
+    );
+    expect(on.bridge.available).toBe(true);
+    expect(on.bridge.capabilities).toEqual(capabilities);
+    // `get_commands` re-pushes the status on every snapshot: fresh objects, same content.
+    expect(
+      reducer(
+        on,
+        host({
+          type: 'bridgeStatus',
+          available: true,
+          capabilities: { ...capabilities },
+        }),
+      ),
+    ).toBe(on);
+
+    // A bridge that goes away (a restart without `-e`) is a capability change and nothing else.
+    const off = reducer(on, host({ type: 'bridgeStatus', available: false }));
+    expect(off.bridge.available).toBe(false);
+    expect(off.bridge.capabilities).toBeUndefined();
+    expect(off.messages).toBe(on.messages);
+    expect(off.tools).toBe(on.tools);
+    // …and the initial state has never heard from a bridge at all.
+    expect(initialState.bridge).toEqual({ available: false });
+  });
+
+  it('holds a revert result until a run starts, without touching the transcript', () => {
+    const result: RevertResult = {
+      ok: true,
+      revertedFrom: 'e9',
+      abandonedCount: 3,
+      message: 'Reverted to that message: 3 entries are out.',
+    };
+    const done = reducer(initialState, host({ type: 'revertResult', result }));
+    expect(done.lastRevert).toEqual(result);
+    // The row itself is the `notice` the host posts beside it — never a second one from here.
+    expect(done.messages).toEqual([]);
+    expect(
+      reducer(done, host({ type: 'revertResult', result: { ...result } })),
+    ).toBe(done);
+
+    const failed = reducer(
+      initialState,
+      host({
+        type: 'revertResult',
+        result: {
+          ok: false,
+          revertedFrom: '',
+          abandonedCount: 0,
+          message: 'no',
+        },
+      }),
+    );
+    expect(failed.lastRevert?.ok).toBe(false);
+
+    // A new run ends the undo window, and so does a snapshot: it is another session or a restarted
+    // runtime, where this surface's abandoned leaf is not the one the host would return to.
+    expect(reducer(done, event({ type: 'agent_start' })).lastRevert).toBeNull();
+    expect(reducer(done, history()).lastRevert).toBeNull();
   });
 });

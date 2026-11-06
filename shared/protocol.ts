@@ -17,6 +17,7 @@
 // ============================================================================
 
 import type { PrivacyRule } from './privacy';
+import type { BridgeCapabilities } from './bridge-protocol';
 
 /**
  * Thinking levels known to the pi runtime (mirrors pi's own `ThinkingLevel`).
@@ -852,6 +853,27 @@ export type WebviewMessage =
   /** Branch from one specific user turn (resolved to an entry id host-side). */
   | { type: 'forkFromMessage'; text: string }
   | { type: 'editAndFork'; entryId: string; text: string }
+  /**
+   * Context surgery. All three edit operations address a **tool call id**, never a pi entry id: a live
+   * card has the former and history messages carry no id at all, while entry ids belong to the child
+   * process — the bridge resolves one to the other (`pi-bridge/target-resolver.ts`).
+   *
+   * They change what the *model* reads on the next request. The transcript, the session file and every
+   * string handed back to pi keep the original text — same rule as the privacy censoring.
+   */
+  | { type: 'omitFromContext'; toolCallId: string }
+  /** Replace the text of one tool result (or reply) for all future requests. */
+  | { type: 'replaceContextContent'; toolCallId: string; content: string }
+  /** Undo an omission or a replacement by re-editing the entry back to its persisted content. */
+  | { type: 'restoreContextEntry'; toolCallId: string }
+  /**
+   * Rewind the conversation to one user message: everything after it leaves the model's context. Same
+   * session file (pi's `navigateTree`), unlike a fork, which is what keeps "Branch from here" a
+   * different action with a different result.
+   */
+  | { type: 'revertToMessage'; text: string; occurrence?: 'newest' | number }
+  /** Go back to the leaf the last successful revert abandoned. */
+  | { type: 'undoRevert' }
   | { type: 'exportChat' }
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }
@@ -987,6 +1009,24 @@ export type HostMessage =
   | { type: 'commands'; commands: CommandInfo[] }
   | { type: 'projectFiles'; result: ProjectFilesResult }
   | { type: 'enterForkMode'; entryId: string; text: string }
+  /**
+   * What the model may no longer re-read, on the branch the transcript is showing. Pushed with every
+   * history snapshot (and after every edit op), because the projected history *loses* an omitted tool
+   * result — the badge is the only thing that says the card is not broken.
+   */
+  | { type: 'contextEdits'; edits: ContextEditView[] }
+  /** Outcome of a revert, so the transcript can say what left and offer the way back. */
+  | { type: 'revertResult'; result: RevertResult }
+  /**
+   * Whether the context-surgery bridge is live in this runtime. Capability state, not a setting echo:
+   * an old pi, a disabled `amulet.contextEditing` or a missing bundle each end up here, and the menu
+   * items are hidden rather than failing when the human clicks.
+   */
+  | {
+      type: 'bridgeStatus';
+      available: boolean;
+      capabilities?: BridgeCapabilities;
+    }
   | { type: 'authStatus'; status: AuthStatus }
   | { type: 'providerLoginResult'; result: ProviderLoginResult }
   | { type: 'extensionUiRequest'; request: ExtensionUiRequest }
@@ -999,6 +1039,48 @@ export type HostMessage =
   | { type: 'packages'; result: PackageListResult }
   /** Outcome of an install / remove / enable / disable / reload, shown inline in the dialog. */
   | { type: 'packageOpResult'; result: PackageOpResult };
+
+// ============================================================================
+// Context surgery (Omit / Edit context content / Revert)
+// ============================================================================
+
+/**
+ * One context edit as the webview renders it: the badge on a tool card, plus the original text the
+ * transcript must keep showing after a reload (the projection has already dropped or replaced it).
+ *
+ * {@link ContextEditView.kind} `applying` means the bridge accepted the edit and holds it in memory —
+ * it is in effect for the next request, but the durable `context_edit` entry only lands at the next
+ * turn boundary, so a reload before that forgets it.
+ */
+export interface ContextEditView {
+  /** Set when the edit is (or was) the output of a tool call — that id is what a card is keyed by. */
+  toolCallId?: string;
+  /** pi's session entry id. The host never derives one; it only carries it back for identity. */
+  entryId: string;
+  kind: 'omitted' | 'replaced' | 'applying' | 'failed';
+  /** The text the model reads now, for a replacement. */
+  replacementText?: string;
+  /** What was really persisted, so the transcript can show what the model no longer sees. */
+  originalText: string;
+  /** Set for {@link kind} `failed`, which is why the badge says "could not" instead of "omitted". */
+  error?: string;
+  /**
+   * The newest compaction already summarised this entry out of the context, so the edit does nothing the
+   * model will notice — the badge says "already compacted away" rather than pretending otherwise.
+   */
+  preCompaction?: boolean;
+}
+
+/** What a revert did, as the host reports it. */
+export interface RevertResult {
+  /** The leaf the conversation moved away from — what `undoRevert` returns to. */
+  revertedFrom: string;
+  /** Entries the move left behind on this branch. */
+  abandonedCount: number;
+  ok: boolean;
+  /** The sentence for the transcript row: pi's own reason on a refusal. */
+  message: string;
+}
 
 // ============================================================================
 // Pi packages (an npm / git / local unit shipping extensions, skills, prompts, themes)

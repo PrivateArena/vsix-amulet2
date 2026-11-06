@@ -7,6 +7,7 @@ import type {
   CompactionReason,
   CompactionStartEvent,
   ContentBlock,
+  ContextEditView,
   ExtensionUiRequest,
   HistoryMessage,
   HostMessage,
@@ -14,6 +15,7 @@ import type {
   MessageStartEvent,
   MessageUpdateEvent,
   ModelInfo,
+  RevertResult,
   RpcEvent,
   RuntimeStatus,
   SessionInfo,
@@ -27,6 +29,7 @@ import type {
   ToolResultMessage,
   Usage,
 } from '../../shared/protocol';
+import type { BridgeCapabilities } from '../../shared/bridge-protocol';
 import {
   applyAssistantEvent,
   asToolCall,
@@ -82,6 +85,27 @@ export interface ToolExec {
    * only — never a successful output — so those rows have nothing to expand to.
    */
   nestedFromRecord?: boolean;
+  /**
+   * What the MODEL reads for this call, once a context edit is in effect — **not** what the card
+   * shows. The card always renders the real output (the transcript is the user's record of what the
+   * tool printed; only the model's view of it changed), and this only drives the badge that says so.
+   *
+   * Written by {@link applyContextEdits} from the host's `contextEdits` push and carried across every
+   * event that rebuilds the card — an uncopied flag would be wiped by the next heartbeat.
+   */
+  ctxEdit?: {
+    /** `applying` is held in the bridge only, `failed` is an operation that did not happen. */
+    kind: 'omitted' | 'replaced' | 'applying' | 'failed';
+    /** The text the model reads now, for a replacement. */
+    replacementText?: string;
+    /** Why the edit did not happen, for `failed` — the sentence the badge's tooltip shows. */
+    error?: string;
+    /**
+     * The newest compaction already summarised this entry out of the context, so the edit has nothing
+     * left to hide — worth saying on the badge, because the card otherwise looks like it worked.
+     */
+    preCompaction?: boolean;
+  };
 }
 
 /**
@@ -181,6 +205,23 @@ export interface ChatState {
   userAttachments: Map<string, Attachment[]>;
   /** Pending attachments waiting to be associated with the next user message. */
   pendingAttachments: Attachment[];
+  /**
+   * The last edit list the host pushed for the branch this transcript shows (`contextEdits`).
+   * Kept because the two pushes can land in either order after a reconnect: a `history` snapshot
+   * re-applies it, so a badge never flashes away while the cards are being rebuilt.
+   */
+  ctxEdits: ContextEditView[];
+  /**
+   * Whether the pi extension that performs the edits is live in this runtime — capability state,
+   * not a settings echo (an old pi, a disabled `amulet.contextEditing` and a missing bundle all
+   * end up here). The menu items are hidden when it is false, so nothing can be clicked and fail.
+   */
+  bridge: { available: boolean; capabilities?: BridgeCapabilities };
+  /**
+   * Outcome of the last revert attempt, until the next run starts: the row itself is a `notice` the
+   * host posted, so this is only what the panel needs to offer (or drop) "Undo revert".
+   */
+  lastRevert: RevertResult | null;
 }
 
 export const initialState: ChatState = {
@@ -203,6 +244,9 @@ export const initialState: ChatState = {
   seq: 0,
   userAttachments: new Map(),
   pendingAttachments: [],
+  ctxEdits: [],
+  bridge: { available: false },
+  lastRevert: null,
 };
 
 const DISPLAYABLE_ROLES = new Set(['user', 'assistant', 'system']);
@@ -524,6 +568,107 @@ function applyToolImageResult(
   };
 }
 
+/**
+ * One badge, as far as a card can tell. Two lists that say the same thing must not re-render a card,
+ * so the comparison is by value and never by object identity.
+ */
+function sameCtxEdit(a: ToolExec['ctxEdit'], b: ToolExec['ctxEdit']): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.kind === b.kind &&
+    a.replacementText === b.replacementText &&
+    a.error === b.error &&
+    a.preCompaction === b.preCompaction
+  );
+}
+
+/** Same rule for the list the host pushed: a re-push of identical content is not a change. */
+function sameContextEdit(a: ContextEditView, b: ContextEditView): boolean {
+  return (
+    a.entryId === b.entryId &&
+    a.toolCallId === b.toolCallId &&
+    a.kind === b.kind &&
+    a.replacementText === b.replacementText &&
+    a.originalText === b.originalText &&
+    a.error === b.error
+  );
+}
+
+function sameContextEdits(a: ContextEditView[], b: ContextEditView[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((view, i) => sameContextEdit(view, b[i]));
+}
+
+function sameBridgeCapabilities(
+  a: BridgeCapabilities | undefined,
+  b: BridgeCapabilities | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.contextEdit === b.contextEdit &&
+    a.navigateTree === b.navigateTree &&
+    a.piVersion === b.piVersion
+  );
+}
+
+/** A revert result is a value object the host may repeat, so it is compared field by field. */
+function sameRevertResult(a: RevertResult | null, b: RevertResult): boolean {
+  if (a === null) return false;
+  return (
+    a.ok === b.ok &&
+    a.revertedFrom === b.revertedFrom &&
+    a.abandonedCount === b.abandonedCount &&
+    a.message === b.message
+  );
+}
+
+/**
+ * Re-badge the tool table from the edits the host reports — the whole list, every time.
+ *
+ * Keyed by `toolCallId`, because that is the only id a live card has (pi's entry ids belong to the
+ * child process). An edit without one addresses no card and is ignored; a card the list no longer
+ * mentions loses its badge, which is what makes a restore land.
+ *
+ * Returns the map untouched when no card differs: the host pushes this list with every history
+ * snapshot, and the memo comparators of the timeline depend on card identity.
+ */
+export function applyContextEdits(
+  tools: Record<string, ToolExec>,
+  edits: ContextEditView[],
+): Record<string, ToolExec> {
+  const badgeOf = new Map<string, ToolExec['ctxEdit']>();
+  for (const edit of edits) {
+    // Later entries of one list win, so a pending view never shadows the durable record of the
+    // same call — the host already keeps the two apart, this only makes the order harmless.
+    if (!edit.toolCallId) continue;
+    badgeOf.set(edit.toolCallId, {
+      kind: edit.kind,
+      replacementText: edit.replacementText,
+      error: edit.error,
+      preCompaction: edit.preCompaction,
+    });
+  }
+  let next: Record<string, ToolExec> | undefined;
+  for (const [toolCallId, tool] of Object.entries(tools)) {
+    const ctxEdit = badgeOf.get(toolCallId);
+    if (sameCtxEdit(tool.ctxEdit, ctxEdit)) continue;
+    next ??= { ...tools };
+    if (!ctxEdit) {
+      // Deleted rather than set to undefined: a card that was never edited must not grow a key,
+      // or every deep comparison of a rebuilt table sees a difference that is not one.
+      const cleared = { ...tool };
+      delete cleared.ctxEdit;
+      next[toolCallId] = cleared;
+    } else {
+      next[toolCallId] = { ...tool, ctxEdit };
+    }
+  }
+  return next ?? tools;
+}
+
 export type Action =
   | { type: 'host'; message: HostMessage }
   | { type: 'dismissUi'; id: string }
@@ -605,12 +750,20 @@ export function reducer(state: ChatState, action: Action): ChatState {
       return {
         ...state,
         messages: newMessages,
-        tools: seedToolsFromHistory(message.messages),
+        // The badge list outlives the cards: after a reconnect the `contextEdits` push can land on
+        // either side of this one, and a badge that flashes away reads as a broken card.
+        tools: applyContextEdits(
+          seedToolsFromHistory(message.messages),
+          state.ctxEdits,
+        ),
         currentUid: null,
         streaming: false,
         // A snapshot is a different session (or a restarted runtime): a run this surface
         // was showing is not coming back.
         compaction: null,
+        // …and neither is the revert this surface could still undo, because the host has
+        // dropped its own undo target too (it does that on `agent_settled`).
+        lastRevert: null,
         userAttachments,
       };
     }
@@ -630,6 +783,39 @@ export function reducer(state: ChatState, action: Action): ChatState {
       return { ...state, commands: message.commands };
     case 'toolImage':
       return applyToolImageResult(state, message);
+    case 'contextEdits': {
+      // Two things move: the list itself (which a later `history` push replays) and the badges it
+      // implies for the cards that exist right now. Either can be the only difference, so both are
+      // compared and the state is returned untouched when neither is.
+      const tools = applyContextEdits(state.tools, message.edits);
+      if (
+        tools === state.tools &&
+        sameContextEdits(state.ctxEdits, message.edits)
+      ) {
+        return state;
+      }
+      return { ...state, ctxEdits: message.edits, tools };
+    }
+    case 'bridgeStatus': {
+      if (
+        state.bridge.available === message.available &&
+        sameBridgeCapabilities(state.bridge.capabilities, message.capabilities)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        bridge: {
+          available: message.available,
+          capabilities: message.capabilities,
+        },
+      };
+    }
+    case 'revertResult':
+      // The transcript row is the `notice` the host posts beside this; what the panel needs is the
+      // machine-readable outcome, which lives until the next run makes the abandoned tail stale.
+      if (sameRevertResult(state.lastRevert, message.result)) return state;
+      return { ...state, lastRevert: message.result };
     case 'rpcEvent':
       return applyRpcEvent(state, message.event);
     case 'notice':
@@ -659,7 +845,10 @@ export function reducer(state: ChatState, action: Action): ChatState {
 function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
   switch (event.type) {
     case 'agent_start':
-      return { ...state, streaming: true };
+      // A new run is also the end of the undo window: the host stops offering it once the
+      // conversation has been continued rather than just paused (`agent_settled`), and a stale
+      // "Undo revert" would jump back over work the user has since done.
+      return { ...state, streaming: true, lastRevert: null };
     case 'agent_end':
       return {
         ...state,
@@ -787,6 +976,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         status: 'running',
         startedAt: Date.now(),
         parentToolCallId: e.parentToolCallId,
+        // A context edit is a fact about the session, not about this execution: a call that runs
+        // again under the same id is still the one the model may not re-read.
+        ctxEdit: state.tools[e.toolCallId]?.ctxEdit,
       };
       return {
         ...state,
@@ -816,6 +1008,8 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         // made — and pi's truncation flag — have to be carried across explicitly.
         childIds: existing?.childIds,
         nestedComplete: existing?.nestedComplete,
+        // …and so does the badge, which no event of this call ever reports.
+        ctxEdit: existing?.ctxEdit,
         resultBlocks:
           e.partialResult?.content !== undefined
             ? normalizeContent(e.partialResult.content)
@@ -856,6 +1050,9 @@ function applyRpcEvent(state: ChatState, event: RpcEvent): ChatState {
         // The live list is already complete for the UI; keep it across the end event.
         childIds: existing?.childIds,
         nestedComplete: existing?.nestedComplete,
+        // The end event is the one that would silently drop a badge: the card is rebuilt here
+        // from the result, and the result says nothing about what the model gets to read.
+        ctxEdit: existing?.ctxEdit,
         resultBlocks:
           e.result && e.result.content !== undefined
             ? normalizeContent(e.result.content)
