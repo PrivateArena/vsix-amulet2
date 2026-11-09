@@ -36,6 +36,7 @@ function config(overrides: Partial<PiConfig> = {}): PiConfig {
     autoCompact: true,
     autoRetry: true,
     expandThinking: false,
+    preserveLineBreaks: true,
     privacyMode: false,
     privacyRules: [],
     contextEditing: true,

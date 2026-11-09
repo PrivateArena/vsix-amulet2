@@ -12,10 +12,12 @@ import {
   LuRefreshCw,
   LuSettings,
   LuSettings2,
+  LuWrapText,
 } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import { usePrivacyMode, usePrivacyStore } from '../../../stores/privacy-store';
+import { useLineBreaks } from '../../../stores/line-breaks-store';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { openSessionInfo } from '../../../stores/session-info-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
@@ -25,6 +27,8 @@ const REPO_URL = 'https://github.com/gunir/vsix-amulet2';
 export function SettingsMenu() {
   const { session, expandThinking } = useChatState();
   const privacyMode = usePrivacyMode();
+  /** `amulet.preserveLineBreaks` — how the author's newlines are painted. */
+  const lineBreaks = useLineBreaks();
   // A rule that cannot compile is a secret that stays visible, so the menu says it rather than
   // leaving the human to find out from the output channel.
   const badRules = usePrivacyStore((s) => s.issues).length;
@@ -77,6 +81,13 @@ export function SettingsMenu() {
       onSelect: () => actions.setExpandThinking(!expandThinking),
       kind: 'toggle',
       checked: expandThinking,
+    },
+    {
+      label: 'Line breaks',
+      icon: LuWrapText,
+      onSelect: () => actions.setPreserveLineBreaks(!lineBreaks),
+      kind: 'toggle',
+      checked: lineBreaks,
     },
     {
       label: 'Auto compact',

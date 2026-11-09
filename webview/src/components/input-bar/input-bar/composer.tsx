@@ -25,6 +25,11 @@ import { mentionInsertion } from '../../../utils/at-mention';
 import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { useRedact } from '../../../stores/privacy-store';
+import {
+  clearComposerReserve,
+  reserveForComposer,
+  useComposerReserveStore,
+} from '../../../stores/composer-reserve-store';
 import { useComposerStore } from '../../../stores/composer-store';
 import { IconButton } from '../../ui/button';
 import { ContextMeter } from '../ctx-meter';
@@ -61,50 +66,87 @@ function imageToAttachment(file: File): Promise<Attachment> {
 }
 
 /**
- * Grow the textarea with its content, one line at a time, up to the `max-height`
- * the stylesheet imposes; past that it scrolls internally. Writing `height:auto`
- * first lets the element shrink back down when lines are deleted.
+ * Can the engine size the textarea itself? `field-sizing: content` (Chromium 123+, so any
+ * current VS Code webview) grows a field to its content without ever being measured.
+ *
+ * Measuring is the fallback, not the design: reading `scrollHeight` right after writing a
+ * height is a forced layout of the *document*, so every keystroke would wait on the
+ * transcript that happens to be on screen — the more messages, the slower the Enter key.
+ */
+const SIZES_ITSELF =
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  CSS.supports('field-sizing', 'content');
+
+/**
+ * Grow the textarea with its content, one line at a time, up to the `max-height` the
+ * stylesheet imposes; past that it scrolls internally. Writing `height:auto` first lets
+ * the element shrink back down when lines are deleted.
+ *
+ * Exactly one layout read per growth — the old `clientHeight` after the write forced a
+ * second one. The stylesheet clamps the value we write, and its `overflow-y: auto` shows
+ * a scrollbar only once the draft really is taller than the ceiling, which is what that
+ * read was there to decide.
  */
 function useAutoGrow(
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
   value: string,
 ) {
   useLayoutEffect(() => {
+    if (SIZES_ITSELF) return;
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const content = textarea.scrollHeight;
-    textarea.style.height = `${content}px`;
-    // `clientHeight` honours the CSS cap, so this is "did we hit the ceiling?".
-    textarea.style.overflowY =
-      content > textarea.clientHeight ? 'auto' : 'hidden';
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }, [textareaRef, value]);
 }
 
 /**
- * Publish the composer's outer height as `--chat-composer-h` so the message list
- * can reserve exactly that much scroll padding — the composer floats over the
- * log, and a fixed gap would either clip the last reply or waste screen space
- * while the composer is a single line.
+ * Keep the transcript's tail clear of this composer, which floats over it — see
+ * `stores/composer-reserve-store.ts` for why the write goes to the log element itself.
+ *
+ * The height comes from the observer's own box: `getBoundingClientRect()` inside the
+ * callback is a read after the layout it just reported, and a read like that is only free
+ * while nothing is dirty — a textarea that grew in the same frame is dirty.
  */
 function usePublishComposerHeight(
   rootRef: React.RefObject<HTMLElement | null>,
 ) {
+  const log = useComposerReserveStore((s) => s.log);
+  /** Last height the observer reported, so a transcript that mounts later gets it. */
+  const lastHeight = useRef(0);
+
   useEffect(() => {
     const el = rootRef.current?.closest('.chat-input-wrap') ?? rootRef.current;
     if (!el) return;
-    const publish = () => {
-      const h = Math.round(el.getBoundingClientRect().height);
-      document.documentElement.style.setProperty('--chat-composer-h', `${h}px`);
+    const publish = (height: number) => {
+      if (height <= 0) return;
+      lastHeight.current = height;
+      reserveForComposer(height);
     };
-    publish();
-    const observer = new ResizeObserver(publish);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      // The observer already measured it: `getBoundingClientRect()` here would be a read
+      // after the layout it just reported, and such a read is only free while nothing is
+      // dirty — a textarea that grew in this very frame is dirty. `blockSize` is the
+      // border-box height in this horizontal-tb document, i.e. the old rect height.
+      const box = entry.borderBoxSize?.[0];
+      publish(box ? box.blockSize : el.getBoundingClientRect().height);
+    });
     observer.observe(el);
     return () => {
       observer.disconnect();
-      document.documentElement.style.removeProperty('--chat-composer-h');
+      clearComposerReserve();
     };
   }, [rootRef]);
+
+  // A transcript element that mounts later (a screen switch) starts on the stylesheet's
+  // placeholder gap, so hand it the height the observer already reported. The observer
+  // does not re-fire: the composer did not change size, only the element to write on.
+  useEffect(() => {
+    if (log && lastHeight.current) reserveForComposer(lastHeight.current);
+  }, [log]);
 }
 
 export const InputBar = forwardRef<HTMLTextAreaElement, {}>(

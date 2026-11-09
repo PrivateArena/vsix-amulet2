@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { LuMinimize2 } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
@@ -23,7 +24,13 @@ export function ContextMeter() {
   const { stats, messages, streaming, compaction } = useChatState();
   const confirm = useConfirm();
 
-  const usage = contextUsageOf(stats, messages);
+  // Memoised because this meter sits in the composer's toolbar: the draft is local
+  // textarea state, and `contextUsageOf` walks the transcript to find the live figure —
+  // un-memoised, every keystroke paid for the whole conversation.
+  const usage = useMemo(
+    () => contextUsageOf(stats, messages),
+    [stats, messages],
+  );
   if (!stats || !usage) return null;
 
   const pct = usage.percent;

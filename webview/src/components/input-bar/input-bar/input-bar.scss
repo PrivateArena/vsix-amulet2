@@ -87,7 +87,8 @@
     border: none;
     border-radius: 0;
     background: transparent !important;
-    /* Height is driven by `useAutoGrow`; these are the floor and the ceiling. */
+    /* `field-sizing` where available, `useAutoGrow` where not — these are the floor and
+       the ceiling either way. */
     min-height: var(--composer-line);
     max-height: min(
       calc(var(--composer-line) * var(--composer-max-lines)),
@@ -105,8 +106,17 @@
     opacity: 1;
     line-height: var(--composer-line);
     outline: none;
-    overflow-y: hidden;
+    /* `auto`, not `hidden`: a scrollbar then appears exactly when the draft is taller
+       than the ceiling — which is the one thing the old per-keystroke `clientHeight`
+       read existed to work out. */
+    overflow-y: auto;
     margin-bottom: 0;
+
+    /* Where the engine can size a field to its content, it does — and no script ever
+       measures the textarea, so a keystroke never waits on the transcript's layout. */
+    @supports (field-sizing: content) {
+      field-sizing: content;
+    }
 
     &::placeholder {
       color: var(--vscode-input-placeholderForeground);

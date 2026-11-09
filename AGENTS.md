@@ -99,7 +99,7 @@ suite built from such a capture.
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the context-surgery bridge, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the context-surgery bridge, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
 (`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
@@ -115,6 +115,15 @@ Extension settings live under the `amulet.*` namespace (declared in [`package.js
   [`webview/src/stores/privacy-store.ts`](webview/src/stores/privacy-store.ts). Censor **before** any
   tokenizer runs (highlight.js splits a path across spans, so a rule cannot match afterwards) — that is why
   `MdRender` and `CodeBlock` rewrite their source rather than their output.
+
+`preserveLineBreaks` (default **on**) is the third webview-only switch on that same route
+(`setPreserveLineBreaks` → `amulet.preserveLineBreaks` → `webviewConfig()` → `config`), held in
+[`webview/src/stores/line-breaks-store.ts`](webview/src/stores/line-breaks-store.ts) beside the privacy
+store. It decides whether a message's soft newline paints as a line break, so it is rendering only: the
+session file, the prompt and every copy path keep the author's own bytes either way. `useLineBreaks()`
+subscribes and then reads the store live for the same reason `useRedact()` does — under
+`useSyncExternalStore` a *server* render answers with the initial state, so a selected value would freeze
+the shipped default in a test render.
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 
@@ -218,6 +227,32 @@ and on `pi >= 1.4`). Read this before changing any of it:
   selection (or a source-less `<pre>`) goes through `serializeDom`. Anything the menu declines (no unit under
   the cursor, no items) must leave the `contextmenu` event alone so the native menu still appears, and the
   selection is snapshotted at right-click time because clicking a menu item destroys it.
+- **A newline the author typed is a line break in the transcript — by default.** Markdown treats a
+  single `\n` as a soft break and renders it as a space, so a composer draft of `1\n2` came back as
+  `1 2` and only `1\n\n2` kept the line. [`webview/src/utils/md-breaks.ts`](webview/src/utils/md-breaks.ts)
+  is the one owner of the other reading: a remark plugin that rewrites soft newlines into `break` nodes,
+  with `MdRender` as its only consumer and `amulet.preserveLineBreaks` (menu: **Line breaks**) choosing
+  between them. Fix it there, never in the submitted text — the session file, the prompt and the
+  transcript's raw copy source must all keep exactly what the author typed, and `serializeDom` already
+  turns a `<br>` back into a markdown hard break.
+- **The composer's keystroke path must never touch the transcript's layout.** Typing used to
+  cost the whole `#chat-log`: the composer's height was published as an _inherited_ custom
+  property on `documentElement`, which makes Blink recompute the style of every node in the
+  conversation, and a `transition` on the `padding-bottom` that consumes it laid the log out
+  once per frame for 260 ms. Four rules, all in
+  [`webview/src/stores/composer-reserve-store.ts`](webview/src/stores/composer-reserve-store.ts)
+  and [`webview/src/components/input-bar/input-bar/composer.tsx`](webview/src/components/input-bar/input-bar/composer.tsx):
+  - reserve the log's tail by writing a **non-inherited property on the log element
+    itself** (`reserveForComposer`) — never a custom property above its consumer, and never
+    React state, which would re-render every turn;
+  - size the textarea with `field-sizing: content` where the engine has it, and keep the
+    measured fallback to one layout read (a read after a height write is a forced layout of
+    the *document*, and the old code did it twice per keystroke);
+  - take the height from `ResizeObserverEntry.borderBoxSize` instead of calling
+    `getBoundingClientRect()` inside the observer callback;
+  - memoise anything rendered inside `.input-bar` that walks `messages` (`ContextMeter`
+    does) — the draft is local textarea state, so a scan of the conversation is otherwise
+    paid for on every keystroke.
 - The webview cannot access the microphone, filesystem, or Node APIs directly — everything goes through the host bridge.
 - **Session lifetime is a prompt-cache asset.** pi rebuilds the model context from the session file
   before *every* request, so the conversation itself never depends on the child process staying up —

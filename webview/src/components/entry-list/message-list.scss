@@ -1,3 +1,10 @@
+/* Placeholder for the gap the composer owns once it is measured: `reserveForComposer`
+   (`stores/composer-reserve-store.ts`) writes the real `padding-bottom` on this element,
+   because the composer floats over the log and a fixed gap would either clip the last
+   reply or waste screen space while the composer is a single line. It already includes
+   the composer gap, so the placeholder needs no `+ 4px` of its own. */
+$composer-tail-reserve: 100px;
+
 #chat-log {
   flex: 1;
   overflow-y: auto;
@@ -8,15 +15,13 @@
   max-width: unset;
   box-sizing: border-box;
   margin: 0 auto;
-  /* `--chat-composer-h` is published by the composer (it floats over the log),
-     so the reserved gap tracks the textarea as it grows instead of a fixed 160px. */
-  padding: calc(1px * var(--amulet-spacing-mult)) 2px
-    calc(var(--chat-composer-h, 96px) + 4px);
+  padding: calc(1px * var(--amulet-spacing-mult)) 2px $composer-tail-reserve;
   position: relative;
+  /* `padding-bottom` is deliberately absent: a transitioned padding is laid out on every
+     frame of its 260ms, which relaid the whole transcript each time the composer grew. */
   transition:
     opacity 0.18s ease,
-    transform 0.22s var(--amulet-ease-out),
-    padding-bottom 0.26s var(--amulet-ease-out);
+    transform 0.22s var(--amulet-ease-out);
 }
 
 /* One turn = a user message + the reply that follows it. It scrolls as one block,

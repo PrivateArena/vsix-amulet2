@@ -8,6 +8,7 @@ import {
 
 const config = (over: Partial<WebviewConfig> = {}): WebviewConfig => ({
   expandThinking: false,
+  preserveLineBreaks: true,
   privacyMode: true,
   privacyRules: [
     { search: '/media/jang/home', replace: '/media/user/home' },

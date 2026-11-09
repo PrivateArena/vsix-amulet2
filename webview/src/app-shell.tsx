@@ -9,6 +9,7 @@ import { useCompactionHistoryStore } from './stores/compaction-history-store';
 import { useContextSurgeryStore } from './stores/context-surgery-store';
 import { usePackagesStore } from './stores/packages-store';
 import { applyPrivacyConfig } from './stores/privacy-store';
+import { applyLineBreakConfig } from './stores/line-breaks-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -76,10 +77,12 @@ export function Shell() {
         contextSurgery.setUndoRevert(message.result.ok ? message.result : null);
         dispatch({ type: 'host', message });
       },
-      // `config` carries a store flag (expandThinking) and the censoring rules together, and the rules
-      // are rendering state rather than chat state: they never enter the transcript, only its painting.
+      // `config` carries store flags (expandThinking, the censoring rules, the line-break
+      // preference) and they are all rendering state rather than chat state: none of them
+      // ever enters the transcript, only its painting.
       config: (message) => {
         applyPrivacyConfig(message.config);
+        applyLineBreakConfig(message.config);
         dispatch({ type: 'host', message });
       },
     };

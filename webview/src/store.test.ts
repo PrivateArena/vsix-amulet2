@@ -62,6 +62,7 @@ describe('reducer — host state messages', () => {
           type: 'config',
           config: {
             expandThinking: false,
+            preserveLineBreaks: true,
             privacyMode: false,
             privacyRules: [],
           },

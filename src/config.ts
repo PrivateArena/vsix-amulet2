@@ -18,6 +18,11 @@ export interface PiConfig {
   autoRetry: boolean;
   /** Webview-only: render new reasoning blocks expanded. */
   expandThinking: boolean;
+  /**
+   * Webview-only: a single newline in a message paints as a line break (menu: "Line
+   * breaks"). False is the strict Markdown reading, where a soft newline is whitespace.
+   */
+  preserveLineBreaks: boolean;
   /** Webview-only: censor configured text in the chat view (menu: "Privacy mode"). */
   privacyMode: boolean;
   /** Webview-only: the censoring rules, applied after the built-ins. */
@@ -69,6 +74,7 @@ export function readConfig(): PiConfig {
     autoCompact: get<boolean>('autoCompact', true),
     autoRetry: get<boolean>('autoRetry', true),
     expandThinking: get<boolean>('expandThinking', false),
+    preserveLineBreaks: get<boolean>('preserveLineBreaks', true),
     privacyMode: get<boolean>('privacyMode', false),
     privacyRules: get<PrivacyRule[]>('privacyRules', []),
     contextEditing: get<boolean>('contextEditing', true),
@@ -148,11 +154,13 @@ function privacyPayload(declaredRules: PrivacyRule[]): PrivacyPayload {
 
 /** The subset of settings the webview renders. */
 export function webviewConfig(): WebviewConfig {
-  const { expandThinking, privacyMode, privacyRules } = readConfig();
+  const { expandThinking, privacyMode, privacyRules, preserveLineBreaks } =
+    readConfig();
   const { rules, issues } = privacyPayload(privacyRules);
   return {
     expandThinking,
     privacyMode,
+    preserveLineBreaks,
     privacyRules: rules,
     privacyRuleIssues: issues,
   };
@@ -166,6 +174,9 @@ export const PRIVACY_KEYS = [
   `${SECTION}.privacyMode`,
   `${SECTION}.privacyRules`,
 ];
+
+/** Config key behind the "Line breaks" toggle. */
+export const PRESERVE_LINE_BREAKS_KEY = `${SECTION}.preserveLineBreaks`;
 
 /** Config key behind the "approval waiting" status-bar entry (see `src/notify`). */
 export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
@@ -185,6 +196,13 @@ export async function setPrivacyMode(enabled: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration(SECTION)
     .update('privacyMode', enabled, vscode.ConfigurationTarget.Global);
+}
+
+/** Persist {@link PiConfig.preserveLineBreaks} so the preference survives reloads. */
+export async function setPreserveLineBreaks(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('preserveLineBreaks', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /** Config keys whose change should trigger a runtime restart. */

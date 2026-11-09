@@ -76,6 +76,8 @@ export const actions = {
     postMessage({ type: 'setExpandThinking', enabled }),
   setPrivacyMode: (enabled: boolean) =>
     postMessage({ type: 'setPrivacyMode', enabled }),
+  setPreserveLineBreaks: (enabled: boolean) =>
+    postMessage({ type: 'setPreserveLineBreaks', enabled }),
 
   // sessions
   newChat: () => postMessage({ type: 'newChat' }),

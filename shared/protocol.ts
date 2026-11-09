@@ -881,6 +881,8 @@ export type WebviewMessage =
   | { type: 'setExpandThinking'; enabled: boolean }
   /** Persist the "Privacy mode" preference (`amulet.privacyMode`). */
   | { type: 'setPrivacyMode'; enabled: boolean }
+  /** Persist the "Line breaks" preference (`amulet.preserveLineBreaks`). */
+  | { type: 'setPreserveLineBreaks'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
@@ -1188,6 +1190,12 @@ export interface WebviewConfig {
   expandThinking: boolean;
   /** The chat-view censoring switch (menu: **Privacy mode**, `amulet.privacyMode`). */
   privacyMode: boolean;
+  /**
+   * Whether a single newline paints as a line break (menu: **Line breaks**,
+   * `amulet.preserveLineBreaks`). Rendering only: the message text, the session file and
+   * anything sent back into the run keep the author's own bytes.
+   */
+  preserveLineBreaks: boolean;
   /**
    * Censoring rules to apply to displayed text: the built-ins plus `amulet.privacyRules`, already
    * checked by the host, so an entry that cannot compile never reaches the webview.

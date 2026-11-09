@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useChatState } from '../../contexts/chat-context';
+import { useComposerReserveStore } from '../../stores/composer-reserve-store';
 import { useTurnNavStore } from '../../stores/turn-nav-store';
 import { AgentTimeline, EntryView } from '../entry-view';
 import { ChatFind, scrollRangesIntoView } from '../chat-find';
@@ -59,10 +60,17 @@ export function EntryList({
   const ready = status.phase === 'ready';
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  // The log element is registered through the ref, not an effect: an effect with `[]`
+  // deps would keep publishing the space of a detached element if this div were ever
+  // re-created, and the composer has no way to notice.
+  const unregisterLog = useRef<(() => void) | null>(null);
   const stickToBottom = useRef(true);
   const setActiveUid = useTurnNavStore((s) => s.setActiveUid);
   // Our own menu over the transcript: VS Code's has nothing to say about markdown.
   const menu = useTranscriptMenu(listRef);
+  const blocks = groupTranscript(messages);
+  /** Identity of the anchor list the topbar navigator walks (`data-turn` per turn). */
+  const anchors = blocks.map((block) => block.key).join(' ');
 
   /** Tell the topbar navigator which turn is currently anchored at the top. */
   const syncActiveTurn = useCallback(() => {
@@ -82,11 +90,51 @@ export function EntryList({
     setActiveUid(active.dataset.turn ?? null);
   }, [setActiveUid]);
 
+  /**
+   * Coalesce the anchor scan into one frame. A scroll gesture is a stream of events —
+   * one per pixel of wheel movement — and each scan reads the box of every turn, so on a
+   * long session the navigator would measure the whole transcript many times per frame.
+   */
+  const syncFrame = useRef(0);
+  const requestActiveTurnSync = useCallback(() => {
+    if (syncFrame.current) return;
+    syncFrame.current = requestAnimationFrame(() => {
+      syncFrame.current = 0;
+      syncActiveTurn();
+    });
+  }, [syncActiveTurn]);
+  useEffect(() => () => cancelAnimationFrame(syncFrame.current), []);
+
+  /** The composer floats over the log and keeps its own tail clear of it. */
+  const attachLog = useCallback((el: HTMLDivElement | null) => {
+    listRef.current = el;
+    unregisterLog.current?.();
+    unregisterLog.current = el
+      ? useComposerReserveStore.getState().registerLog(el)
+      : null;
+  }, []);
+  useEffect(
+    () => () => {
+      unregisterLog.current?.();
+      unregisterLog.current = null;
+    },
+    [],
+  );
+
+  // Hugging the bottom is per streamed delta: a new token has to be followed.
   useEffect(() => {
     const el = listRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+    // ...and streaming is also what pushes an earlier turn out from under the anchor
+    // edge, so the navigator gets one coalesced look per frame, not per delta.
+    requestActiveTurnSync();
+  }, [messages, tools, streaming, compaction, requestActiveTurnSync]);
+
+  // A changed anchor list is a structural fact, so it is resolved immediately rather
+  // than on the next frame.
+  useEffect(() => {
     syncActiveTurn();
-  }, [messages, tools, streaming, compaction, syncActiveTurn]);
+  }, [anchors, syncActiveTurn]);
 
   // Publish the scroll handle the topbar navigator jumps through.
   useEffect(
@@ -119,7 +167,7 @@ export function EntryList({
       stickToBottom.current = atBottom;
       onScrollAtBottomChange?.(atBottom);
     }
-    syncActiveTurn();
+    requestActiveTurnSync();
   };
 
   /**
@@ -137,7 +185,7 @@ export function EntryList({
     <>
       <div
         id="chat-log"
-        ref={listRef}
+        ref={attachLog}
         onScroll={onScroll}
         onContextMenu={menu.open}>
         {messages.length === 0 && ready && (
@@ -157,7 +205,7 @@ export function EntryList({
             </div>
           </div>
         )}
-        {groupTranscript(messages).map((block) => {
+        {blocks.map((block) => {
           if (block.kind === 'compaction') {
             return block.info ? (
               <CompactionCard key={block.key} info={block.info} />

@@ -38,11 +38,13 @@ import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
   EXPAND_THINKING_KEY,
   PRIVACY_KEYS,
+  PRESERVE_LINE_BREAKS_KEY,
   THINKING_LEVEL_KEY,
   affectsSetting,
   readConfig,
   setExpandThinking,
   setPrivacyMode,
+  setPreserveLineBreaks,
   webviewConfig,
 } from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
@@ -271,6 +273,7 @@ export class ChatBridge implements vscode.Disposable {
     const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
       if (
         affectsSetting(e, EXPAND_THINKING_KEY) ||
+        affectsSetting(e, PRESERVE_LINE_BREAKS_KEY) ||
         PRIVACY_KEYS.some((key) => affectsSetting(e, key))
       ) {
         this.postConfig();
@@ -704,6 +707,12 @@ export class ChatBridge implements vscode.Disposable {
           // Also purely a webview rendering preference, and the same echo: the censoring is
           // decided in the webview, so the runtime is never restarted for it.
           await setPrivacyMode(message.enabled);
+          this.postConfig();
+          return;
+        case 'setPreserveLineBreaks':
+          // Same again: how a message is painted, never what it says — the session file and
+          // the prompt keep the author's own newlines either way.
+          await setPreserveLineBreaks(message.enabled);
           this.postConfig();
           return;
         case 'openPiFolder': {
