@@ -27,7 +27,6 @@ const logger: Logger = {
 interface Sent {
   text: string;
   images: unknown;
-  streamingBehavior: unknown;
   options: unknown;
 }
 
@@ -59,13 +58,8 @@ function stubRuntime(
       const space = text.indexOf(' ');
       return commands.has(space < 0 ? text.slice(1) : text.slice(1, space));
     },
-    prompt(
-      text: string,
-      images?: unknown,
-      streamingBehavior?: unknown,
-      opts?: unknown,
-    ): Promise<unknown> {
-      sent.push({ text, images, streamingBehavior, options: opts });
+    prompt(text: string, images?: unknown, opts?: unknown): Promise<unknown> {
+      sent.push({ text, images, options: opts });
       return Promise.resolve(options.disposition ?? 'handled');
     },
   };
@@ -135,11 +129,10 @@ describe('BridgeClient', () => {
     const request = sentRequest(stub.sent);
     expect(request.op).toBe('omit');
     expect(request.handle).toEqual(omitInit.handle);
-    // The 4th argument is the 15-minute budget: an extension command's response only lands when its
+    // The 3rd argument is the 15-minute budget: an extension command's response only lands when its
     // handler returns, so the default one fails a command that worked.
     expect(stub.sent[0].options).toEqual({ longRunning: true });
     expect(stub.sent[0].images).toBeUndefined();
-    expect(stub.sent[0].streamingBehavior).toBeUndefined();
 
     expect(client.handleNotify(ackOf(request))).toBe(true);
     await expect(call).resolves.toMatchObject({

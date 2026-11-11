@@ -5,6 +5,7 @@ import { PermissionPrompt } from './components/ui/permission-prompt';
 import { SessionInfoDialog } from './components/ui/session-info-dialog';
 import { PackagesDialog } from './components/ui/packages-dialog';
 import { CompactionDialog } from './components/ui/compaction-dialog';
+import { PromptDialog } from './components/ui/prompt-dialog';
 import { ChatCtx } from './contexts/chat-context';
 
 import './assets/css/styles.scss';
@@ -20,6 +21,7 @@ export function App() {
       <SessionInfoDialog />
       <CompactionDialog />
       <PackagesDialog />
+      <PromptDialog />
     </ChatCtx>
   );
 }

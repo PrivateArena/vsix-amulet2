@@ -227,7 +227,6 @@ export class BridgeClient {
     const disposition = await runtime.prompt(
       encodeBridgeRequest(request),
       undefined,
-      undefined,
       // An extension command's response only lands when its handler returns, so it needs the long
       // budget — the generic one fails a command that worked. Same argument as in `submitText`.
       { longRunning: true },

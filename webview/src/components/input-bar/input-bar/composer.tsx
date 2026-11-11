@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -19,11 +18,16 @@ import { useFileMentions } from '../../../hooks/use-file-mentions';
 import type { SlashCommand } from '../cmd-menu';
 import { CommandMenu } from '../cmd-menu';
 import { FileMenu } from '../file-menu';
-import { splitPromptChain } from '../../../utils/prompt-chain';
-import { commandName, invocationOf } from '../../../utils/slash-command';
+import {
+  joinDraft,
+  leadingPromptCommand,
+  type PromptKind,
+} from '../../../utils/prompt-insert';
+import { invocationOf } from '../../../utils/slash-command';
 import { mentionInsertion } from '../../../utils/at-mention';
 import { appendToDraft, toBlockquote } from '../../../utils/composer-quote';
 import { openProviderLogin } from '../../../stores/provider-login-store';
+import { promptDialog } from '../../../stores/prompt-dialog-store';
 import { useRedact } from '../../../stores/privacy-store';
 import {
   clearComposerReserve,
@@ -192,50 +196,50 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
     };
 
     /**
-     * Commands the runtime expands from message text — prompt templates and
-     * skills. Extension commands are excluded: they execute immediately and
-     * cannot be queued as a follow-up.
+     * Send the draft. A prompt template or a skill never leaves this way: it is expanded here
+     * first (`utils/prompt-insert.ts`), because pi expands only the *leading* command of a
+     * message and reads everything after it as that command's arguments — so a draft carrying
+     * two `/prompts` silently loses the second one. Expanded prose cannot be swallowed, which is
+     * what makes several prompts in one message possible at all.
      */
-    const chainableNames = useMemo(() => {
-      const names = new Set<string>();
-      for (const cmd of commands) {
-        if (cmd.source === 'extension') continue;
-        names.add(commandName(cmd.name));
-      }
-      return names;
-    }, [commands]);
-
     const submit = () => {
       const message = input.trim();
       if (!message && pendingAttachments.length === 0) return;
-      // One `/command` per prompt: the runtime expands only the leading command,
-      // so a chained entry is split and the tail queues behind the first run.
-      const parts = splitPromptChain(message, (name) =>
-        chainableNames.has(name),
-      );
-      const followUps = parts.length > 1 ? parts.slice(1) : undefined;
-      const text = parts[0] ?? message;
+      // `handles` is the escape hatch: if this exact text already went through the dialog — and the
+      // modal being open is what stops Enter reaching here, so a second Enter means the human closed
+      // it — then the form could not help, and the command is sent the way pi reads it.
+      const command = leadingPromptCommand(message, commands);
+      if (command && !promptDialog.handles(message)) {
+        // The draft survives: Cancel must not have eaten what the human typed.
+        promptDialog.openCommand(command, {
+          start: input.length - input.trimStart().length,
+          end: input.length,
+        });
+        return;
+      }
       if (streaming) {
-        actions.steer(text, followUps);
+        actions.steer(message);
       } else {
         // Leave the attachments in `pendingAttachments`: the store links them to
         // the user message's uid when its `message_start` event arrives, which is
         // what lets the bubble render them.
         actions.sendMessage(
-          text,
+          message,
           pendingAttachments.length > 0 ? pendingAttachments : undefined,
-          followUps,
         );
       }
       setInput('');
     };
 
     /**
-     * Drop the in-progress `/token` and put the invocation in its place, leaving
-     * the caret after `/name ` so arguments — or another `/command` — can follow.
-     * A skill keeps pi's namespace (`/skill:name`), which is what its expander
-     * matches on. Only the commands this UI executes itself skip the composer
-     * entirely, and even those lose just their own token: the rest survives.
+     * Complete the `/token` in place, leaving the caret after `/name ` so arguments — or another
+     * `/command` — can follow. A skill keeps pi's namespace (`/skill:name`), which is what its
+     * expander matches on. Only the commands this UI executes itself skip the composer entirely,
+     * and even those lose just their own token: the rest survives.
+     *
+     * A prompt template or a skill completes and then asks for its arguments: the form *is* what
+     * the human was about to type by hand, and the range it will overwrite is the invocation this
+     * one just became, so Cancel leaves the draft exactly as a plain completion would.
      */
     const applySlashCommand = (
       command: SlashCommand,
@@ -258,6 +262,31 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
           return;
       }
       const inserted = `${invocationOf(command.name)} `;
+      const promptKind: PromptKind | null =
+        command.source === 'skill'
+          ? 'skill'
+          : command.source === 'prompt'
+            ? 'prompt'
+            : null;
+      if (promptKind) {
+        setInput(
+          input.slice(0, token.start) + inserted + input.slice(token.end),
+        );
+        // Park the caret as a plain completion would, so Cancel leaves the same draft and the
+        // same place to keep typing in.
+        pendingCaret.current = token.start + inserted.length;
+        setCaret(pendingCaret.current);
+        promptDialog.openCommand(
+          {
+            name: command.name,
+            kind: promptKind,
+            description: command.description,
+            argsString: '',
+          },
+          { start: token.start, end: token.start + inserted.trimEnd().length },
+        );
+        return;
+      }
       pendingCaret.current = token.start + inserted.length;
       setCaret(pendingCaret.current);
       setInput(input.slice(0, token.start) + inserted + input.slice(token.end));
@@ -330,6 +359,26 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
             setInput((v) => appendToDraft(v, toBlockquote(text)));
             // Answer the quote right away: land the caret after the pasted block.
             pendingCaret.current = CARET_AT_END;
+          },
+          insertBlock: (text, range) => {
+            const current = localRef.current?.value ?? '';
+            const from = Math.max(0, Math.min(range.start, current.length));
+            const to = Math.max(from, Math.min(range.end, current.length));
+            const next = joinDraft(
+              current.slice(0, from),
+              text,
+              current.slice(to),
+            );
+            if (next.value === current) {
+              // React will not re-run the caret effect for a value that did not change, and an
+              // armed `pendingCaret` would otherwise jump the caret on the next keystroke.
+              localRef.current?.focus();
+              localRef.current?.setSelectionRange(next.caret, next.caret);
+              setCaret(next.caret);
+              return;
+            }
+            setInput(next.value);
+            pendingCaret.current = next.caret;
           },
           setText: (text) => setInput(text),
           focus: () => localRef.current?.focus(),

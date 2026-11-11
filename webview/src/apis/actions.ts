@@ -18,11 +18,8 @@ export const actions = {
   ready: () => postMessage({ type: 'ready' }),
 
   // conversation
-  sendMessage: (
-    text: string,
-    attachments?: Attachment[],
-    followUps?: string[],
-  ) => postMessage({ type: 'sendMessage', text, attachments, followUps }),
+  sendMessage: (text: string, attachments?: Attachment[]) =>
+    postMessage({ type: 'sendMessage', text, attachments }),
   pickFiles: () => postMessage({ type: 'pickFiles' }),
   /**
    * Fetch the bytes behind one image a tool returned, and open it full size. Both are
@@ -33,8 +30,7 @@ export const actions = {
     postMessage({ type: 'loadToolImage', toolCallId, index, path }),
   openToolImage: (toolCallId: string, path: string) =>
     postMessage({ type: 'openToolImage', toolCallId, path }),
-  steer: (text: string, followUps?: string[]) =>
-    postMessage({ type: 'steer', text, followUps }),
+  steer: (text: string) => postMessage({ type: 'steer', text }),
   abort: () => postMessage({ type: 'abort' }),
   compact: () => postMessage({ type: 'compact' }),
   editAndFork: (entryId: string, text: string) =>
@@ -90,6 +86,13 @@ export const actions = {
     postMessage({ type: 'openSessionInEditor', path }),
   requestSessions: () => postMessage({ type: 'requestSessions' }),
   requestCommands: () => postMessage({ type: 'requestCommands' }),
+  /**
+   * Read one prompt template or skill off the host's disk (`promptResource` HostMessage). The
+   * caller owns the id and only accepts the answer that carries it, so a file read for a dialog
+   * that has moved on cannot paint the next one.
+   */
+  requestPromptResource: (name: string, requestId: number) =>
+    postMessage({ type: 'requestPromptResource', name, requestId }),
   /**
    * Ask for the project's file paths to complete an `@`-mention. The caller owns the id
    * and only accepts the answer that carries it, so a listing that arrives late — after a

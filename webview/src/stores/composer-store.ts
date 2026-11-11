@@ -20,6 +20,13 @@ export interface ComposerApi {
    * transcript reads as a reply block rather than as one run-on line.
    */
   quote: (text: string) => void;
+  /**
+   * Put a finished block of prose where `range` is, separated from whatever runs into it, and
+   * park the caret after it. Unlike `insertText`/`prefixDraft`, which can only touch the ends of
+   * a draft, this one replaces text the human already wrote — which is what makes it the insertion
+   * for an expanded prompt: the `/name args` token it completes simply disappears.
+   */
+  insertBlock: (text: string, range: { start: number; end: number }) => void;
   /** Replace the draft outright (fork mode reloads a previous message). */
   setText: (text: string) => void;
   focus: () => void;
@@ -71,6 +78,8 @@ export const composer = {
     useComposerStore.getState().run((api) => api.prefixDraft(text)),
   quote: (text: string) =>
     useComposerStore.getState().run((api) => api.quote(text)),
+  insertBlock: (text: string, range: { start: number; end: number }) =>
+    useComposerStore.getState().run((api) => api.insertBlock(text, range)),
   setText: (text: string) =>
     useComposerStore.getState().run((api) => api.setText(text)),
   focus: () => useComposerStore.getState().run((api) => api.focus()),

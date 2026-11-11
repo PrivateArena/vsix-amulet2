@@ -697,8 +697,49 @@ export interface SessionStats {
 
 export interface CommandInfo {
   name: string;
-  description?: string;
+  /** `'extension'` | `'prompt'` | `'skill'` | `'built-in'` (this client's own additions). */
   source: string;
+  description?: string;
+  /**
+   * Where pi found the command, as it reports it (`dist/modes/rpc/rpc-mode.js:540-566`).
+   * Only `prompt` and `skill` rows are file-backed, and their `path` is the markdown file
+   * pi itself reads at expansion time — which is the one way this client can learn a
+   * template's argument shape, since `argumentHint` is TUI-only and never crosses the wire.
+   * Extension commands carry a `.ts` path and there is nothing to read there, so the
+   * webview must not treat their presence as an invitable template.
+   */
+  sourceInfo?: CommandSourceInfo;
+}
+
+/** pi's `SourceInfo` (`dist/core/source-info.d.ts:4-11`), trimmed to what the client uses. */
+export interface CommandSourceInfo {
+  /** File or pseudo-path: a prompt `.md`, a `SKILL.md`, or `builtin:<name>` for nothing on disk. */
+  path?: string;
+  source?: string;
+  scope?: 'user' | 'project' | 'temporary';
+  origin?: 'package' | 'top-level';
+  /** Skill dir / agent dir — the root the resource's own relative paths resolve against. */
+  baseDir?: string;
+}
+
+/**
+ * One prompt template or skill read off disk, for the insert dialog.
+ *
+ * The host is the only one who can read the file, and it reads exactly the bytes pi would
+ * have expanded — frontmatter stripped, newlines normalised. `body` is the template source,
+ * placeholders and all: the webview owns substitution (`shared/prompt-template.ts`) so the
+ * preview tracks the argument fields as they are typed.
+ */
+export interface PromptResource {
+  /** pi's command name, skills namespaced as pi reports them (`skill:pdf-tools`). */
+  name: string;
+  kind: 'prompt' | 'skill';
+  path: string;
+  /** Skill only: the directory its `References are relative to …` sentence names. */
+  baseDir?: string;
+  /** The file's `argument-hint` frontmatter, when it declares one. */
+  hint?: string;
+  body: string;
 }
 
 /**
@@ -803,18 +844,8 @@ export interface RuntimeStatus {
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
   | { type: 'ready' }
-  /**
-   * `followUps` carries the tail of a chained slash-prompt message (see
-   * `splitPromptChain`): the host sends `text` first, then each follow-up as its
-   * own prompt so the pi runtime expands one `/command` per message.
-   */
-  | {
-      type: 'sendMessage';
-      text: string;
-      attachments?: Attachment[];
-      followUps?: string[];
-    }
-  | { type: 'steer'; text: string; followUps?: string[] }
+  | { type: 'sendMessage'; text: string; attachments?: Attachment[] }
+  | { type: 'steer'; text: string }
   | { type: 'abort' }
   | { type: 'newChat' }
   | { type: 'setModel'; provider: string; modelId: string }
@@ -843,6 +874,13 @@ export type WebviewMessage =
   /** Ask for one boundary's summary text, by its persisted entry id. */
   | { type: 'requestCompactionDetail'; id: string }
   | { type: 'requestCommands' }
+  /**
+   * Read one prompt template or skill for the insert dialog. On demand by design: a
+   * session reports dozens of templates, several kilobytes each, and only the one the
+   * human is about to insert is ever needed. `requestId` echoes back so an answer that
+   * lands after the dialog moved on is dropped rather than shown as the new one's.
+   */
+  | { type: 'requestPromptResource'; name: string; requestId: number }
   /**
    * Ask for the project's file paths to complete an `@`-mention. `force` skips the
    * host's short-lived cache: the webview asks again when a search finds nothing, which
@@ -1009,6 +1047,18 @@ export type HostMessage =
    */
   | { type: 'compactionDetail'; id: string; detail: CompactionDetail | null }
   | { type: 'commands'; commands: CommandInfo[] }
+  /**
+   * Answer to `requestPromptResource`. Null `resource` with an `error` when the name is not
+   * a file-backed command, or the file is gone — the dialog then says so and keeps the
+   * invocation it was opened with, because a hand-typed `/name` still works in pi.
+   */
+  | {
+      type: 'promptResource';
+      requestId: number;
+      name: string;
+      resource: PromptResource | null;
+      error?: string;
+    }
   | { type: 'projectFiles'; result: ProjectFilesResult }
   | { type: 'enterForkMode'; entryId: string; text: string }
   /**

@@ -35,8 +35,8 @@ interface SlashCommandMenuProps {
 /**
  * The floating command palette shown above the composer while a `/token` is
  * being typed. Purely presentational — navigation lives in `useSlashCommands`.
- * A pick hands the command back to `onSelect`, which inserts it so arguments and
- * further `/commands` can be typed before the message is sent.
+ * A pick inserts the invocation, except for a prompt template or a skill, whose arguments
+ * cannot be guessed from a name: those open the insert dialog (`stores/prompt-dialog-store.ts`).
  *
  * Uses a portal + fixed positioning to escape overflow:hidden containers.
  * Positions itself above the composer using `bottom` to avoid overlaps.
@@ -50,6 +50,7 @@ export function CommandMenu({
   textareaRef,
 }: SlashCommandMenuProps) {
   const composerRect = useComposerAnchor(textareaRef);
+  const focusedItem = items[focused];
 
   const handleMouseDown = useCallback(
     (cmd: SlashCommand) => (e: React.MouseEvent) => {
@@ -117,7 +118,9 @@ export function CommandMenu({
           <kbd className="cmd-kbd">
             <LuCornerDownLeft size={11} />
           </kbd>
-          Insert
+          {focusedItem?.source === 'prompt' || focusedItem?.source === 'skill'
+            ? 'Arguments'
+            : 'Insert'}
         </span>
         <span className="cmd-hint cmd-hint-end">
           <kbd className="cmd-kbd">Esc</kbd>

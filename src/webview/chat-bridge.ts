@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import type { BridgeTargetView } from '../../shared/bridge-protocol';
 import type {
   Attachment,
-  CommandInfo,
   CompactionEndEvent,
   CompactionStartEvent,
   ContextEditView,
@@ -36,6 +35,10 @@ import {
 } from '../../shared/blocks';
 import { authFilePath, readAuthStatus, writeAuthEntry } from '../auth-store';
 import {
+  readPromptResource,
+  type PromptResourceResult,
+} from '../prompts/prompt-resource';
+import {
   EXPAND_THINKING_KEY,
   PRIVACY_KEYS,
   PRESERVE_LINE_BREAKS_KEY,
@@ -48,7 +51,11 @@ import {
   webviewConfig,
 } from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
-import { resolveBinaryPath, getAgentVersion } from '../runtime/bootstrap';
+import {
+  getAgentVersion,
+  resolveAgentDir,
+  resolveBinaryPath,
+} from '../runtime/bootstrap';
 import {
   approvalRequested,
   approvalSettled,
@@ -544,12 +551,10 @@ export class ChatBridge implements vscode.Disposable {
               rpcImages.length > 0 ? rpcImages : undefined,
             );
           }
-          await this.sendFollowUps(runtime, message.followUps);
           return;
         }
         case 'steer':
           if (runtime) await this.submitText(runtime, message.text, 'steer');
-          await this.sendFollowUps(runtime, message.followUps);
           return;
         case 'abort':
           await runtime?.abort();
@@ -603,6 +608,9 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'requestCommands':
           await this.pushCommands();
+          return;
+        case 'requestPromptResource':
+          await this.pushPromptResource(message.name, message.requestId);
           return;
         case 'requestProjectFiles':
           await this.pushProjectFiles(message.requestId, message.force);
@@ -879,34 +887,6 @@ export class ChatBridge implements vscode.Disposable {
   }
 
   /**
-   * Send the tail of a chained slash-prompt message (`followUps`). Every part
-   * starts with its own `/command`, which is what lets one composer entry carry
-   * several prompts: the runtime only expands the *leading* command of a message.
-   *
-   * The tail always goes out as a `followUp` prompt — never as a `steer` queue
-   * entry. Queued steering survives a run that ends before it is drained and would
-   * surface in some later turn; `followUp` queues behind the run in flight and
-   * starts a fresh one if that run already finished. A failure stops the chain, so
-   * a rejected part cannot leave the rest to pile up unnoticed.
-   */
-  private async sendFollowUps(
-    runtime: PiRuntime | null | undefined,
-    parts: string[] | undefined,
-  ): Promise<void> {
-    if (!runtime || !parts || parts.length === 0) return;
-    for (const part of parts) {
-      try {
-        await this.submitText(runtime, part, 'follow-up');
-      } catch (err) {
-        const text = err instanceof Error ? err.message : String(err);
-        this.log.error(`Chained prompt "${part.slice(0, 40)}" failed: ${text}`);
-        void vscode.window.showErrorMessage(`Amulet: ${text}`);
-        return;
-      }
-    }
-  }
-
-  /**
    * The one place that puts a piece of webview text in front of pi.
    *
    * The route matters: pi executes an extension command *only* from `prompt`, and throws
@@ -919,7 +899,7 @@ export class ChatBridge implements vscode.Disposable {
   private async submitText(
     runtime: PiRuntime,
     text: string,
-    route: 'send' | 'steer' | 'follow-up',
+    route: 'send' | 'steer',
     images?: unknown[],
   ): Promise<PromptDisposition | undefined> {
     if (text.startsWith('/') && runtime.isExtensionCommand(text)) {
@@ -933,7 +913,7 @@ export class ChatBridge implements vscode.Disposable {
       // `longRunning`: pi resolves this response when the command handler *returns*, so a
       // dialog the handler opened parks it for as long as the human takes to answer — the
       // generic 30s budget would fail a command that worked.
-      const disposition = await runtime.prompt(text, images, undefined, {
+      const disposition = await runtime.prompt(text, images, {
         longRunning: true,
       });
       if (disposition === 'handled') {
@@ -950,11 +930,7 @@ export class ChatBridge implements vscode.Disposable {
       await runtime.steer(text);
       return undefined;
     }
-    return runtime.prompt(
-      text,
-      images,
-      route === 'follow-up' ? 'followUp' : undefined,
-    );
+    return runtime.prompt(text, images);
   }
 
   /**
@@ -1104,10 +1080,7 @@ export class ChatBridge implements vscode.Disposable {
     const runtime = this.runtime;
     if (!runtime?.isReady) return;
     try {
-      this.post({
-        type: 'commands',
-        commands: (await runtime.getCommands()) as CommandInfo[],
-      });
+      this.post({ type: 'commands', commands: await runtime.getCommands() });
     } catch {
       /* ignore */
     }
@@ -1115,6 +1088,66 @@ export class ChatBridge implements vscode.Disposable {
     // decided after it — which is also why a runtime that loaded the bridge mid-life flips to true
     // here without any restart.
     await this.pushBridgeStatus();
+  }
+
+  /**
+   * Read one prompt template or skill for the insert dialog (`requestPromptResource`).
+   *
+   * The webview sends a *name* and never a path: the file is resolved from this runtime's own
+   * `get_commands` answer, so a surface can only be shown a file pi itself offered. A cold command
+   * cache is fetched once, because an unprimed list must not read as a missing template.
+   */
+  private async pushPromptResource(
+    name: string,
+    requestId: number,
+  ): Promise<void> {
+    const runtime = this.runtime;
+    const fail = (error: string): void => {
+      this.log.warn(`Prompt resource "${name}": ${error}`);
+      this.post({
+        type: 'promptResource',
+        requestId,
+        name,
+        resource: null,
+        error,
+      });
+    };
+    if (!runtime?.isReady) {
+      fail('No ready pi runtime to read a prompt from.');
+      return;
+    }
+    let result: PromptResourceResult;
+    try {
+      let command = runtime.findCommand(name);
+      if (!command) {
+        try {
+          command = (await runtime.getCommands()).find((c) => c.name === name);
+        } catch {
+          /* reported below as "no such command", which is what a dead runtime leaves behind */
+        }
+      }
+      result = readPromptResource(command, {
+        // Resolved like every other reader of pi's folders: an unset `amulet.agentDir` means
+        // `~/.pi/agent`, and a relative one belongs to the child's cwd, not the host's.
+        agentDir: resolveAgentDir(readConfig().agentDir, runtime.cwd),
+        cwd: runtime.cwd,
+      });
+    } catch (err) {
+      // A throw here would otherwise be toasted and never answered, leaving the dialog waiting.
+      result = {
+        error: `Reading ${name} failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+    if ('error' in result) {
+      fail(result.error);
+      return;
+    }
+    this.post({
+      type: 'promptResource',
+      requestId,
+      name,
+      resource: result.resource,
+    });
   }
 
   /**

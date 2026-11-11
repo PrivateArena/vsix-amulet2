@@ -10,11 +10,11 @@ import {
 import { bridgeSpawnArgs } from './bridge-args';
 import type { PiConfig } from '../config';
 import type {
+  CommandInfo,
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
   PromptDisposition,
-  PromptStreamingBehavior,
   RpcEvent,
   RuntimeStatus,
   SessionState,
@@ -81,6 +81,13 @@ export class PiRuntime {
    * must know that before it chooses between `prompt` and `steer`.
    */
   private extensionCommands = new Set<string>();
+  /**
+   * The whole `get_commands` answer of this child process, kept beside the name set above.
+   * A prompt template or skill is addressed by name everywhere in this app, but its body is
+   * a file — and `sourceInfo.path` is the only thing that says which one, so the insert dialog
+   * resolves a name here instead of asking the runtime again.
+   */
+  private commandCache: CommandInfo[] = [];
 
   constructor(
     readonly cwd: string,
@@ -188,6 +195,7 @@ export class PiRuntime {
     // A new child process loads its own extensions; commands from the previous one
     // must not decide how text is routed to this one.
     this.extensionCommands.clear();
+    this.commandCache = [];
     if (!resolved.resolved) {
       this.log.warn(
         `Could not resolve "${config.binaryPath}" to an absolute path. Relying on PATH. ` +
@@ -355,8 +363,7 @@ export class PiRuntime {
   }
 
   /**
-   * Send a prompt. `streamingBehavior` decides what pi does when a run is
-   * already in flight (`queued` disposition) — it is ignored while idle.
+   * Send a prompt.
    *
    * `longRunning` is for an extension command, whose response only lands when the handler
    * returns: a dialog it opened parks that reply for as long as the human takes to answer.
@@ -364,15 +371,9 @@ export class PiRuntime {
   prompt(
     message: string,
     images?: unknown[],
-    streamingBehavior?: PromptStreamingBehavior,
     options?: { longRunning?: boolean },
   ): Promise<PromptDisposition | undefined> {
-    return this.requireClient().prompt(
-      message,
-      images,
-      streamingBehavior,
-      options,
-    );
+    return this.requireClient().prompt(message, images, options);
   }
   steer(message: string): Promise<unknown> {
     return this.requireClient().steer(message);
@@ -491,12 +492,11 @@ export class PiRuntime {
   exportHtml(outputPath?: string): Promise<{ path: string }> {
     return this.requireClient().exportHtml(outputPath);
   }
-  getCommands(): Promise<
-    Array<{ name: string; description?: string; source: string }>
-  > {
+  getCommands(): Promise<CommandInfo[]> {
     return this.requireClient()
       .getCommands()
       .then((commands) => {
+        this.commandCache = commands;
         this.extensionCommands = new Set(
           commands
             .filter((c) => c.source === 'extension')
@@ -505,6 +505,14 @@ export class PiRuntime {
         );
         return commands;
       });
+  }
+  /**
+   * One row of the last {@link getCommands}, or undefined when this process has never answered.
+   * Exact-name matching on purpose: these are pi's own invocation names, and a skill arrives
+   * already namespaced (`skill:pdf-tools`), which is what the caller holds.
+   */
+  findCommand(name: string): CommandInfo | undefined {
+    return this.commandCache.find((c) => c.name === name);
   }
   /**
    * Whether pi would run this text as a registered extension command instead of

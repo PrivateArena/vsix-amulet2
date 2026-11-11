@@ -1,10 +1,10 @@
 import { RpcProcess, type RpcProcessOptions } from './rpc-process';
 import type {
+  CommandInfo,
   ExtensionUiRequest,
   ExtensionUiResponse,
   ModelInfo,
   PromptDisposition,
-  PromptStreamingBehavior,
   RpcCommand,
   RpcCommandType,
   RpcEvent,
@@ -191,16 +191,10 @@ export class RpcClient {
   async prompt(
     message: string,
     images?: unknown[],
-    streamingBehavior?: PromptStreamingBehavior,
     options?: { longRunning?: boolean },
   ): Promise<PromptDisposition | undefined> {
     const data = await this.call<{ disposition?: PromptDisposition }>(
-      {
-        type: 'prompt',
-        message,
-        images,
-        streamingBehavior,
-      },
+      { type: 'prompt', message, images },
       options,
     );
     return data?.disposition;
@@ -296,12 +290,8 @@ export class RpcClient {
   exportHtml(outputPath?: string): Promise<{ path: string }> {
     return this.call<{ path: string }>({ type: 'export_html', outputPath });
   }
-  getCommands(): Promise<
-    Array<{ name: string; description?: string; source: string }>
-  > {
-    return this.call<{
-      commands: Array<{ name: string; description?: string; source: string }>;
-    }>({
+  getCommands(): Promise<CommandInfo[]> {
+    return this.call<{ commands: CommandInfo[] }>({
       type: 'get_commands',
     }).then((d) => d.commands);
   }

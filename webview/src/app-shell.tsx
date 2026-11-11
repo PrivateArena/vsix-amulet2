@@ -8,6 +8,7 @@ import { projectFiles } from './stores/project-files-store';
 import { useCompactionHistoryStore } from './stores/compaction-history-store';
 import { useContextSurgeryStore } from './stores/context-surgery-store';
 import { usePackagesStore } from './stores/packages-store';
+import { usePromptDialogStore } from './stores/prompt-dialog-store';
 import { applyPrivacyConfig } from './stores/privacy-store';
 import { applyLineBreakConfig } from './stores/line-breaks-store';
 import { useSessionInfoStore } from './stores/session-info-store';
@@ -64,6 +65,9 @@ export function Shell() {
       packages: (message) => usePackagesStore.getState().acceptList(message),
       packageOpResult: (message) =>
         usePackagesStore.getState().acceptOp(message.result),
+      // A prompt body is read off disk for one dialog, so it never enters chat state.
+      promptResource: (message) =>
+        usePromptDialogStore.getState().acceptResource(message),
       // An edit list is both a badge update (the reducer) and the proof that any operation this panel
       // asked for has landed — which is what releases a card's in-flight mark. The host pushes it after
       // every history snapshot and after every op, so no timer has to guess.
@@ -103,13 +107,15 @@ export function Shell() {
   const sessionInfoOpen = useSessionInfoStore((s) => s.open);
   const compactionOpen = useCompactionHistoryStore((s) => s.openId !== null);
   const packagesOpen = usePackagesStore((s) => s.open);
+  const promptOpen = usePromptDialogStore((s) => s.target !== null);
   useEscapeKey(
     () => actions.abort(),
     state.streaming &&
       state.pendingUi.length === 0 &&
       !sessionInfoOpen &&
       !compactionOpen &&
-      !packagesOpen,
+      !packagesOpen &&
+      !promptOpen,
   );
 
   // The revert this panel may still take back. The host owns the truth (`ChatState.lastRevert`, cleared
@@ -126,7 +132,16 @@ export function Shell() {
   const sessionId = state.session?.sessionId;
   useEffect(() => {
     contextSurgery.clearAll();
+    // A prompt dialog is bound to one draft of one session: after a switch, an Insert would paste
+    // the previous session's file into a draft whose offsets no longer describe the invocation.
+    usePromptDialogStore.getState().close();
   }, [sessionId]);
+
+  // Same reason for a restart: the composer unmounts into the splash screen, so the form would be
+  // editing a draft that is about to be torn down.
+  useEffect(() => {
+    if (state.status.phase !== 'ready') usePromptDialogStore.getState().close();
+  }, [state.status.phase]);
 
   // Stay on the splash until the runtime is actually up. The runtime reports
   // `stopped` before `start()` runs (its initial status), so treating anything

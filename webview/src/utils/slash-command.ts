@@ -67,7 +67,7 @@ export interface SlashTokenMatch extends SlashTokenRange {
  * The slash token at the end of `value`, or null when the trailing word is not a
  * command. A skill keeps its namespace in the query, because `/skill:` is what pi
  * anchors on; a token still ends at a `/`, so a chained `/a /b` completes one name
- * at a time (see `splitPromptChain`).
+ * at a time — each prompt then expands into the draft itself (`utils/prompt-insert.ts`).
  */
 export function parseSlashToken(value: string): SlashTokenMatch | null {
   const m = value.match(/(?:^|\s)\/(skill:)?([^\s/]*)$/);
