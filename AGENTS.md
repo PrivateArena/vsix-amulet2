@@ -106,7 +106,7 @@ the ack, and `node scripts/stop-probe.mjs "note"` runs the whole stop-a-hung-com
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `notifySticky`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
 (`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
@@ -134,9 +134,12 @@ the shipped default in a test render.
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 
-The three `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
+The four `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
 process, so `notifySettings()` in [`src/config.ts`](src/config.ts) reads them at delivery time and a change
-takes effect on the next alert (never a restart, never a webview push). Two alerts exist, and both are
+takes effect on the next alert (never a restart). `notifySticky` is the one of them the webview **does** see:
+the menu has to show the switch, so `webviewConfig()` mirrors it (from `notifySettings()`, not from
+`readConfig()` — it stays out of `PiConfig` for the same reason as its three siblings) and the menu writes it
+back with the `setNotifySticky` `WebviewMessage`. Two alerts exist, and both are
 decided host-side because both moments are already handled there: a run finishing its report, and a pi dialog
 parked on an answer. Rules worth keeping:
 
@@ -160,8 +163,15 @@ parked on an answer. Rules worth keeping:
   while the window is unfocused — always through `spawn(argv, { shell: false })`, never a shell string, with
   the text in argv or (on Windows) in the environment, so no report body is ever parsed. The freedesktop
   urgency vocabulary is `low | normal | critical` and nothing else — an unknown level exits 1, which reads as
-  "no notifier here". An unanswered dialog is `critical` because that is the tier that survives
-  Do-Not-Disturb, and since servers may clip a notification body, the _title_ carries the quoted command.
+  "no notifier here". **`critical` and "expires" cannot be asked for at once:** the convention every real
+  server follows (verified against xfce4-notifyd, which honours a client timeout to the second for `low` and
+  `normal` and ignores it entirely for `critical`) is that a critical banner survives Do-Not-Disturb _and_
+  stays until a human clicks it away — which is exactly what a notification that never goes away looks like
+  to a user. So `amulet.notifySticky` (menu: **Sticky approval alerts**, default **off**) picks between the
+  two: off sends an unanswered dialog as `normal` with `--expire-time`, on sends it as `critical` and asks for
+  no timeout at all. A finished run is never critical either way. Only the freedesktop channel has the choice
+  — macOS `display notification` has no tiers and a Windows balloon tip always expires. Since servers may clip
+  a notification body, the _title_ carries the quoted command.
   Positional text is `--`-terminated: a report or folder name starting with `-` would otherwise be eaten by
   getopt, and a notifier that refuses three notifications in a row (too old for our options) is dropped
   rather than respawned for every alert. An unanswered dialog is tracked per runtime, because a restart of one workspace folder must not
@@ -170,7 +180,8 @@ parked on an answer. Rules worth keeping:
   While one is unanswered the status bar counts them ([`approval-ledger.ts`](src/notify/approval-ledger.ts),
   which is why it is per-runtime: a restart of one workspace folder must not silence a question another is
   still parked on), because a notification expires and an unanswered dialog does not; a dialog whose extension times out on its own (pi-subagent's 5-minute ceiling) is dropped when it
-  does. `Amulet: Test Notification` proves which channel the machine actually has.
+  does. `Amulet: Test Notification` proves which channel the machine actually has, and now names which tier
+  the current settings ask for — "expires on the server clock" or "kept until dismissed".
 
 ## Context surgery: Amulet ships and owns a pi extension
 

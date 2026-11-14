@@ -9,6 +9,7 @@ import {
   LuKeyRound,
   LuMessageSquareWarning,
   LuMinimize2,
+  LuPin,
   LuRefreshCw,
   LuSettings,
   LuSettings2,
@@ -18,6 +19,7 @@ import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import { usePrivacyMode, usePrivacyStore } from '../../../stores/privacy-store';
 import { useLineBreaks } from '../../../stores/line-breaks-store';
+import { useNotifySticky } from '../../../stores/notify-sticky-store';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { openSessionInfo } from '../../../stores/session-info-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
@@ -29,6 +31,8 @@ export function SettingsMenu() {
   const privacyMode = usePrivacyMode();
   /** `amulet.preserveLineBreaks` — how the author's newlines are painted. */
   const lineBreaks = useLineBreaks();
+  /** `amulet.notifySticky` — whether a parked dialog's system banner is kept until clicked. */
+  const notifySticky = useNotifySticky();
   // A rule that cannot compile is a secret that stays visible, so the menu says it rather than
   // leaving the human to find out from the output channel.
   const badRules = usePrivacyStore((s) => s.issues).length;
@@ -88,6 +92,15 @@ export function SettingsMenu() {
       onSelect: () => actions.setPreserveLineBreaks(!lineBreaks),
       kind: 'toggle',
       checked: lineBreaks,
+    },
+    {
+      // The one entry here that changes something outside the transcript, so the label says which
+      // alert: off, an unanswered dialog is announced by a banner that expires like any other app's.
+      label: 'Sticky approval alerts',
+      icon: LuPin,
+      onSelect: () => actions.setNotifySticky(!notifySticky),
+      kind: 'toggle',
+      checked: notifySticky,
     },
     {
       label: 'Auto compact',

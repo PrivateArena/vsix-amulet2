@@ -195,14 +195,15 @@ function renderApprovalCount(current: NotifyService, open: number): void {
  * balloon script takes seconds, and a toast the human has to wait out is worse than no toast.
  */
 function deliver(message: AttentionMessage, current: NotifyService): void {
+  const settings = notifySettings();
   if (
     needsSystemNotification({
-      enabled: notifySettings().system,
+      enabled: settings.system,
       windowFocused: vscode.window.state.focused,
     })
   ) {
     void current.channel
-      .send(toSystemNotification(message))
+      .send(toSystemNotification(message, { sticky: settings.sticky }))
       .then((ok) => {
         if (!ok)
           current.log.info('[notify] no OS channel took it; toast only.');
@@ -240,15 +241,24 @@ export async function sendTestNotification(): Promise<void> {
     body: 'If you can see this, Amulet can reach you from another window.',
     critical: true,
   };
-  const ok = await current.channel.send(toSystemNotification(message));
   const settings = notifySettings();
+  // The test is the tool a user has for this exact question, so say which of the two behaviours the
+  // current settings ask for: a banner that vanishes, or a critical one a server keeps until it is clicked.
+  const tier = settings.sticky
+    ? 'critical tier, kept until dismissed'
+    : 'normal tier, expires on the server clock';
+  const ok = await current.channel.send(
+    toSystemNotification(message, { sticky: settings.sticky }),
+  );
   const via = ok ? current.channel.describe() : 'VS Code toast only';
   const caveat = settings.system
     ? ''
     : ' · amulet.notifySystem is currently off';
-  current.log.info(`[notify] test notification delivered via ${via}.`);
+  current.log.info(
+    `[notify] test notification delivered via ${via} (${tier}).`,
+  );
   const pick = await vscode.window.showInformationMessage(
-    `Amulet notification test — delivered via ${via}${caveat}.`,
+    `Amulet notification test — delivered via ${via}, ${tier}${caveat}.`,
     SHOW_CHAT_LABEL,
   );
   if (pick === SHOW_CHAT_LABEL) {

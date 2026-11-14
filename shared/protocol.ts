@@ -933,6 +933,8 @@ export type WebviewMessage =
   | { type: 'setPrivacyMode'; enabled: boolean }
   /** Persist the "Line breaks" preference (`amulet.preserveLineBreaks`). */
   | { type: 'setPreserveLineBreaks'; enabled: boolean }
+  /** Persist the "Sticky approval alerts" preference (`amulet.notifySticky`). */
+  | { type: 'setNotifySticky'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
@@ -1258,6 +1260,13 @@ export interface WebviewConfig {
    * anything sent back into the run keep the author's own bytes.
    */
   preserveLineBreaks: boolean;
+  /**
+   * Whether the banner for an unanswered dialog is a `critical` one that the notification centre keeps
+   * until it is dismissed (menu: **Sticky approval alerts**, `amulet.notifySticky`). Off — the default —
+   * sends it as an ordinary expiring banner, like every other application's. Echoed here purely so the
+   * menu can show the switch: the decision itself is made host-side, at delivery time.
+   */
+  notifySticky: boolean;
   /**
    * Censoring rules to apply to displayed text: the built-ins plus `amulet.privacyRules`, already
    * checked by the host, so an entry that cannot compile never reaches the webview.

@@ -93,16 +93,24 @@ export interface NotifySettings {
   onApproval: boolean;
   /** Also reach the OS notification centre while this window is not focused. */
   system: boolean;
+  /**
+   * Keep the banner for an unanswered dialog on screen until it is dismissed. Off, that alert is an
+   * ordinary expiring one — the default, because the freedesktop convention is that a `critical`
+   * notification is never timed out, which reads as a notification that will not go away. The status-bar
+   * counter is the record either way; a banner that expires costs nothing.
+   */
+  sticky: boolean;
 }
 
 export function notifySettings(): NotifySettings {
   // No {@link LEGACY_SECTION} fallback here: these keys shipped after the rename, and the declared
-  // defaults in the manifest are their only other source. One lookup for all three switches.
+  // defaults in the manifest are their only other source. One lookup for all four switches.
   const cfg = vscode.workspace.getConfiguration(SECTION);
   return {
     onTurnDone: cfg.get<boolean>('notifyOnTurnDone', true),
     onApproval: cfg.get<boolean>('notifyOnApproval', true),
     system: cfg.get<boolean>('notifySystem', true),
+    sticky: cfg.get<boolean>('notifySticky', false),
   };
 }
 
@@ -161,6 +169,10 @@ export function webviewConfig(): WebviewConfig {
     expandThinking,
     privacyMode,
     preserveLineBreaks,
+    // The one notify switch the webview renders, and only to show its own menu checkmark: the tier of an
+    // alert is decided host-side from {@link notifySettings} at delivery time, so this echo is a mirror of
+    // a value the child process has no opinion about — which is why it stays out of `readConfig()`.
+    notifySticky: notifySettings().sticky,
     privacyRules: rules,
     privacyRuleIssues: issues,
   };
@@ -180,6 +192,9 @@ export const PRESERVE_LINE_BREAKS_KEY = `${SECTION}.preserveLineBreaks`;
 
 /** Config key behind the "approval waiting" status-bar entry (see `src/notify`). */
 export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
+
+/** Config key behind the "Sticky approval alerts" toggle (`NotifySettings.sticky`). */
+export const NOTIFY_STICKY_KEY = `${SECTION}.notifySticky`;
 
 /** Config key for the startup thinking level (`disabled` = leave the runtime alone). */
 export const THINKING_LEVEL_KEY = `${SECTION}.thinkingLevel`;
@@ -203,6 +218,16 @@ export async function setPreserveLineBreaks(enabled: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration(SECTION)
     .update('preserveLineBreaks', enabled, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * Persist {@link NotifySettings.sticky} so the preference survives reloads. Written to `amulet.*` only,
+ * like the other webview toggles, and never a restart: the tier of an alert is read when it is sent.
+ */
+export async function setNotifySticky(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('notifySticky', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /** Config keys whose change should trigger a runtime restart. */

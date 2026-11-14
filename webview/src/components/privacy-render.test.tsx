@@ -22,6 +22,7 @@ const SHOWN = '/media/user/home/PortableApp';
 const config = (privacyMode: boolean) => ({
   expandThinking: false,
   preserveLineBreaks: true,
+  notifySticky: false,
   privacyMode,
   privacyRules: [{ search: SECRET, replace: SHOWN }],
 });

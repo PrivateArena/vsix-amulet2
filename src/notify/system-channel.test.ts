@@ -8,25 +8,51 @@ import {
   type NotifyRunResult,
 } from './system-channel';
 
-const approval = toSystemNotification({
-  title: 'amulet: approval needed',
-  body: 'pi-gate: bash — `git push && rm -rf /`',
-  critical: true,
-});
+const approval = toSystemNotification(
+  {
+    title: 'amulet: approval needed',
+    body: 'pi-gate: bash — `git push && rm -rf /`',
+    critical: true,
+  },
+  { sticky: false },
+);
+
+/** The same alert with `amulet.notifySticky` on. */
+const pinned = toSystemNotification(
+  {
+    title: 'amulet: approval needed',
+    body: 'pi-gate: bash — `git push && rm -rf /`',
+    critical: true,
+  },
+  { sticky: true },
+);
+
+/** A finished run: never critical, however the sticky switch is set. */
+const report = toSystemNotification(
+  { title: 'amulet: report ready', body: 'the run answered', critical: false },
+  { sticky: true },
+);
 
 describe('toSystemNotification', () => {
-  it('maps an unanswered dialog onto the tier that survives Do-Not-Disturb', () => {
-    expect(approval.urgency).toBe('critical');
-    expect(
-      toSystemNotification({ title: 'a', body: 'b', critical: false }).urgency,
-    ).toBe('normal');
+  it('lets an unanswered dialog expire, because a server never times out a critical one', () => {
+    // Verified against xfce4-notifyd: with `--urgency=critical` the client's `--expire-time` is ignored
+    // and the banner survives until it is clicked. So the default asks for the ordinary tier, which is
+    // what "a notification, not a modal" means on every other application.
+    expect(approval.urgency).toBe('normal');
+    expect(approval.expireMs).toBe(60_000);
   });
 
-  it('gives an unanswered dialog long enough to still be there when the human surfaces', () => {
-    expect(approval.expireMs).toBe(300_000);
-    expect(
-      toSystemNotification({ title: 'a', body: 'b', critical: false }).expireMs,
-    ).toBeUndefined();
+  it('asks for the tier that survives Do-Not-Disturb only when the banner should be kept', () => {
+    expect(pinned.urgency).toBe('critical');
+    // No timeout is asked for: a kept banner is one the user accepted as persistent, and a server that
+    // did honour a timeout would use its default.
+    expect(pinned.expireMs).toBeUndefined();
+  });
+
+  it('never promotes a finished run, sticky or not', () => {
+    expect(report.urgency).toBe('normal');
+    // A report is a lead-in, so it takes the server's own duration.
+    expect(report.expireMs).toBeUndefined();
   });
 });
 
@@ -36,8 +62,8 @@ describe('buildNotifyCommand', () => {
     expect(built?.command).toBe('notify-send');
     expect(built?.args).toContain('--app-name=Amulet');
     // `notify-send` exits 1 on an urgency it does not know, so only its own three words are legal.
-    expect(built?.args).toContain('--urgency=critical');
-    expect(built?.args).toContain('--expire-time=300000');
+    expect(built?.args).toContain('--urgency=normal');
+    expect(built?.args).toContain('--expire-time=60000');
     const args = built!.args;
     // Positional text only after the end-of-options marker, or getopt eats a title that starts with `-`.
     expect(args.indexOf('--')).toBeGreaterThan(-1);
@@ -46,6 +72,12 @@ describe('buildNotifyCommand', () => {
       args.indexOf(approval.body),
     );
     expect(built?.args).toContain('pi-gate: bash — `git push && rm -rf /`');
+  });
+
+  it('passes a kept banner as critical, and asks for no timeout at all', () => {
+    const built = buildNotifyCommand('linux', pinned);
+    expect(built?.args).toContain('--urgency=critical');
+    expect(built?.args.some((a) => a.startsWith('--expire-time'))).toBe(false);
   });
 
   it('escapes nothing on macOS because nothing is interpolated into a script', () => {

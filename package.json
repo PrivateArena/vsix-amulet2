@@ -289,20 +289,26 @@
           "order": 12,
           "markdownDescription": "Also deliver notifications to the operating system's notification centre while this VS Code window is not focused (`notify-send` on Linux, `display notification` on macOS, a balloon tip on Windows). Nothing is ever run through a shell: the notifier is spawned with an argument array, and a missing one falls back to VS Code's own notification."
         },
+        "amulet.notifySticky": {
+          "type": "boolean",
+          "default": false,
+          "order": 13,
+          "markdownDescription": "Keep the system notification for an **unanswered dialog** on screen until it is dismissed, instead of letting it fade out on the notification centre's clock. On = the freedesktop `critical` tier, the only one that survives Do-Not-Disturb — and, by the convention every notification server follows, the one it refuses to time out, so the banner stays until it is clicked (macOS and Windows banners always expire; there this setting changes nothing). Off, the default, the alert behaves like every other application's, and the status-bar entry stays the record of a question that is still parked. Toggle this from the chat menu: **Sticky approval alerts**. A run that finished reporting is never kept. No restart: the next alert uses the new value, and `Amulet: Test Notification` shows which behaviour your machine has."
+        },
         "amulet.extraArgs": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "order": 13,
+          "order": 14,
           "scope": "machine",
           "markdownDescription": "Additional command-line arguments passed to the pi runtime at startup. Scoped to machine so a workspace cannot inject args."
         },
         "amulet.contextEditing": {
           "type": "boolean",
           "default": true,
-          "order": 14,
+          "order": 15,
           "scope": "machine",
           "markdownDescription": "Let Amulet manage what the model can re-read: **Omit from context**, **Edit context content** and **Revert to this message** on a tool result or a reply. Implemented by loading a small pi extension that Amulet ships (`pi -e`), so **changing this restarts the runtime**. Needs pi 1.4 or newer; older runtimes simply show none of these actions. Scoped to machine because it changes the arguments the child process is spawned with."
         }

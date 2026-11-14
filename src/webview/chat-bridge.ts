@@ -42,10 +42,12 @@ import {
   EXPAND_THINKING_KEY,
   PRIVACY_KEYS,
   PRESERVE_LINE_BREAKS_KEY,
+  NOTIFY_STICKY_KEY,
   THINKING_LEVEL_KEY,
   affectsSetting,
   readConfig,
   setExpandThinking,
+  setNotifySticky,
   setPrivacyMode,
   setPreserveLineBreaks,
   webviewConfig,
@@ -281,6 +283,7 @@ export class ChatBridge implements vscode.Disposable {
       if (
         affectsSetting(e, EXPAND_THINKING_KEY) ||
         affectsSetting(e, PRESERVE_LINE_BREAKS_KEY) ||
+        affectsSetting(e, NOTIFY_STICKY_KEY) ||
         PRIVACY_KEYS.some((key) => affectsSetting(e, key))
       ) {
         this.postConfig();
@@ -724,6 +727,14 @@ export class ChatBridge implements vscode.Disposable {
           // Same again: how a message is painted, never what it says — the session file and
           // the prompt keep the author's own newlines either way.
           await setPreserveLineBreaks(message.enabled);
+          this.postConfig();
+          return;
+        case 'setNotifySticky':
+          // The odd one of these toggles: it changes a host-side alert, not a rendering, but the menu
+          // still has to show what it wrote. Nothing is restarted — `notifySettings()` is read again on
+          // the next alert, so the echo is for the checkmark and for a Settings-editor change made next
+          // door, which arrives through the same watcher above.
+          await setNotifySticky(message.enabled);
           this.postConfig();
           return;
         case 'openPiFolder': {

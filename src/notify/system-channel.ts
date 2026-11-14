@@ -21,13 +21,14 @@ export interface SystemNotification {
   title: string;
   body: string;
   /**
-   * `critical` is the only tier that survives Do-Not-Disturb, which is what an unanswered dialog deserves:
-   * the tool call is parked and nothing else will move.
+   * The freedesktop tier. `critical` is the only one that survives Do-Not-Disturb — and, by the
+   * convention every real server follows, the one that is never timed out. See
+   * {@link toSystemNotification}: asking for both is contradictory, so the caller picks.
    */
   urgency: NotifyUrgency;
   /**
-   * How long the banner should stay. Servers expire notifications on their own clock; an unanswered dialog
-   * is still unanswered ten minutes later, so the alert for one asks for longer.
+   * How long the banner asks to stay, in the server's own clock (it may clip it, or ignore it). Left
+   * unset for the tiers that are never meant to expire — a timeout there is a promise the server breaks.
    */
   expireMs?: number;
 }
@@ -59,20 +60,41 @@ const WINDOWS_BALLOON_SCRIPT = [
   '$i.Dispose()',
 ].join(' ');
 
-/** How long an unanswered dialog keeps asking, in the notification centre's own clock. */
-const APPROVAL_EXPIRE_MS = 5 * 60_000;
+/**
+ * How long an expiring alert about an unanswered dialog asks to stay on screen. Longer than a report
+ * (the run really is parked), short enough that a dialog answered from another keyboard is not a
+ * permanent piece of furniture — and the durable half of this alert is the status-bar counter, not the
+ * banner, so nothing is lost when the banner goes.
+ */
+const APPROVAL_ALERT_EXPIRE_MS = 60_000;
 
-/** Map the UI-level weight of a message onto the notification centre's tiers. */
-export function toSystemNotification(message: {
-  title: string;
-  body: string;
-  critical: boolean;
-}): SystemNotification {
+/**
+ * Map the UI-level weight of a message onto the notification centre's tiers.
+ *
+ * `critical` and "disappears on its own" cannot be asked for at once: the freedesktop convention —
+ * followed by xfce4-notifyd, GNOME and mako alike, and verified against the former — is that a critical
+ * notification ignores any timeout and is dismissed only by a human. So {@link sticky} chooses between
+ * the two honest readings of an unanswered dialog: survive Do-Not-Disturb and stay until clicked, or
+ * behave like every other application's banner. Only the approval alert is affected; a finished run is
+ * never critical.
+ */
+export function toSystemNotification(
+  message: {
+    title: string;
+    body: string;
+    critical: boolean;
+  },
+  { sticky }: { sticky: boolean },
+): SystemNotification {
+  const pinned = message.critical && sticky;
   return {
     title: message.title,
     body: message.body,
-    urgency: message.critical ? 'critical' : 'normal',
-    expireMs: message.critical ? APPROVAL_EXPIRE_MS : undefined,
+    urgency: pinned ? 'critical' : 'normal',
+    // A pinned alert asks for no timeout at all — on a server that does expire critical ones, the
+    // default is what the user accepted by turning the tier on.
+    expireMs:
+      message.critical && !pinned ? APPROVAL_ALERT_EXPIRE_MS : undefined,
   };
 }
 

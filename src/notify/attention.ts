@@ -12,8 +12,9 @@ export interface AttentionMessage {
   title: string;
   body: string;
   /**
-   * True while the runtime is blocked on a human answer. The OS channel uses it for a sticky
-   * (critical) notification, because an unanswered pi dialog parks the tool call forever.
+   * True while the runtime is blocked on a human answer. The OS channel gives such a message its own
+   * expiry and, if `amulet.notifySticky` is on, the `critical` tier — see `toSystemNotification` in
+   * `system-channel.ts`, which explains why those two are alternatives rather than a pair.
    */
   critical: boolean;
 }

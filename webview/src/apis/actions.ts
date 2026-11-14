@@ -84,6 +84,8 @@ export const actions = {
     postMessage({ type: 'setPrivacyMode', enabled }),
   setPreserveLineBreaks: (enabled: boolean) =>
     postMessage({ type: 'setPreserveLineBreaks', enabled }),
+  setNotifySticky: (enabled: boolean) =>
+    postMessage({ type: 'setNotifySticky', enabled }),
 
   // sessions
   newChat: () => postMessage({ type: 'newChat' }),
