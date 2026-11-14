@@ -32,6 +32,16 @@ export const actions = {
     postMessage({ type: 'openToolImage', toolCallId, path }),
   steer: (text: string) => postMessage({ type: 'steer', text }),
   abort: () => postMessage({ type: 'abort' }),
+  /**
+   * Stop one *command*, as opposed to the turn: the host asks the bridge to signal the process pi spawned for
+   * this call, the call comes back failed, and the run (or the subagent that made it) continues.
+   *
+   * `note` is optional and reaches the model at the head of that result; omitting it is a complete answer,
+   * exactly as an empty note on pi-gate's "Abort with reason" still aborts. Works for a nested (subagent) call
+   * too, because a nested call really runs a process even though it has no session entry of its own.
+   */
+  stopToolCall: (toolCallId: string, note?: string) =>
+    postMessage({ type: 'stopToolCall', toolCallId, note }),
   compact: () => postMessage({ type: 'compact' }),
   editAndFork: (entryId: string, text: string) =>
     postMessage({ type: 'editAndFork', entryId, text }),

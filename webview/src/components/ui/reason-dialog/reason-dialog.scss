@@ -1,0 +1,109 @@
+/* The reason dialog — the same surface language as the context editor (`ce-*`), because it opens for the
+   same purpose: so a person can type. `ReasonDialog` is the short-answer version of it, so the dialog is a
+   line tall rather than a screen. */
+
+.rd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--amulet-bg) 55%, transparent);
+}
+
+.rd-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(560px, 100%);
+  padding: 12px 14px 14px;
+  border: 1px solid
+    color-mix(in srgb, var(--amulet-border-strong) 62%, transparent);
+  border-radius: var(--amulet-radius-md);
+  background: var(--amulet-surface-elevated);
+  box-shadow:
+    var(--amulet-shadow-lg),
+    inset 0 1px var(--amulet-highlight);
+}
+
+.rd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rd-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--amulet-fg);
+}
+
+.rd-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.rd-subtitle {
+  font-size: 0.8rem;
+  color: var(--amulet-muted);
+  overflow-wrap: anywhere;
+}
+
+.rd-field {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--amulet-input-border);
+  border-radius: var(--amulet-radius-sm);
+  background: var(--amulet-input-bg);
+  color: var(--amulet-fg);
+  font-family: inherit;
+  font-size: var(--amulet-type-sm);
+}
+
+.rd-field:focus-visible {
+  outline: 1px solid var(--amulet-focus-ring);
+  outline-offset: -1px;
+}
+
+/* What the model will read, shown before it is sent: the note is the point of the dialog, so it is
+   previewed in the words that will actually be injected (see `shared/stop-command.ts`). */
+.rd-preview {
+  padding: 6px 9px;
+  border-left: 2px solid var(--amulet-accent);
+  border-radius: var(--amulet-radius-sm);
+  background: color-mix(in srgb, var(--amulet-bg) 55%, transparent);
+  font-size: var(--amulet-type-sm);
+  color: var(--amulet-fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.rd-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rd-hint {
+  font-size: var(--amulet-type-xs);
+  color: var(--amulet-muted);
+}
+
+.rd-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

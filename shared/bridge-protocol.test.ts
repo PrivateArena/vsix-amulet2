@@ -69,6 +69,8 @@ describe('encodeBridgeRequest', () => {
       ['restore', { handle: { kind: 'entry', entryId: 'e7' } }],
       ['revert', { entryId: 'e7', summarize: false }],
       ['undo-revert', { entryId: 'e9' }],
+      // A stop with no note is a complete request: the human pressed Enter on an empty field.
+      ['stop', { handle: { kind: 'toolCall', toolCallId: 'call_1/3' } }],
     ];
     for (const [op, init] of cases) {
       expect(parseOk(encodeBridgeRequest(request(op, init)))).toEqual(
@@ -252,5 +254,182 @@ describe('parseBridgeReply', () => {
         `${BRIDGE_REPLY_PREFIX}${JSON.stringify({ ...ok, targets: [{ role: 'bogus' }] })}`,
       ),
     ).toBeNull();
+  });
+});
+
+/**
+ * `stop` is the one op that must be honoured *during* a run, and the only one whose answer names an OS
+ * process — so its shape is pinned here rather than borrowed from the surgery cases above.
+ */
+describe('the stop op', () => {
+  it('is a known op', () => {
+    expect(BRIDGE_OPS).toContain('stop');
+  });
+
+  it('can only address a live tool call', () => {
+    expect(
+      parseError(
+        JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, reqId: 'r1', op: 'stop' }),
+      ),
+    ).toContain('needs the tool call');
+    expect(
+      parseError(
+        JSON.stringify({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'stop',
+          handle: { kind: 'entry', entryId: 'e1' },
+        }),
+      ),
+    ).toContain('can only address a tool call');
+    expect(
+      parseOk(
+        encodeBridgeRequest(
+          request('stop', {
+            handle: { kind: 'toolCall', toolCallId: 'call_1/3' },
+            content: 'the port is taken',
+          }),
+        ),
+      ),
+    ).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      reqId: 'req-1',
+      op: 'stop',
+      handle: { kind: 'toolCall', toolCallId: 'call_1/3' },
+      content: 'the port is taken',
+    });
+  });
+
+  it('round-trips the evidence of what was signalled', () => {
+    const reply: BridgeReply = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      reqId: 'r1',
+      op: 'stop',
+      ok: true,
+      stop: {
+        matched: 'command',
+        pids: [4242],
+        group: true,
+        signals: ['SIGTERM', 'SIGKILL'],
+        toolName: 'bash',
+        candidates: 3,
+        liveCalls: 1,
+      },
+    };
+    expect(parseBridgeReply(encodeBridgeReply(reply))).toEqual(reply);
+  });
+
+  it('round-trips the refusal a mis-aim produces', () => {
+    const reply: BridgeReply = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      reqId: 'r1',
+      op: 'stop',
+      ok: false,
+      code: 'no-process',
+      error: 'no process this child owns began as late as that call',
+    };
+    expect(parseBridgeReply(encodeBridgeReply(reply))).toEqual(reply);
+  });
+
+  it('refuses an evidence object that could not be shown to a human', () => {
+    const broken = (stop: unknown) =>
+      parseBridgeReply(
+        `${BRIDGE_REPLY_PREFIX}${JSON.stringify({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'stop',
+          ok: true,
+          stop,
+        })}`,
+      );
+    expect(
+      broken({
+        matched: 'vibes',
+        pids: [],
+        group: true,
+        signals: [],
+        toolName: 'bash',
+        candidates: 1,
+        liveCalls: 1,
+      }),
+    ).toBeNull();
+    expect(
+      broken({
+        matched: 'command',
+        pids: ['4242'],
+        group: true,
+        signals: [],
+        toolName: 'bash',
+        candidates: 1,
+        liveCalls: 1,
+      }),
+    ).toBeNull();
+    expect(
+      broken({
+        matched: 'command',
+        pids: [1],
+        group: 'yes',
+        signals: [],
+        toolName: 'bash',
+      }),
+    ).toBeNull();
+    // The two counts are what makes a `single-shell` ack auditable, so an ack without them is not an ack.
+    expect(
+      broken({
+        matched: 'command',
+        pids: [1],
+        group: true,
+        signals: [],
+        toolName: 'bash',
+        liveCalls: 1,
+      }),
+    ).toBeNull();
+    expect(
+      broken({
+        matched: 'command',
+        pids: [1],
+        group: true,
+        signals: [],
+        toolName: 'bash',
+        candidates: 'one',
+        liveCalls: 1,
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps toolStop optional, because an older bundle omits it', () => {
+    const reply: BridgeReply = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      reqId: 'r1',
+      op: 'hello',
+      ok: true,
+      capabilities: {
+        contextEdit: true,
+        navigateTree: true,
+        piVersion: '1.5.0',
+        toolStop: true,
+      },
+    };
+    expect(parseBridgeReply(encodeBridgeReply(reply))?.ok).toBe(true);
+    const legacy = {
+      ...reply,
+      capabilities: {
+        contextEdit: true,
+        navigateTree: true,
+        piVersion: '1.5.0',
+      },
+    };
+    expect(
+      parseBridgeReply(encodeBridgeReply(legacy))?.ok === true &&
+        (
+          parseBridgeReply(encodeBridgeReply(legacy)) as {
+            capabilities?: unknown;
+          }
+        ).capabilities,
+    ).toEqual({
+      contextEdit: true,
+      navigateTree: true,
+      piVersion: '1.5.0',
+    });
   });
 });

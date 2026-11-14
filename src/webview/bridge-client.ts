@@ -101,7 +101,7 @@ export class BridgeClient {
     this.caps = reply.capabilities;
     this.log.info(
       `Amulet bridge ready (pi ${this.caps.piVersion}; context_edit=${this.caps.contextEdit}, ` +
-        `navigateTree=${this.caps.navigateTree}).`,
+        `navigateTree=${this.caps.navigateTree}, toolStop=${this.caps.toolStop === true}).`,
     );
     return this.caps;
   }

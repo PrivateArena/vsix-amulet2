@@ -41,12 +41,14 @@ export const CONTEXT_OMIT_PLACEHOLDER = '[Omitted from context by the user.]';
 /**
  * What the host can ask for.
  *
- * `hello` is a capability probe with no side effect; the others are the three user-facing features
- * plus their inverses. `undo-revert` is separate from `revert` because it targets the leaf the last
+ * `hello` is a capability probe with no side effect; `omit`/`replace`/`restore`/`revert`/`undo-revert` are
+ * the context-surgery features plus their inverses — persistent state, so all of them idle-only.
+ * `stop` is the exception and has to be: it interrupts a call that is executing *right now*, which is the
+ * only moment it means anything. `undo-revert` is separate from `revert` because it targets the leaf the last
  * revert abandoned rather than a message the user picked.
  */
 export type BridgeOp =
-  'hello' | 'omit' | 'replace' | 'restore' | 'revert' | 'undo-revert';
+  'hello' | 'omit' | 'replace' | 'restore' | 'revert' | 'undo-revert' | 'stop';
 
 export const BRIDGE_OPS: readonly BridgeOp[] = [
   'hello',
@@ -55,6 +57,7 @@ export const BRIDGE_OPS: readonly BridgeOp[] = [
   'restore',
   'revert',
   'undo-revert',
+  'stop',
 ];
 
 /**
@@ -76,7 +79,7 @@ export interface BridgeRequest {
   handle?: BridgeHandle;
   /** Required by `revert` and `undo-revert`: the entry to move the leaf to. */
   entryId?: string;
-  /** Required by `replace`: the text the model should read from now on. */
+  /** Required by `replace`: the text the model should read from now on. For `stop`: the human's note. */
   content?: string;
   /** Always false in v1 — a branch summary is an LLM call that appends content and busts the cache. */
   summarize?: false;
@@ -103,6 +106,11 @@ export interface BridgeCapabilities {
   navigateTree: boolean;
   /** The runtime's own `--version` string, for the log and for the degradation notice. */
   piVersion: string;
+  /**
+   * Whether `stop` can be honoured here. Optional on the wire: a bridge built before the feature omits
+   * it, and the host must then hide the buttons rather than discover the answer by failing.
+   */
+  toolStop?: boolean;
 }
 
 /** Why an operation did not happen. Each is a different sentence in the UI. */
@@ -114,7 +122,13 @@ export type BridgeErrorCode =
   | 'pre-compaction'
   | 'no-such-entry'
   | 'cancelled'
-  | 'unsupported';
+  | 'unsupported'
+  /** `stop`: no process could be tied to that call, so nothing was signalled. */
+  | 'no-process'
+  /** `stop`: the named call is not one this child is executing. */
+  | 'not-running'
+  /** `stop`: the call is not a shell command, so there is no process to stop. */
+  | 'not-shell';
 
 export const BRIDGE_ERROR_CODES: readonly BridgeErrorCode[] = [
   'busy',
@@ -125,7 +139,48 @@ export const BRIDGE_ERROR_CODES: readonly BridgeErrorCode[] = [
   'no-such-entry',
   'cancelled',
   'unsupported',
+  'no-process',
+  'not-running',
+  'not-shell',
 ];
+
+/**
+ * What a `stop` did, as evidence rather than as an adjective.
+ *
+ * The bridge is the only party that can see these processes, and killing one is the single operation in
+ * this protocol that can be aimed at the wrong target — so it reports which pids it signalled and how
+ * sure it was about the aim, and a human can check `ps` afterwards.
+ */
+export interface ToolStopEvidence {
+  /**
+   * How the target was found: `command` when the command text the bridge recorded for the call appeared in a
+   * process it owns, `single-shell` when that text matched nothing (something rewrote the arguments before
+   * execution) and there was exactly one process it could have been *and* exactly one call the bridge believed
+   * was running — see `liveCalls`.
+   */
+  matched: 'command' | 'single-shell';
+  /** The process ids that were signalled; a group kill takes the whole tree under them. */
+  pids: number[];
+  /**
+   * Whether a process *group* was signalled. Only ever true when the shell is that group's leader, which
+   * is how pi spawns its shell children — pi's own group is never a candidate.
+   */
+  group: boolean;
+  /** Everything that left, in order: `['SIGTERM']`, or with `'SIGKILL'` appended when the first was ignored. */
+  signals: string[];
+  /** The tool the call was running, from the bridge's own record of it. */
+  toolName: string;
+  /**
+   * How many processes the aim chose between — the measure of its confidence: one process carrying the command's
+   * text is an identification, several is a choice (the oldest, which is the one that has been hanging longest).
+   */
+  candidates: number;
+  /**
+   * How many calls the bridge believed were executing. The fallback aim is permitted only at 1, so this is the
+   * number that explains a `single-shell` answer and the one that makes a suspicious ack auditable afterwards.
+   */
+  liveCalls: number;
+}
 
 export interface BridgeReplyOk {
   v: typeof BRIDGE_PROTOCOL_VERSION;
@@ -140,6 +195,8 @@ export interface BridgeReplyOk {
   abandonedCount?: number;
   /** `hello` only. */
   capabilities?: BridgeCapabilities;
+  /** `stop` only: what was signalled, and how certain the bridge was about the aim. */
+  stop?: ToolStopEvidence;
 }
 
 export interface BridgeReplyError {
@@ -290,6 +347,14 @@ function validateRequest(value: unknown): BridgeRequest | BridgeRequestError {
     case 'undo-revert':
       if (!request.entryId) return { error: `${op} needs an entryId` };
       break;
+    case 'stop':
+      // A live call is the only thing a stop can address, and a nested call has no session entry at all —
+      // so an entry/text handle could never name one.
+      if (!request.handle)
+        return { error: 'stop needs the tool call it should interrupt' };
+      if (request.handle.kind !== 'toolCall')
+        return { error: 'stop can only address a tool call' };
+      break;
     case 'hello':
       break;
   }
@@ -418,6 +483,41 @@ function validateReply(value: unknown): BridgeReply | null {
       contextEdit: caps.contextEdit,
       navigateTree: caps.navigateTree,
       piVersion: caps.piVersion,
+      // Absent on a bridge that predates the stop button; anything else is a broken reply, and a reply
+      // that half-parses must not advertise a capability.
+      ...(typeof caps.toolStop === 'boolean'
+        ? { toolStop: caps.toolStop }
+        : {}),
+    };
+  }
+  if (value.stop !== undefined) {
+    const stop = value.stop;
+    if (!isRecord(stop)) return null;
+    if (stop.matched !== 'command' && stop.matched !== 'single-shell')
+      return null;
+    if (
+      !Array.isArray(stop.pids) ||
+      stop.pids.some((pid) => typeof pid !== 'number')
+    )
+      return null;
+    if (typeof stop.group !== 'boolean') return null;
+    if (
+      !Array.isArray(stop.signals) ||
+      stop.signals.some((signal) => typeof signal !== 'string')
+    )
+      return null;
+    if (typeof stop.toolName !== 'string') return null;
+    const counted = (n: unknown): n is number =>
+      typeof n === 'number' && Number.isFinite(n);
+    if (!counted(stop.candidates) || !counted(stop.liveCalls)) return null;
+    reply.stop = {
+      matched: stop.matched,
+      pids: stop.pids as number[],
+      group: stop.group,
+      signals: stop.signals as string[],
+      toolName: stop.toolName,
+      candidates: stop.candidates,
+      liveCalls: stop.liveCalls,
     };
   }
   return reply;

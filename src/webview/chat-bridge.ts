@@ -689,6 +689,9 @@ export class ChatBridge implements vscode.Disposable {
         case 'restoreContextEntry':
           await this.runContextOp('restore', message.toolCallId);
           return;
+        case 'stopToolCall':
+          await this.runStopCommand(message.toolCallId, message.note);
+          return;
         case 'revertToMessage':
           await this.revertToMessage(message.text, message.occurrence);
           return;
@@ -1148,6 +1151,57 @@ export class ChatBridge implements vscode.Disposable {
       name,
       resource: result.resource,
     });
+  }
+
+  /**
+   * Stop one executing command: the bridge signals the process group pi spawned for that call, and pi reports
+   * the call as a failed result while the run goes on.
+   *
+   * Deliberately *not* routed through {@link bridgeGate}, whose first job is to refuse while a run is active —
+   * and a run parked on a hung command is the only state in which this button exists. pi dispatches an
+   * extension command immediately even during streaming (`agent-session.js`: "Handle extension commands
+   * first"), which is what makes `/amulet` usable here at all; a `steer` would not do, because a steer waits
+   * for a turn boundary and the hang is exactly what prevents one.
+   *
+   * The one refusal this path can need is "this child has no bridge", which is also the honest answer for an
+   * old pi, a disabled `amulet.contextEditing` or a missing bundle — and the reason the webview hides the
+   * buttons unless the bridge advertised `toolStop`.
+   */
+  private async runStopCommand(
+    toolCallId: string,
+    note?: string,
+  ): Promise<void> {
+    if (!this.runtime?.isReady) {
+      void vscode.window.showWarningMessage(
+        'Amulet: the pi runtime is not running.',
+      );
+      return;
+    }
+    if (!this.bridge.isAvailable()) {
+      void vscode.window.showWarningMessage(
+        'Amulet: stopping one command needs the Amulet bridge, which "amulet.contextEditing" loads on pi 1.4 or newer.',
+      );
+      return;
+    }
+    const reply = await this.bridge.call('stop', {
+      // The command text is *not* sent: the bridge recorded it from the same call it is being asked about,
+      // and it is the aim of a process kill. Never trust a webview restatement for that — the rule
+      // `src/prompts/prompt-resource.ts` applies to paths applies harder here.
+      handle: { kind: 'toolCall', toolCallId },
+      content: note ?? '',
+    });
+    if (!reply.ok) {
+      void vscode.window.showWarningMessage(`Amulet: ${reply.error}`);
+      return;
+    }
+    const stop = reply.stop;
+    this.log.info(
+      stop
+        ? `Stopped ${stop.toolName} call ${toolCallId}: ${
+            stop.signals.join(' then ') || 'already gone'
+          } ${stop.group ? 'process group' : 'process'} ${stop.pids.join(', ')} (${stop.matched}).`
+        : `Stopped call ${toolCallId}: the bridge confirmed it but named no process.`,
+    );
   }
 
   /**

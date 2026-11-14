@@ -18,6 +18,7 @@ import {
   toolRowPreview,
 } from '../tool-display';
 import { subagentMetaLine, type SubagentDetailsView } from './subagent-details';
+import { StopActions } from '../stop-actions';
 import { ToolImages } from '../tool-images';
 import './subagent-calls.scss';
 
@@ -124,10 +125,10 @@ function NestedCallRow({
 }) {
   const [open, setOpen] = useState(false);
   // Same rule as the card header: only a call pi reported on counts, so a row left
-  // `unfinished` in a reloaded history does not hold a timer that shows nothing.
-  const now = useTickingClock(
-    tool.status === 'running' && tool.startedAt != null,
-  );
+  // `unfinished` in a reloaded history does not hold a timer that shows nothing — and cannot be stopped,
+  // because the runtime is no longer running it.
+  const live = tool.status === 'running' && tool.startedAt != null;
+  const now = useTickingClock(live);
   const children = childCalls(tool, tools);
   const redact = useRedact();
   const preview = toolRowPreview(tool);
@@ -184,6 +185,23 @@ function NestedCallRow({
         </Tooltip>
         {duration && <span className="sub-call-duration">{duration}</span>}
       </div>
+      {/* The two command stops, and deliberately not the turn stop: aborting is the outer card's control, and a
+          row that cancelled the whole run would read as a way to stop the one command it shows.
+
+          A *sibling* of the row, not a cell inside it: the row is the disclosure and carries `role="button"`,
+          and a real button nested in an ARIA button is hidden from the assistive tech that would need to press
+          it — and its click would bubble into the toggle, folding the row the stop just opened up. The row is
+          a grid, so this costs one grid on the list item instead. */}
+      {live && (
+        <span className="sub-call-actions">
+          <StopActions
+            toolCallId={tool.toolCallId}
+            name={tool.toolName}
+            live
+            allowAbort={false}
+          />
+        </span>
+      )}
       {open && tool.resultText && (
         <pre
           className={`sub-call-output${

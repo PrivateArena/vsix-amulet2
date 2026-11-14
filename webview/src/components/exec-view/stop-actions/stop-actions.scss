@@ -1,0 +1,61 @@
+/*
+ * The stop controls, in the two places they appear.
+ *
+ * `.exec-action` itself — size, focus halo, the error tint of `.exec-action-stop`, and the card header's
+ * hover-reveal — is owned by `exec-block-view.scss`, which every tool card imports and both hosts render
+ * inside. What a nested row lacks is a hover context of its own, and the stopped state is scoped to a card
+ * header there, so both are restated for the row here.
+ */
+
+/*
+ * A nested row's actions are a *sibling* of the row, because the row is the disclosure (`role="button"`) and a
+ * nested button would be hidden from the assistive tech that needs to press it. The list item therefore becomes
+ * the grid: the row takes the flexible column, the controls the trailing one, and everything the row opens up
+ * spans both.
+ */
+.sub-call {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 4px;
+  align-items: center;
+}
+
+.sub-call > .sub-call-row {
+  grid-column: 1;
+  min-width: 0;
+}
+
+/* Everything the row opens up — its output, its images, its own nested calls — spans both columns. Written as
+   a negation so a new body element cannot land in the narrow column by forgetting to be listed. */
+.sub-call > :not(.sub-call-row):not(.sub-call-actions) {
+  grid-column: 1 / -1;
+}
+
+.sub-call-actions {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: end;
+}
+
+.sub-call-row .exec-action,
+.sub-call-actions .exec-action {
+  width: 18px;
+  height: 18px;
+}
+
+/* Hovering either the row or the controls themselves keeps them lit — the pointer leaving the row for a button
+   must not make the button vanish out from under it. */
+.sub-call:hover .exec-action,
+.sub-call:focus-within .exec-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The "Stopping…" state. `.exec-header .exec-action.is-stopped` in the card stylesheet is scoped to a header, so
+   a row's placeholder would otherwise be indistinguishable from a control that is ready to press. */
+.sub-call-actions .exec-action.is-stopped {
+  opacity: 0.55;
+  pointer-events: none;
+}

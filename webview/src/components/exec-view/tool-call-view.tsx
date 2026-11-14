@@ -1,11 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   LuBot,
   LuCheck,
   LuChevronRight,
   LuCopy,
   LuEllipsisVertical,
-  LuSquare,
   LuWrench,
 } from 'react-icons/lu';
 import { actions } from '../../apis/actions';
@@ -30,6 +29,7 @@ import {
   cardMenuOf,
   type ContextOp,
 } from './card-menu';
+import { StopActions } from './stop-actions';
 import {
   FILE_TOOLS,
   TOOL_ICONS,
@@ -293,7 +293,6 @@ export function ExecBlock({
   const expanded = expandedOverride ?? defaultExpanded;
   const now = useTickingClock(live);
   const { copied, copy } = useCopyFeedback();
-  const [stopRequested, setStopRequested] = useState(false);
 
   // A terminal call is the only one whose result arrives in pieces: pi streams the output of a
   // running `bash` on `tool_execution_update` and reports nothing at all for the other tools
@@ -319,12 +318,6 @@ export function ExecBlock({
       el.scrollTop = 0;
     }
   }, [followOutput]);
-
-  // pi settles the call itself (an aborted tool comes back as an error result), so
-  // the flag only has to keep the button from looking pressable in the meantime.
-  useEffect(() => {
-    if (!running) setStopRequested(false);
-  }, [running]);
 
   const Icon = subagent ? LuBot : (TOOL_ICONS[name] ?? LuWrench);
   const label = subagent ? SUBAGENT_TITLE : (TOOL_LABELS[name] ?? name);
@@ -366,15 +359,6 @@ export function ExecBlock({
           ? 'command'
           : 'arguments';
   const toggle = () => setExpandedOverride(!expanded);
-
-  // pi has no per-tool cancel: `abort` cancels the run's signal, which the running
-  // tool observes (or ignores until it settles) — the composer's Stop button, placed
-  // on the call you are actually watching.
-  const stop = () => {
-    if (stopRequested) return;
-    setStopRequested(true);
-    actions.abort();
-  };
 
   return (
     <div
@@ -427,23 +411,8 @@ export function ExecBlock({
                 </button>
               </Tooltip>
             )}
-            {live && (
-              <Tooltip
-                content={stopRequested ? 'Stopping…' : 'Stop'}
-                side="bottom"
-                align="end">
-                {/* `aria-disabled` rather than `disabled`: Chromium stops dispatching
-                    mouse events to a disabled control, which would strand its own
-                    open tooltip and hide the "Stopping…" confirmation. */}
-                <button
-                  type="button"
-                  className={`exec-action exec-action-stop${stopRequested ? ' is-stopped' : ''}`}
-                  aria-label="Stop this tool call"
-                  aria-disabled={stopRequested || undefined}
-                  onClick={stop}>
-                  <LuSquare aria-hidden />
-                </button>
-              </Tooltip>
+            {live && toolCallId && (
+              <StopActions toolCallId={toolCallId} name={name} live={live} />
             )}
             {tool && <CardMenu tool={tool} />}
           </span>

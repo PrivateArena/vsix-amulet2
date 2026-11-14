@@ -912,6 +912,18 @@ export type WebviewMessage =
   | { type: 'revertToMessage'; text: string; occurrence?: 'newest' | number }
   /** Go back to the leaf the last successful revert abandoned. */
   | { type: 'undoRevert' }
+  /**
+   * Stop one **executing command** — not the turn.
+   *
+   * The bridge signals the process group pi spawned for that call, so the command ends, its result comes back
+   * non-zero and annotated, and the run goes on with the same conversation and the same warm child. That is the
+   * whole difference from {@link abort}, which cancels the run's signal and therefore the turn.
+   *
+   * `note` is the human's own words, and it is the only text that reaches the model: an empty one is a valid
+   * answer, exactly as an empty note on pi-gate's "Abort with reason" still aborts. Addressed by tool call id,
+   * which works for a nested (subagent) call too — the child has no session entry, but its command really runs.
+   */
+  | { type: 'stopToolCall'; toolCallId: string; note?: string }
   | { type: 'exportChat' }
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }

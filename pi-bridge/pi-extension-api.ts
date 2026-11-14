@@ -199,6 +199,69 @@ export interface TurnEndEventResult {
   continue?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Tool calls (the live half: what is executing *right now*)
+// ---------------------------------------------------------------------------
+
+/**
+ * A call about to execute.
+ *
+ * Open on purpose: pi narrows this into one interface per tool (`BashToolCallEvent`, …) with a literal
+ * `toolName`, and the bridge only ever reads the fields every one of them shares.
+ *
+ * `input` is the live object pi is about to hand the tool — pi tells handlers to "mutate `event.input` in
+ * place" to change arguments, which is why nothing here may hold on to it. `toolCallId` is `<parent>/<n>`
+ * for a call another tool made, so a subagent's nested calls arrive here too: the child session runs with zero
+ * extensions and forwards every call back through `ctx.executeTool` (pi-subagent/shims.ts), which is what makes
+ * one bridge able to stop a command a subagent started.
+ */
+export interface ToolCallEvent {
+  type: 'tool_call';
+  toolCallId: string;
+  toolName: string;
+  input?: Record<string, unknown>;
+  parentToolCallId?: string;
+}
+
+/** The result of one call. `content` is what the model reads; a handler may replace it. */
+export interface ToolResultEvent {
+  type: 'tool_result';
+  toolCallId: string;
+  toolName: string;
+  input?: Record<string, unknown>;
+  content: (TextContent | ImageContent)[];
+  details?: unknown;
+  structuredContent?: unknown;
+  isError: boolean;
+  usage?: unknown;
+  parentToolCallId?: string;
+}
+
+/** What a `tool_result` handler changes. Omitted fields stay as they are. */
+export interface ToolResultEventResult {
+  content?: (TextContent | ImageContent)[];
+  details?: unknown;
+  structuredContent?: unknown;
+  isError?: boolean;
+  usage?: unknown;
+}
+
+/**
+ * A shell call the bridge has seen begin and not yet seen finish — the only thing a stop request can mean.
+ *
+ * Held by the bridge rather than sent by the host on purpose: the command text is the aim of a process kill,
+ * and a webview restating it would be a client inventing a path — the same rule `prompt-resource.ts` follows.
+ */
+export interface LiveCall {
+  toolCallId: string;
+  toolName: string;
+  /** The command the tool was about to run, as pi recorded it for this call. */
+  command: string;
+  parentToolCallId?: string;
+  /** When the `tool_call` hook ran, in this process's clock. */
+  startedAt: number;
+}
+
 export type ExtensionHandler<E, R = undefined> = (
   event: E,
   ctx: ExtensionContext,
@@ -220,6 +283,16 @@ export interface ExtensionAPI {
   on(
     event: 'turn_end',
     handler: ExtensionHandler<TurnEndEvent, TurnEndEventResult>,
+  ): () => void;
+  /**
+   * Fires for every tool call the *parent* runtime executes, including the nested ones a subagent's shim
+   * forwards back — which is why one registered hook covers both the main agent's terminal and a child's.
+   */
+  on(event: 'tool_call', handler: ExtensionHandler<ToolCallEvent>): () => void;
+  /** Fires after execution and before the result reaches the model; the return value may replace it. */
+  on(
+    event: 'tool_result',
+    handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>,
   ): () => void;
   registerCommand(
     name: string,

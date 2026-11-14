@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CONTEXT_OP_LABELS, cardMenuOf, contextOpBlocker } from './card-menu';
+import {
+  CONTEXT_OP_LABELS,
+  STOP_DIALOG,
+  STOP_LABELS,
+  canPressCommandStop,
+  canStopCommand,
+  cardMenuOf,
+  contextOpBlocker,
+} from './card-menu';
 
 /**
  * The enablement rules behind both menus that offer context surgery (the tool card's overflow button
@@ -59,5 +67,55 @@ describe('cardMenuOf', () => {
     expect(contextOpBlocker({ ...ok, inFlight: 'replace' })).toContain(
       'replace',
     );
+  });
+});
+
+/**
+ * The other Stop. `cardMenuOf` decides what may be asked of a conversation pi is not writing; these rules
+ * decide what may be asked of a command pi is running right now — which is why they are the opposite shape:
+ * gated on liveness and on the bridge's `toolStop`, never on `streaming`.
+ */
+describe('canStopCommand', () => {
+  const live = { live: true, toolStop: true };
+
+  it('offers it for a running shell call and for nothing else', () => {
+    expect(canStopCommand({ ...live, toolName: 'bash' })).toBe(true);
+    expect(canStopCommand({ ...live, toolName: 'powershell' })).toBe(true);
+    // No process to signal: a hung `grep` is a hung regexp.
+    expect(canStopCommand({ ...live, toolName: 'read' })).toBe(false);
+    expect(canStopCommand({ ...live, toolName: 'subagent' })).toBe(false);
+  });
+
+  it('is hidden when the runtime cannot honour it', () => {
+    // A bridge built before the feature, an old pi, a missing bundle: all the same answer, and all of
+    // them leave the abort control standing, which is what the card offered before this existed.
+    expect(
+      canStopCommand({ live: true, toolStop: false, toolName: 'bash' }),
+    ).toBe(false);
+  });
+
+  it('is not offered for a call the runtime is not executing', () => {
+    // A card from a reloaded history has no live process, and stopping "the newest thing pi ran" would
+    // abort whatever the agent is busy with instead.
+    expect(
+      canStopCommand({ live: false, toolStop: true, toolName: 'bash' }),
+    ).toBe(false);
+  });
+
+  it('keeps the controls offered while a stop is in flight, but stops them firing', () => {
+    // A button that vanishes on press reads as a broken card; a second press would signal a process that is
+    // already dying and answer a call the human has already stopped.
+    const inflight = { live: true, toolStop: true, toolName: 'bash' };
+    expect(canStopCommand(inflight)).toBe(true);
+    expect(canPressCommandStop({ ...inflight, pending: true })).toBe(false);
+    expect(canPressCommandStop({ ...inflight, pending: false })).toBe(true);
+  });
+
+  it('keeps the two senses of “stop” in one vocabulary', () => {
+    // The buttons are one row apart on the same card, so the wording is the only thing separating them.
+    expect(STOP_LABELS.command).toContain('command');
+    expect(STOP_LABELS.turn).toContain('turn');
+    expect(STOP_LABELS.command).not.toBe(STOP_LABELS.turn);
+    expect(STOP_DIALOG.subtitle).toContain('Abort this turn');
   });
 });

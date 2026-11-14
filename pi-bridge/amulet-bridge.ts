@@ -34,6 +34,7 @@ import {
   type BridgeReply,
   type BridgeRequest,
   type BridgeTargetView,
+  type ToolStopEvidence,
 } from '../shared/bridge-protocol';
 import {
   PendingStore,
@@ -42,7 +43,16 @@ import {
   omittedReplacement,
   type PendingEdit,
 } from './pending-store';
+import { clampStopNote } from '../shared/stop-command';
 import { resolveTargets } from './target-resolver';
+import {
+  StopBoard,
+  attachStopNote,
+  describeStop,
+  isShellTool,
+  planStop,
+} from './tool-stop';
+import { readProcessTable, stopProcess } from './process-tree';
 import type {
   AgentMessage,
   ContextEditEntryDraft,
@@ -126,12 +136,27 @@ export class BridgeSessions {
 
 export default function amuletBridge(pi: ExtensionAPI): void {
   const sessions = new BridgeSessions();
+  /**
+   * The live-call ledger for `stop`. Deliberately not part of {@link BridgeSessions}: an edit is durable,
+   * sidecar-backed state that must outlive a restart, while a call that is executing cannot — a bridge that
+   * reloaded has no running command to stop, and must say so rather than chase a stale process.
+   */
+  const stops = new StopBoard();
 
   pi.on('session_start', async (event, ctx) => {
-    // `fork` keeps the entries (ids included), `new`/`resume` do not; `startup`/`reload` re-read the
-    // sidecar of the file they are on, which is the whole point of writing one.
+    stops.clear();
+    // `fork` keeps the entries (ids included), `new`/`resume` land on a different conversation.
     await sessions.sync(ctx, true, event.reason === 'fork');
   });
+
+  // The two hooks a stop needs, and nothing else. They observe, never intervene: `tool_call` only records
+  // what is about to run (the command text is the aim of the kill) and `tool_result` only annotates a result
+  // the human already stopped. Registering them costs no prompt cache — see the header of this file.
+  pi.on('tool_call', (event) => {
+    stops.record(event);
+  });
+
+  pi.on('tool_result', (event) => attachStopNote(event, stops));
 
   pi.on('session_tree', async (_event, ctx) => {
     // The leaf moved (a revert, a `/tree` navigation, a fork): edits of the abandoned branch are no
@@ -191,7 +216,7 @@ export default function amuletBridge(pi: ExtensionAPI): void {
       }
       let reply: BridgeReply;
       try {
-        reply = await runOp(parsed, ctx, sessions);
+        reply = await runOp(parsed, ctx, sessions, stops);
       } catch (err) {
         reply = failure(
           parsed.reqId,
@@ -216,6 +241,7 @@ function okReply(
     revertedFrom?: string;
     abandonedCount?: number;
     capabilities?: BridgeCapabilities;
+    stop?: ToolStopEvidence;
   } = {},
 ): BridgeReply {
   return {
@@ -262,20 +288,27 @@ async function runOp(
   req: BridgeRequest,
   ctx: ExtensionCommandContext,
   sessions: BridgeSessions,
+  stops: StopBoard,
 ): Promise<BridgeReply> {
   if (req.op === 'hello') {
     return okReply(req, {
       capabilities: {
         contextEdit: true,
         navigateTree: typeof ctx.navigateTree === 'function',
+        // Whether this bundle can see and signal the child processes. `readProcessTable` answers for the
+        // platform, and a table it cannot read is reported per request, not here.
+        toolStop: true,
         // pi's own version is the host's fact (`pi --version`), not one the child has to re-derive.
         piVersion: '',
       },
     });
   }
 
-  // Every other op moves persistent state, so all of them are idle-only: `navigateTree` rejects during
-  // a run, and a turn boundary is the only place a `context_edit` may be written.
+  // A stop is the one op that *requires* a live run: it interrupts the call that is executing right now.
+  // Every other op moves persistent state, so all of them are idle-only: `navigateTree` rejects during a run,
+  // and a turn boundary is the only place a `context_edit` may be written.
+  if (req.op === 'stop') return runStop(req, stops);
+
   if (!ctx.isIdle()) {
     return failure(
       req.reqId,
@@ -335,6 +368,73 @@ async function runOp(
   }
   for (const edit of edits) await active.set(edit);
   return okReply(req, { targets: resolved.targets });
+}
+
+/**
+ * Stop one executing command, and promise the human's note for its result.
+ *
+ * Why this works at all: pi dispatches an extension command *immediately, even during streaming*
+ * (`agent-session.js`: "Handle extension commands first"), so `/amulet` is a usable channel into a child whose
+ * run is parked on the hung call — the thing `steer` cannot do, because a steer waits for a boundary that the
+ * hang is exactly what prevents.
+ *
+ * Order is load-bearing: the note is promised *before* the signal leaves, so a command that dies instantly
+ * still gets its result annotated; and the plan is computed from the bridge's own record of the call, never
+ * from text the webview sent.
+ */
+async function runStop(
+  req: BridgeRequest,
+  stops: StopBoard,
+): Promise<BridgeReply> {
+  const callId =
+    req.handle?.kind === 'toolCall' ? req.handle.toolCallId : undefined;
+  if (!callId)
+    return failure(req.reqId, req.op, 'unknown-handle', 'missing call id');
+  const call = stops.of(callId);
+  if (!call) {
+    return failure(
+      req.reqId,
+      req.op,
+      'not-running',
+      'that call is not running in this child — it has finished, or the runtime restarted since.',
+    );
+  }
+  // The webview only offers the control for a shell, but the bridge is the authority: a call with no process of
+  // its own is refused here rather than chased with a signal.
+  if (!isShellTool(call.toolName)) {
+    return failure(
+      req.reqId,
+      req.op,
+      'not-shell',
+      `a ${call.toolName} call runs inside pi itself — there is no process to stop. Use Abort turn instead.`,
+    );
+  }
+  const table = readProcessTable();
+  // `liveCalls` is what makes the aim honest: with several calls running, a process whose command text has been
+  // rewritten belongs to one of them and cannot be attributed to the one the human pointed at.
+  const plan = planStop(call, table, stops.liveCalls().length);
+  if (!plan.ok) return failure(req.reqId, req.op, plan.code, plan.error);
+
+  // Promised before the signal, so a command that dies instantly still has its result annotated.
+  stops.promiseNote(callId, clampStopNote(req.content ?? ''));
+  const outcome = await stopProcess(plan.target, table);
+  // The output channel is where a stop that hit the wrong process gets diagnosed after the fact, which is why
+  // the counts travel with the sentence rather than being dropped with the ack.
+  log(
+    `stop ${callId} (${call.toolName}): ${describeStop(plan.matched, outcome)} — ` +
+      `${plan.candidates} matching process(es) of ${plan.liveCalls} live call(s).`,
+  );
+  return okReply(req, {
+    stop: {
+      matched: plan.matched,
+      pids: outcome.pids,
+      group: outcome.group,
+      signals: outcome.signals,
+      toolName: call.toolName,
+      candidates: plan.candidates,
+      liveCalls: plan.liveCalls,
+    },
+  });
 }
 
 /**
