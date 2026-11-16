@@ -9,6 +9,7 @@ import {
   LuKeyRound,
   LuMessageSquareWarning,
   LuMinimize2,
+  LuMousePointerClick,
   LuPin,
   LuRefreshCw,
   LuSettings,
@@ -19,7 +20,10 @@ import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import { usePrivacyMode, usePrivacyStore } from '../../../stores/privacy-store';
 import { useLineBreaks } from '../../../stores/line-breaks-store';
-import { useNotifySticky } from '../../../stores/notify-sticky-store';
+import {
+  useNotifyClickToFocus,
+  useNotifySticky,
+} from '../../../stores/notify-store';
 import { openProviderLogin } from '../../../stores/provider-login-store';
 import { openSessionInfo } from '../../../stores/session-info-store';
 import { Menu, MenuItem } from '../../ui/menu-item';
@@ -33,6 +37,8 @@ export function SettingsMenu() {
   const lineBreaks = useLineBreaks();
   /** `amulet.notifySticky` — whether a parked dialog's system banner is kept until clicked. */
   const notifySticky = useNotifySticky();
+  /** `amulet.notifyClickToFocus` — whether a banner can raise this window when clicked. */
+  const notifyClickToFocus = useNotifyClickToFocus();
   // A rule that cannot compile is a secret that stays visible, so the menu says it rather than
   // leaving the human to find out from the output channel.
   const badRules = usePrivacyStore((s) => s.issues).length;
@@ -101,6 +107,14 @@ export function SettingsMenu() {
       onSelect: () => actions.setNotifySticky(!notifySticky),
       kind: 'toggle',
       checked: notifySticky,
+    },
+    {
+      // Both of these change what the operating system shows, not what the transcript shows.
+      label: 'Click to focus',
+      icon: LuMousePointerClick,
+      onSelect: () => actions.setNotifyClickToFocus(!notifyClickToFocus),
+      kind: 'toggle',
+      checked: notifyClickToFocus,
     },
     {
       label: 'Auto compact',

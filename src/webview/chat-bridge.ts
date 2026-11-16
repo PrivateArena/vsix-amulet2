@@ -43,10 +43,12 @@ import {
   PRIVACY_KEYS,
   PRESERVE_LINE_BREAKS_KEY,
   NOTIFY_STICKY_KEY,
+  NOTIFY_CLICK_TO_FOCUS_KEY,
   THINKING_LEVEL_KEY,
   affectsSetting,
   readConfig,
   setExpandThinking,
+  setNotifyClickToFocus,
   setNotifySticky,
   setPrivacyMode,
   setPreserveLineBreaks,
@@ -284,6 +286,7 @@ export class ChatBridge implements vscode.Disposable {
         affectsSetting(e, EXPAND_THINKING_KEY) ||
         affectsSetting(e, PRESERVE_LINE_BREAKS_KEY) ||
         affectsSetting(e, NOTIFY_STICKY_KEY) ||
+        affectsSetting(e, NOTIFY_CLICK_TO_FOCUS_KEY) ||
         PRIVACY_KEYS.some((key) => affectsSetting(e, key))
       ) {
         this.postConfig();
@@ -735,6 +738,12 @@ export class ChatBridge implements vscode.Disposable {
           // the next alert, so the echo is for the checkmark and for a Settings-editor change made next
           // door, which arrives through the same watcher above.
           await setNotifySticky(message.enabled);
+          this.postConfig();
+          return;
+        case 'setNotifyClickToFocus':
+          // Same as the sticky switch above: a host-side alert behaviour, echoed only so the menu
+          // checkmark follows the write.
+          await setNotifyClickToFocus(message.enabled);
           this.postConfig();
           return;
         case 'openPiFolder': {

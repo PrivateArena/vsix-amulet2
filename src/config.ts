@@ -100,17 +100,24 @@ export interface NotifySettings {
    * counter is the record either way; a banner that expires costs nothing.
    */
   sticky: boolean;
+  /**
+   * Offer a click action on a system notification so clicking it raises this VS Code window (X11 +
+   * `xdotool`). Needs a child that lives until the banner is gone, so it is only offered for an alert
+   * that expires — a pinned (`critical`) banner carries no action.
+   */
+  clickToFocus: boolean;
 }
 
 export function notifySettings(): NotifySettings {
   // No {@link LEGACY_SECTION} fallback here: these keys shipped after the rename, and the declared
-  // defaults in the manifest are their only other source. One lookup for all four switches.
+  // defaults in the manifest are their only other source. One lookup for all five switches.
   const cfg = vscode.workspace.getConfiguration(SECTION);
   return {
     onTurnDone: cfg.get<boolean>('notifyOnTurnDone', true),
     onApproval: cfg.get<boolean>('notifyOnApproval', true),
     system: cfg.get<boolean>('notifySystem', true),
     sticky: cfg.get<boolean>('notifySticky', false),
+    clickToFocus: cfg.get<boolean>('notifyClickToFocus', true),
   };
 }
 
@@ -173,6 +180,7 @@ export function webviewConfig(): WebviewConfig {
     // alert is decided host-side from {@link notifySettings} at delivery time, so this echo is a mirror of
     // a value the child process has no opinion about — which is why it stays out of `readConfig()`.
     notifySticky: notifySettings().sticky,
+    notifyClickToFocus: notifySettings().clickToFocus,
     privacyRules: rules,
     privacyRuleIssues: issues,
   };
@@ -195,6 +203,9 @@ export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
 
 /** Config key behind the "Sticky approval alerts" toggle (`NotifySettings.sticky`). */
 export const NOTIFY_STICKY_KEY = `${SECTION}.notifySticky`;
+
+/** Config key behind the "Click to focus" toggle (`NotifySettings.clickToFocus`). */
+export const NOTIFY_CLICK_TO_FOCUS_KEY = `${SECTION}.notifyClickToFocus`;
 
 /** Config key for the startup thinking level (`disabled` = leave the runtime alone). */
 export const THINKING_LEVEL_KEY = `${SECTION}.thinkingLevel`;
@@ -228,6 +239,16 @@ export async function setNotifySticky(enabled: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration(SECTION)
     .update('notifySticky', enabled, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * Persist {@link NotifySettings.clickToFocus} so the preference survives reloads. Same route and same
+ * non-restart as {@link setNotifySticky}: the next alert decides from the new value.
+ */
+export async function setNotifyClickToFocus(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('notifyClickToFocus', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /** Config keys whose change should trigger a runtime restart. */

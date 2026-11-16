@@ -11,7 +11,7 @@ import { usePackagesStore } from './stores/packages-store';
 import { usePromptDialogStore } from './stores/prompt-dialog-store';
 import { applyPrivacyConfig } from './stores/privacy-store';
 import { applyLineBreakConfig } from './stores/line-breaks-store';
-import { applyNotifyStickyConfig } from './stores/notify-sticky-store';
+import { applyNotifyConfig } from './stores/notify-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -88,7 +88,7 @@ export function Shell() {
       config: (message) => {
         applyPrivacyConfig(message.config);
         applyLineBreakConfig(message.config);
-        applyNotifyStickyConfig(message.config);
+        applyNotifyConfig(message.config);
         dispatch({ type: 'host', message });
       },
     };

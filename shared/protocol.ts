@@ -935,6 +935,8 @@ export type WebviewMessage =
   | { type: 'setPreserveLineBreaks'; enabled: boolean }
   /** Persist the "Sticky approval alerts" preference (`amulet.notifySticky`). */
   | { type: 'setNotifySticky'; enabled: boolean }
+  /** Persist the "Click to focus" preference (`amulet.notifyClickToFocus`). */
+  | { type: 'setNotifyClickToFocus'; enabled: boolean }
   | { type: 'openPiFolder' }
   /** Run `pi update --all --force` against the configured pi binary. */
   | { type: 'updatePi' }
@@ -1267,6 +1269,12 @@ export interface WebviewConfig {
    * menu can show the switch: the decision itself is made host-side, at delivery time.
    */
   notifySticky: boolean;
+  /**
+   * Whether a system notification offers a click action that raises this VS Code window (menu:
+   * **Click to focus**, `amulet.notifyClickToFocus`). Host-decided — the webview only shows the switch,
+   * and the host additionally requires X11 with `xdotool` before offering anything.
+   */
+  notifyClickToFocus: boolean;
   /**
    * Censoring rules to apply to displayed text: the built-ins plus `amulet.privacyRules`, already
    * checked by the host, so an entry that cannot compile never reaches the webview.

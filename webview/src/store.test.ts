@@ -64,6 +64,7 @@ describe('reducer — host state messages', () => {
             expandThinking: false,
             preserveLineBreaks: true,
             notifySticky: false,
+            notifyClickToFocus: true,
             privacyMode: false,
             privacyRules: [],
           },

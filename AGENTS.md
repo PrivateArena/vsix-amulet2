@@ -42,7 +42,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Image results of a tool call                                                             | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Commands / config                                                                        | [`src/commands.ts`](src/commands.ts), [`src/config.ts`](src/config.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Prompt-template & skill insert (the arguments dialog)                                    | parity rules [`shared/prompt-template.ts`](shared/prompt-template.ts) · host reader [`src/prompts/prompt-resource.ts`](src/prompts/prompt-resource.ts) (name → pi's reported path, never a webview path) · routing `pushPromptResource` in [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts) · webview [`webview/src/utils/prompt-insert.ts`](webview/src/utils/prompt-insert.ts), [`webview/src/stores/prompt-dialog-store.ts`](webview/src/stores/prompt-dialog-store.ts), [`webview/src/components/ui/prompt-dialog/`](webview/src/components/ui/prompt-dialog/)                                                                                                                                                                                                                                                                   |
-| "Look at this" notifications (host-side)                                                 | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `notify-service.ts` (VS Code toast + status bar)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| "Look at this" notifications (host-side)                                                 | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `window-focus.ts` (click → raise this window), `notify-service.ts` (VS Code toast + status bar)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | pi package manager (installed list, enable/disable, install/remove)                      | [`src/packages/`](src/packages/) — `package-settings.ts` reads/edits the `packages` arrays of pi's `settings.json`, `package-catalog.ts` resolves a source to its on-disk package, `package-service.ts` runs the `pi install`/`pi remove` child; state in [`webview/src/stores/packages-store.ts`](webview/src/stores/packages-store.ts), UI in [`webview/src/components/ui/packages-dialog/`](webview/src/components/ui/packages-dialog/), shared source rules in [`shared/pi-packages.ts`](shared/pi-packages.ts)                                                                                                                                                                                                                                                                                                                            |
 | Context surgery (Omit from context / Edit context content / Revert to this message)      | contract [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · the pi extension Amulet ships: [`pi-bridge/`](pi-bridge/) (`amulet-bridge.ts` command + hooks, `target-resolver.ts` handle→entry ids, `pending-store.ts` override map + sidecar) · loaded by [`src/runtime/bridge-args.ts`](src/runtime/bridge-args.ts) (`pi -e`) · host client [`src/webview/bridge-client.ts`](src/webview/bridge-client.ts) (reqId↔ack, 15 s watchdog) · durable state reader [`src/session/session-store.ts`](src/session/session-store.ts) (`readBranchContextEdits`) · transcript repair [`src/webview/history-repair.ts`](src/webview/history-repair.ts) · badges `ToolExec.ctxEdit` in [`webview/src/store.ts`](webview/src/store.ts), menu rules [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) |
 | Stop one command (Stop / Stop with reason, on a card **and** on a subagent's nested row) | same bridge, new op: [`pi-bridge/tool-stop.ts`](pi-bridge/tool-stop.ts) (live-call board, the aim, the note) + [`pi-bridge/process-tree.ts`](pi-bridge/process-tree.ts) (process table, group kill) · vocabulary + shell tool list [`shared/stop-command.ts`](shared/stop-command.ts) · `op: 'stop'` in [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · host `runStopCommand` in [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts) · buttons [`webview/src/components/exec-view/stop-actions/`](webview/src/components/exec-view/stop-actions/) + [`webview/src/components/ui/reason-dialog/`](webview/src/components/ui/reason-dialog/) · rules in [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) · runtime proof [`scripts/stop-probe.mjs`](scripts/stop-probe.mjs)    |
@@ -93,6 +93,9 @@ Two more harnesses drive the bridge, which is the half of Amulet that only exist
 `node scripts/bridge-probe.mjs '{"op":"omit",...}'` sends one bridge op (or a `hello` capability probe) and prints
 the ack, and `node scripts/stop-probe.mjs "note"` runs the whole stop-a-hung-command chain against a live model turn
 (`NESTED=1` stops a command a _subagent_ made instead). Both need `node esbuild.mjs` to have produced the bundle.
+A third harness skips Amulet entirely and drives the OS notification chain against the live desktop —
+`node scripts/notify-probe.mjs` resolves the window, posts a banner with a click action, prints the id it gets
+back and activates the window if the banner is clicked.
 
 ## Conventions
 
@@ -106,7 +109,7 @@ the ack, and `node scripts/stop-probe.mjs "note"` runs the whole stop-a-hung-com
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `notifySticky`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `notifySticky`, `notifyClickToFocus`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
 (`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
@@ -134,12 +137,13 @@ the shipped default in a test render.
 
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 
-The four `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
+The five `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
 process, so `notifySettings()` in [`src/config.ts`](src/config.ts) reads them at delivery time and a change
-takes effect on the next alert (never a restart). `notifySticky` is the one of them the webview **does** see:
-the menu has to show the switch, so `webviewConfig()` mirrors it (from `notifySettings()`, not from
-`readConfig()` — it stays out of `PiConfig` for the same reason as its three siblings) and the menu writes it
-back with the `setNotifySticky` `WebviewMessage`. Two alerts exist, and both are
+takes effect on the next alert (never a restart). `notifySticky` and `notifyClickToFocus` are the two of them
+the webview **does** see: the menu has to show the switches, so `webviewConfig()` mirrors them (from
+`notifySettings()`, not from `readConfig()` — they stay out of `PiConfig` for the same reason as their three
+siblings) and the menu writes them back with the `setNotifySticky` / `setNotifyClickToFocus` `WebviewMessage`.
+Two alerts exist, and both are
 decided host-side because both moments are already handled there: a run finishing its report, and a pi dialog
 parked on an answer. Rules worth keeping:
 
@@ -182,6 +186,44 @@ parked on an answer. Rules worth keeping:
   still parked on), because a notification expires and an unanswered dialog does not; a dialog whose extension times out on its own (pi-subagent's 5-minute ceiling) is dropped when it
   does. `Amulet: Test Notification` proves which channel the machine actually has, and now names which tier
   the current settings ask for — "expires on the server clock" or "kept until dismissed".
+
+## Clicking a system notification raises the window
+
+A notification centre is not a window manager: `xfce4-notifyd` was read off the wire and its entire click
+vocabulary is the `ActionInvoked(id, key)` signal — no activation token (`--activation-token-fd` is accepted by
+libnotify and stays empty), no `StartupId`, nothing that moves a window. So the client activates it, which is
+[`src/notify/window-focus.ts`](src/notify/window-focus.ts) (`xdotool`, X11) behind
+`amulet.notifyClickToFocus` (menu: **Click to focus**, default **on**). Read this before changing any of it:
+
+- **The action is part of the argv, so the window must be known before the banner is posted.** That is one
+  `xdotool search` per alert (and the reason the OS half of `deliver` is the asynchronous one). If the probe
+  finds nothing — no X11, no `xdotool`, a remote window, a title it cannot match — the notification is posted
+  exactly as it was without the feature: with **no action at all**. A button that does nothing, or raises the
+  wrong window, is worse than no button, and a click that arrives after a window reload is simply gone.
+- **An action implies an expiry.** `--action` implies `--wait`, so the posting process lives until the banner
+  is gone; a `critical` banner never is, which is why {@link toSystemNotification} refuses to pair the two and
+  why every clickable alert carries an explicit `--expire-time`. The waiter is `unref()`ed and bounded by that
+  expiry, so a window reload or a daemon that never expires cannot leak processes.
+- **The id on fd 3 is the delivery receipt, never the exit code.** Measured against this stack: expired,
+  clicked and server-closed all exit `0`, and libnotify on a server it decides has no action support *posts*
+  the banner and still exits `1`. So `runNotifyCommand` resolves as soon as `--id-fd` yields a non-`0` id, and
+  reports the chosen action key from stdout when the waiter later exits. There is deliberately **no spawn
+  timeout**: our own `SIGTERM` used to read as a refusal, so three legitimate clicks would have disabled the
+  OS channel for the session; refusals are now counted only when no id ever arrived.
+- **The window belongs to an ancestor, and a search result is not a window.** The extension host owns no X
+  window, so candidates are `VSCODE_PID` first, then this process and its parents. `xdotool search --pid`
+  returns Electron's unmapped 10×10/200×200 helpers too, so `--onlyvisible` is the filter — and for an
+  iconified (therefore unmapped) window, the fallback list is only trusted when a *title* picks one, because
+  the helpers have no titles. All windows of one VS Code instance share `_NET_WM_PID`, so the title is also what
+  separates two windows: `focusNames()` feeds it the alerted project's folder name first.
+- **`DISPLAY` is not enough — `XAUTHORITY` must travel too**, or the server answers "Authorization required",
+  which reads like a broken window manager and is really a missing credential. `wmctrl` is *not* assumed
+  (it is absent on the development machine); the activator resolves `xdotool` the same way the channel
+  resolves `notify-send`, and a failed probe is retried at most three times so a Wayland session is not
+  re-probed per alert.
+- Verification: `src/notify/window-focus.test.ts` (candidate pids, the title rule, caching, the probe budget)
+  against a fake `xdotool`, `src/notify/system-channel.test.ts` for the argv and for the fd-3 receipt against a
+  real child, and `scripts/notify-probe.mjs` for the whole chain, including the finger.
 
 ## Context surgery: Amulet ships and owns a pi extension
 

@@ -5,7 +5,8 @@
  * entry, and hands the payloads decided in {@link run-report} / {@link approval-prompt} to the two channels —
  * VS Code's own notification (always, as a record with a route back to the chat) and the operating system's
  * notification centre ({@link system-channel}), which is the one that reaches a user sitting in another
- * window. Which dialogs are still waiting is not this module's business: {@link ApprovalLedger} owns that.
+ * window and, on X11, is the one a click can bring back to this one ({@link window-focus}). Which dialogs
+ * are still waiting is not this module's business: {@link ApprovalLedger} owns that.
  *
  * Two triggers exist because those are the two moments Amulet knows about from the wire:
  *
@@ -16,7 +17,11 @@
  */
 
 import * as vscode from 'vscode';
-import { NOTIFY_APPROVAL_KEY, notifySettings } from '../config';
+import {
+  NOTIFY_APPROVAL_KEY,
+  notifySettings,
+  type NotifySettings,
+} from '../config';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
 import type { ExtensionUiRequest } from '../../shared/protocol';
 import {
@@ -37,10 +42,12 @@ import {
   describeApprovalRequest,
 } from './approval-prompt';
 import {
+  CLICK_ACTION,
   createSystemChannel,
   toSystemNotification,
   type SystemChannel,
 } from './system-channel';
+import { createWindowFocus, type WindowFocus } from './window-focus';
 
 /** Button on every alert. */
 const SHOW_CHAT_LABEL = 'Show Chat';
@@ -54,6 +61,7 @@ const SHOW_CHAT_COMMAND = 'amulet.focusInput';
 interface NotifyService {
   readonly log: Logger;
   readonly channel: SystemChannel;
+  readonly focus: WindowFocus;
   readonly statusItem: vscode.StatusBarItem;
   readonly ledger: ApprovalLedger;
 }
@@ -79,6 +87,7 @@ export function initNotifications(log: Logger): vscode.Disposable {
   const current: NotifyService = {
     log,
     channel: createSystemChannel({ log: (text) => log.info(text) }),
+    focus: createWindowFocus({ log: (text) => log.info(text) }),
     statusItem,
     ledger: new ApprovalLedger({
       log: (text) => log.info(text),
@@ -149,7 +158,7 @@ function reportFinished(
   current.log.info(
     `[notify] run finished (${run.outcome}, stop=${run.stopReason}): ${message.body}`,
   );
-  deliver(message, current);
+  deliver(message, current, projectLabel(cwd));
 }
 
 /**
@@ -170,7 +179,7 @@ export function approvalRequested(req: ExtensionUiRequest, cwd: string): void {
   current.log.info(
     `[notify] ${prompt.kind} waiting for an answer (${req.id}): ${message.body}`,
   );
-  deliver(message, current);
+  deliver(message, current, projectLabel(cwd));
 }
 
 /** Stop tracking a dialog: it was answered, cancelled, or its runtime went away. */
@@ -191,10 +200,17 @@ function renderApprovalCount(current: NotifyService, open: number): void {
 }
 
 /**
- * Send to both channels. The OS notifier is never awaited: `notify-send` takes a moment and the Windows
+ * Send to both channels. The OS notifier is never awaited: `notify-send` takes a moment, the Windows
  * balloon script takes seconds, and a toast the human has to wait out is worse than no toast.
+ *
+ * `hint` is the project the alert is about — the folder name, which is also the piece of the VS Code
+ * window title that tells two windows of one instance apart.
  */
-function deliver(message: AttentionMessage, current: NotifyService): void {
+function deliver(
+  message: AttentionMessage,
+  current: NotifyService,
+  hint?: string,
+): void {
   const settings = notifySettings();
   if (
     needsSystemNotification({
@@ -202,17 +218,11 @@ function deliver(message: AttentionMessage, current: NotifyService): void {
       windowFocused: vscode.window.state.focused,
     })
   ) {
-    void current.channel
-      .send(toSystemNotification(message, { sticky: settings.sticky }))
-      .then((ok) => {
-        if (!ok)
-          current.log.info('[notify] no OS channel took it; toast only.');
-      })
-      .catch((err: unknown) => {
-        current.log.info(
-          `[notify] the OS channel failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+    void postToOs(message, current, settings, hint).catch((err: unknown) => {
+      current.log.info(
+        `[notify] the OS channel failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
   }
   const text = toastText(message);
   const prompt = message.critical
@@ -230,6 +240,58 @@ function deliver(message: AttentionMessage, current: NotifyService): void {
 }
 
 /**
+ * One alert, OS channel, with the click wired up.
+ *
+ * The window has to be known *before* the notification is posted, because the click target is part of the
+ * argv — that is one `xdotool search`, and it is why this half is the asynchronous one. When it finds
+ * nothing (no X11, no `xdotool`, a remote window, Wayland), the notification is posted exactly as it was
+ * before: with no action, and so with nothing that can fail to happen on a click.
+ */
+async function postToOs(
+  message: AttentionMessage,
+  current: NotifyService,
+  settings: NotifySettings,
+  hint?: string,
+): Promise<{ ok: boolean; wid?: string }> {
+  const wid = settings.clickToFocus
+    ? await current.focus.target(focusNames(hint))
+    : undefined;
+  const ok = await current.channel.send(
+    toSystemNotification(message, {
+      sticky: settings.sticky,
+      clickable: !!wid,
+    }),
+    wid
+      ? (key) => {
+          if (key === CLICK_ACTION.key) void raiseWindow(current, wid);
+        }
+      : undefined,
+  );
+  if (!ok) current.log.info('[notify] no OS channel took it; toast only.');
+  return { ok, wid };
+}
+
+/** The human clicked a banner: bring our window to the front. Nothing else — VS Code was the point. */
+async function raiseWindow(current: NotifyService, wid: string): Promise<void> {
+  const outcome = await current.focus.raise(wid);
+  current.log.info(`[notify] notification clicked — ${outcome.why}.`);
+}
+
+/**
+ * Titles that identify this window: the alerted project first, then whatever VS Code calls the workspace.
+ * Two-character names are excluded because a title substring that short is a coincidence, not a match.
+ */
+function focusNames(hint?: string): string[] {
+  const names = [hint, vscode.workspace.name];
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    names.push(folder.name);
+  }
+  return [
+    ...new Set(names.filter((n): n is string => !!n && n.trim().length > 2)),
+  ];
+}
+
+/**
  * Fire one notification through the real channels, ignoring the focus rule and the trigger settings, so
  * the user can see what their machine actually does. Backs `Amulet: Test Notification`.
  */
@@ -242,23 +304,26 @@ export async function sendTestNotification(): Promise<void> {
     critical: true,
   };
   const settings = notifySettings();
-  // The test is the tool a user has for this exact question, so say which of the two behaviours the
-  // current settings ask for: a banner that vanishes, or a critical one a server keeps until it is clicked.
+  // The test is the tool a user has for these exact questions, so report the answers it just produced:
+  // which tier the banner has, and whether a click can raise anything.
   const tier = settings.sticky
     ? 'critical tier, kept until dismissed'
     : 'normal tier, expires on the server clock';
-  const ok = await current.channel.send(
-    toSystemNotification(message, { sticky: settings.sticky }),
-  );
+  const { ok, wid } = await postToOs(message, current, settings);
+  const click = wid
+    ? `clicking raises ${wid}`
+    : settings.clickToFocus
+      ? `no click action (${current.focus.describe()})`
+      : 'no click action (amulet.notifyClickToFocus is off)';
   const via = ok ? current.channel.describe() : 'VS Code toast only';
   const caveat = settings.system
     ? ''
     : ' · amulet.notifySystem is currently off';
   current.log.info(
-    `[notify] test notification delivered via ${via} (${tier}).`,
+    `[notify] test notification delivered via ${via} (${tier}; ${click}).`,
   );
   const pick = await vscode.window.showInformationMessage(
-    `Amulet notification test — delivered via ${via}, ${tier}${caveat}.`,
+    `Amulet notification test — ${via}, ${tier}, ${click}${caveat}.`,
     SHOW_CHAT_LABEL,
   );
   if (pick === SHOW_CHAT_LABEL) {

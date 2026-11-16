@@ -86,6 +86,8 @@ export const actions = {
     postMessage({ type: 'setPreserveLineBreaks', enabled }),
   setNotifySticky: (enabled: boolean) =>
     postMessage({ type: 'setNotifySticky', enabled }),
+  setNotifyClickToFocus: (enabled: boolean) =>
+    postMessage({ type: 'setNotifyClickToFocus', enabled }),
 
   // sessions
   newChat: () => postMessage({ type: 'newChat' }),

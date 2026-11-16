@@ -23,6 +23,7 @@ const config = (privacyMode: boolean) => ({
   expandThinking: false,
   preserveLineBreaks: true,
   notifySticky: false,
+  notifyClickToFocus: true,
   privacyMode,
   privacyRules: [{ search: SECRET, replace: SHOWN }],
 });

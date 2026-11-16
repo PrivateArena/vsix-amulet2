@@ -80,6 +80,48 @@ describe('buildNotifyCommand', () => {
     expect(built?.args.some((a) => a.startsWith('--expire-time'))).toBe(false);
   });
 
+  it('asks for the click action, and for the notification id on its own descriptor', () => {
+    const clickable = toSystemNotification(
+      { title: 'a', body: 'b', critical: false },
+      { sticky: false, clickable: true },
+    );
+    const built = buildNotifyCommand('linux', clickable);
+    // Two argv items: `--action` then `key=label`, the form this notify-send is known to accept.
+    expect(built?.args).toContain('--action');
+    expect(built?.args).toContain('default=Open Amulet');
+    expect(built?.args).toContain('--id-fd=3');
+    // An action means a process that waits for the click, so the banner must be guaranteed to die.
+    expect(built?.args).toContain('--expire-time=30000');
+  });
+
+  it('asks for neither action nor tier where the platform cannot carry them', () => {
+    const clickable = toSystemNotification(
+      { title: 'a', body: 'b', critical: false },
+      { sticky: false, clickable: true },
+    );
+    // `display notification` and a balloon tip have no actions: a click that can never be reported must
+    // not be advertised as one. (The host also never asks for one off X11.)
+    expect(
+      buildNotifyCommand('darwin', clickable)?.args.join(' '),
+    ).not.toContain('--action');
+    expect(
+      buildNotifyCommand('win32', clickable)?.args.join(' '),
+    ).not.toContain('action');
+  });
+
+  it('never attaches a click action to a pinned banner', () => {
+    expect(pinned.action).toBeUndefined();
+    expect(
+      toSystemNotification(
+        { title: 'a', body: 'b', critical: true },
+        {
+          sticky: true,
+          clickable: true,
+        },
+      ).action,
+    ).toBeUndefined();
+  });
+
   it('escapes nothing on macOS because nothing is interpolated into a script', () => {
     const built = buildNotifyCommand('darwin', approval);
     expect(built?.command).toBe('osascript');
@@ -209,6 +251,55 @@ describe('createSystemChannel', () => {
     });
     expect(result.delivered).toBe(false);
     expect(result.missing).toBe(true);
+  });
+
+  describe('runNotifyCommand against a real child', () => {
+    // A stand-in for `notify-send`: an id on fd 3, then, much later, the chosen action on stdout.
+    const fake = (script: string): NotifyCommand => ({
+      command: process.execPath,
+      args: ['-e', script],
+    });
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    /** Until the child has exited and reported its action, rather than a fixed sleep. */
+    const until = async (done: () => boolean, budget = 3_000) => {
+      for (let spent = 0; spent < budget; spent += 25) {
+        if (done()) return true;
+        await wait(25);
+      }
+      return false;
+    };
+
+    it('takes the id on fd 3 as the receipt, and resolves before the waiter exits', async () => {
+      const actions: string[] = [];
+      const started = Date.now();
+      const result = await runNotifyCommand(
+        fake(
+          "require('fs').writeSync(3, '42\\n'); setTimeout(() => process.stdout.write('default'), 600)",
+        ),
+        { onAction: (key) => actions.push(key) },
+      );
+      // The child is deliberately still alive: that is the whole point of the id channel.
+      expect(result.delivered).toBe(true);
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(await until(() => actions.length > 0)).toBe(true);
+      expect(actions).toEqual(['default']);
+    });
+
+    it('reads id 0 as "the server refused to post it"', async () => {
+      const result = await runNotifyCommand(
+        fake("require('fs').writeSync(3, '0\\n')"),
+      );
+      expect(result.delivered).toBe(false);
+    });
+
+    it('falls back to the exit for a notifier too old for --id-fd', async () => {
+      expect((await runNotifyCommand(fake('process.exit(0)'))).delivered).toBe(
+        true,
+      );
+      expect((await runNotifyCommand(fake('process.exit(1)'))).delivered).toBe(
+        false,
+      );
+    });
   });
 
   it('has no channel to describe on an unknown platform', async () => {
