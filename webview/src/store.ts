@@ -222,6 +222,16 @@ export interface ChatState {
    * host posted, so this is only what the panel needs to offer (or drop) "Undo revert".
    */
   lastRevert: RevertResult | null;
+  /**
+   * Keys ({@link toolImageKey}) of the image tiles a reader has open right now.
+   *
+   * The retention budget is nothing without this: it decides which decoded pixels to hand
+   * back, and the one thing that must never be handed back is what is on screen. Retiring an
+   * open tile's bytes re-arms the very request its answer had just satisfied — a tile asks
+   * whenever it is open and has no pixels — so a session over the budget would trade file
+   * reads, image decodes and card heights with itself forever.
+   */
+  shownImages: Set<string>;
 }
 
 export const initialState: ChatState = {
@@ -247,6 +257,7 @@ export const initialState: ChatState = {
   ctxEdits: [],
   bridge: { available: false },
   lastRevert: null,
+  shownImages: new Set(),
 };
 
 const DISPLAYABLE_ROLES = new Set(['user', 'assistant', 'system']);
@@ -433,9 +444,24 @@ function compactionInfoOf(
 }
 
 /**
+ * One image of one tool result, as the state names it.
+ *
+ * `toolCallId` is opaque, so the join needs a character it cannot contain — the same reason
+ * (and the same character) the host uses to key a read in flight.
+ */
+export function toolImageKey(toolCallId: string, index: number): string {
+  return `${toolCallId}\u0000${index}`;
+}
+
+/**
  * What the webview keeps decoded, at most: the images a reader looked at recently, not a
  * whole session's worth. A reference dropped here re-reads on its next expansion — which
  * is why the tiles ask from state rather than from a flag of their own.
+ *
+ * A reader who still has a card open is not "recently": those bytes are on the screen, and
+ * taking them back would only buy a re-read (see {@link ChatState.shownImages}). So the
+ * budget retires what nobody is looking at, and accepts that a session whose open cards are
+ * over the budget temporarily is — the human closes a card to give the memory back.
  */
 const MAX_RETAINED_IMAGE_BYTES = 24 * 1024 * 1024;
 const MAX_RETAINED_IMAGES = 8;
@@ -467,16 +493,30 @@ function mergeToolImages(
 
 /**
  * Drop the oldest delivered pixels until the session is back inside the retention budget.
+ *
+ * `shown` are the tiles a reader has open and `keep` is the reference that just arrived. Neither
+ * is ever a victim: a tile that loses bytes it was promised asks for them again, and a card that
+ * is not open is at least wasting the read that was already done. Without those two rules the
+ * budget stops being a memory cap and becomes a request generator.
  */
 function retainNewestImages(
   tools: Record<string, ToolExec>,
+  shown: Set<string>,
+  keep?: string,
 ): Record<string, ToolExec> {
-  type Loaded = { toolId: string; index: number; bytes: number; at: number };
+  type Loaded = {
+    key: string;
+    toolId: string;
+    index: number;
+    bytes: number;
+    at: number;
+  };
   const loaded: Loaded[] = [];
   for (const [toolId, tool] of Object.entries(tools)) {
     tool.images?.forEach((image, index) => {
       if (image.dataUrl) {
         loaded.push({
+          key: toolImageKey(toolId, index),
           toolId,
           index,
           bytes: image.dataUrl.length,
@@ -492,11 +532,16 @@ function retainNewestImages(
   ) {
     return tools;
   }
-  // Oldest first; the image that just arrived is the newest, so it is never the victim.
-  loaded.sort((a, b) => a.at - b.at);
+  // Oldest first, and never a tile the reader is looking at: when those run out the session is
+  // over budget because of what is on screen, which is not this pass's to fix.
+  const evictable = loaded.filter(
+    (entry) => !shown.has(entry.key) && entry.key !== keep,
+  );
+  if (!evictable.length) return tools;
+  evictable.sort((a, b) => a.at - b.at);
   const victims = new Map<string, number[]>();
   let dropped = 0;
-  for (const entry of loaded) {
+  for (const entry of evictable) {
     if (
       loaded.length - dropped <= MAX_RETAINED_IMAGES &&
       total <= MAX_RETAINED_IMAGE_BYTES
@@ -561,10 +606,14 @@ function applyToolImageResult(
   };
   return {
     ...state,
-    tools: retainNewestImages({
-      ...state.tools,
-      [message.toolCallId]: { ...tool, images: next },
-    }),
+    tools: retainNewestImages(
+      {
+        ...state.tools,
+        [message.toolCallId]: { ...tool, images: next },
+      },
+      state.shownImages,
+      toolImageKey(message.toolCallId, message.index),
+    ),
   };
 }
 
@@ -674,7 +723,14 @@ export type Action =
   | { type: 'dismissUi'; id: string }
   | { type: 'setPendingAttachments'; attachments: Attachment[] }
   | { type: 'addPendingAttachments'; attachments: Attachment[] }
-  | { type: 'clearPendingAttachments' };
+  | { type: 'clearPendingAttachments' }
+  /**
+   * A reader opened, or closed, the card showing one image of a tool result. The tile that
+   * paints the pixels is the only thing that knows it is painting them, and the memory budget
+   * has to be told — see {@link ChatState.shownImages}.
+   */
+  | { type: 'showImage'; toolCallId: string; index: number }
+  | { type: 'hideImage'; toolCallId: string; index: number };
 
 export function reducer(state: ChatState, action: Action): ChatState {
   if (action.type === 'dismissUi') {
@@ -694,6 +750,24 @@ export function reducer(state: ChatState, action: Action): ChatState {
   }
   if (action.type === 'clearPendingAttachments') {
     return { ...state, pendingAttachments: [] };
+  }
+  if (action.type === 'showImage') {
+    const key = toolImageKey(action.toolCallId, action.index);
+    if (state.shownImages.has(key)) return state;
+    return { ...state, shownImages: new Set([...state.shownImages, key]) };
+  }
+  if (action.type === 'hideImage') {
+    const key = toolImageKey(action.toolCallId, action.index);
+    if (!state.shownImages.has(key)) return state;
+    const shown = new Set(state.shownImages);
+    shown.delete(key);
+    // Closing a card is the moment its bytes stop being worth their space, so the budget is
+    // balanced here rather than at the next delivery: what nobody is looking at is retired now.
+    return {
+      ...state,
+      shownImages: shown,
+      tools: retainNewestImages(state.tools, shown),
+    };
   }
   const message = action.message;
   switch (message.type) {

@@ -1,6 +1,7 @@
 import { memo, useEffect } from 'react';
 import { LuImage, LuMaximize2, LuTriangleAlert } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
+import { useChatDispatch } from '../../../contexts/chat-context';
 import type { ToolImageRef } from '../../../../../shared/protocol';
 import { formatByteSize } from '../../../utils/format';
 import { useRedact } from '../../../stores/privacy-store';
@@ -68,7 +69,9 @@ function sizeOf(image: ToolImageRef): string {
  *
  * Deliberately stateless about *having* asked: state is the only honest record, since the
  * reducer may retire a data URL the reader stopped looking at, and a card that remembered
- * its own requests would then show a wait that never ends.
+ * its own requests would then show a wait that never ends. What keeps that retirement safe
+ * is the `showImage` registration below: the bytes of an open tile are never retired, so the
+ * only way to lose them is to close the card, which is also what stops the asking.
  */
 export function needsToolImage(
   image: ToolImageRef,
@@ -84,6 +87,17 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
   const redact = useRedact();
   const label = path ? redact(basename(path)) : redact(mimeType);
   const caption = path ? redact(path) : undefined;
+  const dispatch = useChatDispatch();
+
+  // "I am painting these pixels" is a fact only this tile can state, and the memory budget
+  // needs it: the reducer would otherwise retire the bytes of a card that is open, the tile
+  // would ask again, and the answer would push the session back over the budget. See
+  // {@link ChatState.shownImages}.
+  useEffect(() => {
+    if (!expanded || !toolCallId) return;
+    dispatch({ type: 'showImage', toolCallId, index });
+    return () => dispatch({ type: 'hideImage', toolCallId, index });
+  }, [dispatch, expanded, index, toolCallId]);
 
   useEffect(() => {
     if (path && needsToolImage(image, expanded)) {

@@ -10,6 +10,7 @@ import type {
 import { asToolCall } from '../../shared/blocks';
 import { parseStreamingToolArgs } from '../../shared/tool-args';
 import { applyContextEdits, initialState, reducer } from './store';
+import type { ChatState } from './store';
 
 const host = (message: HostMessage) => ({ type: 'host' as const, message });
 
@@ -1162,6 +1163,70 @@ describe('reducer — tool images', () => {
     );
   };
 
+  /** A settled `read` of one image, the reference only — the shape every retention test starts from. */
+  const openImageCard = (s: ChatState, id: string): ChatState => {
+    const path = `tmp/${id}.png`;
+    s = reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_start',
+          toolCallId: id,
+          toolName: 'read',
+          args: { path },
+        } as never,
+      }),
+    );
+    return reducer(
+      s,
+      host({
+        type: 'rpcEvent',
+        event: {
+          type: 'tool_execution_end',
+          toolCallId: id,
+          toolName: 'read',
+          result: {
+            content: [{ type: 'image', mimeType: 'image/png', bytes: 10 }],
+          },
+        } as never,
+      }),
+    );
+  };
+
+  /** The host's answer to a card's request — the pixels that make it a held image. */
+  const deliver = (s: ChatState, id: string, dataUrl: string): ChatState =>
+    reducer(
+      s,
+      host({
+        type: 'toolImage',
+        toolCallId: id,
+        index: 0,
+        path: `tmp/${id}.png`,
+        dataUrl,
+        size: 3,
+      }),
+    );
+
+  /** What the tile of an open card states: these bytes are on the screen. */
+  const show = (s: ChatState, id: string): ChatState =>
+    reducer(s, { type: 'showImage', toolCallId: id, index: 0 });
+
+  const hide = (s: ChatState, id: string): ChatState =>
+    reducer(s, { type: 'hideImage', toolCallId: id, index: 0 });
+
+  /** A settled read, its card open, and its pixels delivered: one image on screen. */
+  const loadOpenImageCard = (
+    s: ChatState,
+    id: string,
+    dataUrl: string,
+  ): ChatState => deliver(show(openImageCard(s, id), id), id, dataUrl);
+
+  const heldImages = (s: ChatState) =>
+    Object.values(s.tools).flatMap((tool) =>
+      (tool.images ?? []).filter((image) => image.dataUrl),
+    );
+
   it('keeps an image result as a reference, with the call path attached', () => {
     const s = withImage();
     expect(s.tools.r1).toMatchObject({
@@ -1355,50 +1420,13 @@ describe('reducer — tool images', () => {
     let s = initialState;
     for (let i = 0; i < 10; i++) {
       const id = `r${i}`;
-      s = reducer(
-        s,
-        host({
-          type: 'rpcEvent',
-          event: {
-            type: 'tool_execution_start',
-            toolCallId: id,
-            toolName: 'read',
-            args: { path: `tmp/${id}.png` },
-          } as never,
-        }),
-      );
-      s = reducer(
-        s,
-        host({
-          type: 'rpcEvent',
-          event: {
-            type: 'tool_execution_end',
-            toolCallId: id,
-            toolName: 'read',
-            result: {
-              content: [{ type: 'image', mimeType: 'image/png', bytes: 10 }],
-            },
-          } as never,
-        }),
-      );
-      s = reducer(
-        s,
-        host({
-          type: 'toolImage',
-          toolCallId: id,
-          index: 0,
-          path: `tmp/${id}.png`,
-          dataUrl: pixels,
-          size: 3,
-        }),
-      );
+      // Nothing is registered as shown here: a reader who has moved on is what the budget
+      // is allowed to forget.
+      s = deliver(openImageCard(s, id), id, pixels);
     }
-    const held = Object.values(s.tools).flatMap((tool) =>
-      (tool.images ?? []).filter((image) => image.dataUrl),
-    );
     // Eight retained images, the newest eight: a session opened card by card keeps its
     // memory flat instead of accumulating every screenshot the reader ever clicked.
-    expect(held).toHaveLength(8);
+    expect(heldImages(s)).toHaveLength(8);
     expect(s.tools.r0.images?.[0].dataUrl).toBeUndefined();
     expect(s.tools.r9.images?.[0].dataUrl).toBe(pixels);
     // A retired reference stays readable — the card re-reads it when it is opened again.
@@ -1450,6 +1478,95 @@ describe('reducer — tool images', () => {
     }
     expect(s.tools.big1.images?.[0].dataUrl).toBeUndefined();
     expect(s.tools.big2.images?.[0].dataUrl).toBe(huge);
+  });
+
+  it('never retires the pixels of a card the reader has open', () => {
+    // The budget exists to stop a session accumulating every screenshot ever clicked. It must
+    // not do that by taking the picture back out of the card that is showing it: the tile
+    // asks whenever it is open and has no bytes, so the answer would re-arm the request, the
+    // request would re-fill the budget, and the walk around the open cards never ends.
+    const pixels = 'data:image/png;base64,' + 'A'.repeat(2048);
+    let s = initialState;
+    for (let i = 0; i < 10; i++) {
+      s = loadOpenImageCard(s, `r${i}`, pixels);
+    }
+    // Ten open cards, ten pictures on screen: over the budget, and staying that way. The
+    // reader closes a card to hand the memory back — see the next test.
+    expect(heldImages(s)).toHaveLength(10);
+    // …and nothing left to ask for: the loop the old retirement started cannot be armed.
+    for (let i = 0; i < 10; i++) {
+      expect(s.tools[`r${i}`].images?.[0].dataUrl).toBe(pixels);
+    }
+    // The resting state is a fixed point: re-delivering what a tile already has answers with
+    // the same state object, so no render, no retirement, no new request.
+    expect(deliver(s, 'r0', pixels)).toBe(s);
+  });
+
+  it('hands an image back to the budget when its card closes', () => {
+    const pixels = 'data:image/png;base64,' + 'A'.repeat(2048);
+    let s = initialState;
+    for (let i = 0; i < 10; i++) {
+      s = loadOpenImageCard(s, `r${i}`, pixels);
+    }
+    // A key nobody registered is not a state change…
+    expect(hide(s, 'nope')).toBe(s);
+    // …and closing one card is the moment its bytes stop being worth their space, so the
+    // budget is balanced then rather than at the next delivery: oldest first, unwatched only.
+    s = hide(s, 'r0');
+    expect(heldImages(s)).toHaveLength(9);
+    expect(s.tools.r0.images?.[0].dataUrl).toBeUndefined();
+    expect(s.tools.r0.images?.[0].path).toBe('tmp/r0.png');
+    expect(s.tools.r1.images?.[0].dataUrl).toBe(pixels);
+  });
+
+  it('retires the oldest unwatched tile, never the open one', () => {
+    // Deliveries inside one millisecond all carry the same `loadedAt`, so "oldest first" is
+    // decided by insertion order and can name any tile — including the open one. This is the
+    // single card the reader left open, and the flash this whole rule used to start.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    try {
+      const pixels = 'data:image/png;base64,' + 'A'.repeat(2048);
+      let s = initialState;
+      for (let i = 0; i < 9; i++) {
+        s = openImageCard(s, `r${i}`);
+      }
+      // r0 is the oldest reference in the session and the newest delivery.
+      for (let i = 1; i < 9; i++) {
+        s = deliver(s, `r${i}`, pixels);
+      }
+      s = deliver(show(s, 'r0'), 'r0', pixels);
+      expect(s.tools.r0.images?.[0].dataUrl).toBe(pixels);
+      expect(s.tools.r1.images?.[0].dataUrl).toBeUndefined();
+      expect(heldImages(s)).toHaveLength(8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('never drops the pixels that just landed', () => {
+    // The other half of the same trap, for a card that is not open: "oldest first" is decided
+    // by insertion order when the deliveries tie, and an answer dropped on arrival is a file
+    // read and a base64 payload that were paid for and thrown away.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    try {
+      const pixels = 'data:image/png;base64,' + 'A'.repeat(2048);
+      let s = initialState;
+      for (let i = 0; i < 9; i++) {
+        s = openImageCard(s, `r${i}`);
+      }
+      for (let i = 1; i < 9; i++) {
+        s = deliver(s, `r${i}`, pixels);
+      }
+      // r0 is the first reference in the session, so it sorts oldest: it must still be the one
+      // that keeps its bytes, and r1 — the oldest of the rest — is what the budget takes.
+      s = deliver(s, 'r0', pixels);
+      expect(s.tools.r0.images?.[0].dataUrl).toBe(pixels);
+      expect(s.tools.r1.images?.[0].dataUrl).toBeUndefined();
+      expect(heldImages(s)).toHaveLength(8);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

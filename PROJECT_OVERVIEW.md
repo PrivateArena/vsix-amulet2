@@ -174,7 +174,11 @@ webview (React)              host (Node)                                pi --mod
    webview keeps only a `ToolImageRef`. Pixels cross on request (`loadToolImage`), from disk,
    typed by the file's **signature** rather than by its name or by what the runtime reported.
    A card asks only while it is expanded, and the reducer retires the oldest delivered pixels
-   past a retention budget.
+   past a retention budget — but never those of a tile the reader has open, because an open
+   tile with no pixels asks again. That registration (`showImage`/`hideImage` →
+   `ChatState.shownImages`) is what keeps the budget from starting a read/retire cycle over the
+   open cards; a retired open card also changes height, which is what a broken version of it
+   looks like on screen.
 10. **Compaction is event-owned, never command-owned.** pi answers `{"type":"compact"}` only after
     its summarisation call resolves (minutes), so `RpcClient` lifts the response budget for
     `compact`/`fork` (`LONG_RUNNING_COMMANDS`); the 30s default is what used to surface as
