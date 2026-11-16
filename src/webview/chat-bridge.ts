@@ -42,6 +42,7 @@ import {
   EXPAND_THINKING_KEY,
   PRIVACY_KEYS,
   PRESERVE_LINE_BREAKS_KEY,
+  REDUCED_MOTION_KEY,
   NOTIFY_STICKY_KEY,
   NOTIFY_CLICK_TO_FOCUS_KEY,
   THINKING_LEVEL_KEY,
@@ -52,8 +53,10 @@ import {
   setNotifySticky,
   setPrivacyMode,
   setPreserveLineBreaks,
+  setReducedMotion,
   webviewConfig,
 } from '../config';
+import { StreamPacer } from './stream-pacer';
 import type { Logger, PiRuntime } from '../runtime/pi-runtime';
 import {
   getAgentVersion,
@@ -204,6 +207,11 @@ export class ChatBridge implements vscode.Disposable {
   /** Undo side of the {@link registerUiSurface} entry made for this bridge. */
   private readonly unregisterSurface: () => void;
   /**
+   * Chunking of this surface's streamed deltas (menu: **Reduced motion**). Per surface, not per runtime:
+   * one child fans its events out to N webviews, and what has to stay cheap is each one's own render.
+   */
+  private readonly pacer: StreamPacer<RpcEvent>;
+  /**
    * The host side of the pi extension Amulet ships (`pi-bridge/`), for this surface alone: it owns the
    * `reqId`s this surface issued, which is what lets one reply be claimed by the caller that waits for
    * it while N surfaces share one runtime. Bound lazily because {@link runtime} moves on `connect()`.
@@ -226,6 +234,14 @@ export class ChatBridge implements vscode.Disposable {
     this.unregisterSurface = registerUiSurface(this.asUiSurface());
     // ...and the same for a client that has to hold the real logger, not an undefined stand-in.
     this.bridge = new BridgeClient(() => this.runtime, this.log);
+    // Off until {@link postConfig} says otherwise, which is the first thing `connect()` does.
+    this.pacer = new StreamPacer<RpcEvent>({
+      sink: (events) => {
+        for (const event of events) {
+          this.post({ type: 'rpcEvent', event: event as any });
+        }
+      },
+    });
   }
 
   /** This bridge's entry in the dialog surface registry. */
@@ -285,6 +301,7 @@ export class ChatBridge implements vscode.Disposable {
       if (
         affectsSetting(e, EXPAND_THINKING_KEY) ||
         affectsSetting(e, PRESERVE_LINE_BREAKS_KEY) ||
+        affectsSetting(e, REDUCED_MOTION_KEY) ||
         affectsSetting(e, NOTIFY_STICKY_KEY) ||
         affectsSetting(e, NOTIFY_CLICK_TO_FOCUS_KEY) ||
         PRIVACY_KEYS.some((key) => affectsSetting(e, key))
@@ -325,6 +342,8 @@ export class ChatBridge implements vscode.Disposable {
    */
   private postConfig(): void {
     const config = webviewConfig();
+    // The webview only mirrors this one for its checkmark; the chunking itself happens here.
+    this.pacer.setEnabled(config.reducedMotion);
     const issues = config.privacyRuleIssues ?? [];
     const fingerprint = issues.join('\n');
     // The same settings are pushed on every connect, restart and unrelated toggle, and once per
@@ -359,10 +378,10 @@ export class ChatBridge implements vscode.Disposable {
     if (VISIBLE_EVENT_TYPES.has(event.type)) this.visibleOutput++;
     // Image payloads are the one part of a tool result no renderer can show, and the
     // one part big enough to matter: redact them, then hand the reference over.
-    this.post({
-      type: 'rpcEvent',
-      event: stripEventImages(event as RpcEvent) as any,
-    });
+    const stripped = stripEventImages(event as RpcEvent) as RpcEvent;
+    // Reduced motion folds streamed deltas into chunks and flushes the queue ahead of anything else,
+    // so the surface sees the wire in order and only the deltas move later.
+    this.pacer.route(stripped);
     // Refresh derived data when a turn completes or the session changes. A run is
     // many turns (one LLM call plus its tool results), so `turn_end` is what keeps
     // the context meter moving inside a long run; the reply is derived from
@@ -730,6 +749,13 @@ export class ChatBridge implements vscode.Disposable {
           // Same again: how a message is painted, never what it says — the session file and
           // the prompt keep the author's own newlines either way.
           await setPreserveLineBreaks(message.enabled);
+          this.postConfig();
+          return;
+        case 'setReducedMotion':
+          // The one rendering switch that also acts here: `postConfig()` repaces this surface's stream
+          // as it echoes the value back, so flipping it mid-answer takes effect on the next chunk.
+          // No restart — the child process and the session file never see a difference.
+          await setReducedMotion(message.enabled);
           this.postConfig();
           return;
         case 'setNotifySticky':
@@ -2393,6 +2419,9 @@ export class ChatBridge implements vscode.Disposable {
   private detach(): void {
     for (const unsub of this.subscriptions) unsub();
     this.subscriptions = [];
+    // Queued deltas belong to a webview that is reconnecting or gone; `pushSnapshot` will bring the
+    // conversation up to date from the child, so a late chunk of the old stream would only duplicate it.
+    this.pacer.stop();
     // `connect()` calls this first, so this also runs when the surface moves to another runtime: a call
     // waiting on the child we are leaving would never be answered by the one we are getting.
     this.bridge.cancelOutstanding(

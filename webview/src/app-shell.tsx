@@ -12,6 +12,7 @@ import { usePromptDialogStore } from './stores/prompt-dialog-store';
 import { applyPrivacyConfig } from './stores/privacy-store';
 import { applyLineBreakConfig } from './stores/line-breaks-store';
 import { applyNotifyConfig } from './stores/notify-store';
+import { applyReducedMotionConfig } from './stores/reduced-motion-store';
 import { useSessionInfoStore } from './stores/session-info-store';
 import { useChatDispatch, useChatState } from './contexts/chat-context';
 import { useEscapeKey } from './hooks/use-escape-key';
@@ -84,11 +85,13 @@ export function Shell() {
       },
       // `config` carries store flags (expandThinking, the censoring rules, the line-break and alert
       // preferences) and they are all rendering state rather than chat state: none of them
-      // ever enters the transcript, only its painting.
+      // ever enters the transcript, only its painting — or, for Reduced motion, how often that
+      // painting is asked for at all, which is decided by the host bridge and mirrored here.
       config: (message) => {
         applyPrivacyConfig(message.config);
         applyLineBreakConfig(message.config);
         applyNotifyConfig(message.config);
+        applyReducedMotionConfig(message.config);
         dispatch({ type: 'host', message });
       },
     };

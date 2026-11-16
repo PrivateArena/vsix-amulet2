@@ -37,6 +37,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | Sidebar webview provider                                                                 | [`src/provider.ts`](src/provider.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Editor-tab chat panels                                                                   | [`src/editor/panel-manager.ts`](src/editor/panel-manager.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Host↔webview bridge                                                                      | [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Pacing of a streamed reply (Reduced motion)                                              | [`src/webview/stream-pacer.ts`](src/webview/stream-pacer.ts) — folds one surface's deltas; `chat-bridge.ts` owns the pacer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Right-click menu on the chat body                                                        | [`webview/src/components/entry-list/transcript-menu.tsx`](webview/src/components/entry-list/transcript-menu.tsx), sources in [`webview/src/utils/md-units.ts`](webview/src/utils/md-units.ts), DOM→text in [`webview/src/utils/dom-markdown.ts`](webview/src/utils/dom-markdown.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | pi extension dialogs (pi-gate approvals)                                                 | [`src/webview/ui-request-routing.ts`](src/webview/ui-request-routing.ts) (one owner, ack watchdog, single answer), [`src/webview/ui-surfaces.ts`](src/webview/ui-surfaces.ts) (surface registry + fan-out), [`webview/src/components/ui/permission-prompt/`](webview/src/components/ui/permission-prompt/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Image results of a tool call                                                             | [`src/webview/tool-image.ts`](src/webview/tool-image.ts), [`webview/src/components/exec-view/tool-images/`](webview/src/components/exec-view/tool-images/) — base64 is stripped off the wire in [`shared/blocks.ts`](shared/blocks.ts) and re-read from disk when a card opens · the retention budget may retire pixels only for a tile nobody is showing, which that tile registers with `showImage`/`hideImage` (`ChatState.shownImages` in [`webview/src/store.ts`](webview/src/store.ts)) — retiring what an open card shows only buys the same read again                                                                                                                                                                                                                                                                                 |
@@ -109,7 +110,7 @@ back and activates the window if the banner is clicked.
 
 ## Configuration surface
 
-Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `notifySticky`, `notifyClickToFocus`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
+Extension settings live under the `amulet.*` namespace (declared in [`package.json`](package.json) `contributes.configuration`): `binaryPath`, `agentDir`, `defaultModel`, `thinkingLevel`, `autoCompact`, `autoRetry`, `expandThinking`, `preserveLineBreaks`, `reducedMotion`, `privacyMode`, `privacyRules`, `notifyOnTurnDone`, `notifyOnApproval`, `notifySystem`, `notifySticky`, `notifyClickToFocus`, `contextEditing`, `extraArgs`. A key the user has not set in `amulet.*` falls back to its pre-rebrand `pintra.*` twin (the extension shipped as Pintra until 1.0.14) — see `LEGACY_SECTION`/`isExplicitlySet` in [`src/config.ts`](src/config.ts); the legacy namespace is **read-only**. `affectsRestart` / `affectsSetting` watch both namespaces, so editing a `pintra.*` key still restarts the runtime and re-applies the thinking level. Changing a **restart-affecting** setting triggers a runtime restart via `affectsRestart` in [`src/config.ts`](src/config.ts) — keep that list in sync when adding settings that alter how the child process is spawned. `contextEditing` (default **on**) is one of them: it decides whether the child is started with the bridge that carries context surgery _and_ the per-command Stop, it is `machine`-scoped for the same reason as `extraArgs`, it has no `pintra.*` twin, and it is **not** part of `webviewConfig()` — whether the bridge is actually live is capability state about a running child, so it travels on the `bridgeStatus` HostMessage instead of a settings echo. `expandThinking` is webview-only: the host pushes it in the `config` `HostMessage` (see `webviewConfig()`), and the webview writes it back with the `setExpandThinking` `WebviewMessage` (into `amulet.*` only).
 
 `privacyMode` + `privacyRules` are the other webview-only pair, and they follow the same route
 (`setPrivacyMode` → `amulet.privacyMode` → `webviewConfig()` → `config`). Two rules they must keep:
@@ -135,12 +136,19 @@ subscribes and then reads the store live for the same reason `useRedact()` does 
 `useSyncExternalStore` a _server_ render answers with the initial state, so a selected value would freeze
 the shipped default in a test render.
 
+`reducedMotion` (default **off**) is the fourth switch on that route and the only one whose work happens on
+the host: `amulet.reducedMotion` is read by `streamSettings()`, applied by `ChatBridge` to its
+[`StreamPacer`](src/webview/stream-pacer.ts), and mirrored in `webviewConfig()` purely so the menu can show the
+checkmark (held in [`webview/src/stores/reduced-motion-store.ts`](webview/src/stores/reduced-motion-store.ts)).
+The runtime streams every token either way, so the key is neither a restart key nor part of `PiConfig` — see the
+section below on why folding the stream is safe at all.
+
 `thinkingLevel` defaults to **`disabled`**, which means the host sends _nothing_ to the runtime — pi's own settings, the resumed session and the model default decide (`applySettings` in [`src/runtime/pi-runtime.ts`](src/runtime/pi-runtime.ts)). The chat-box picker never invents its menu: it renders the levels the runtime reports from `get_available_thinking_levels` (derived from the model's `thinkingLevelMap`), pushed as the `thinkingLevels` `HostMessage` and refreshed on model change and on open. `get_state.thinkingLevel` is optional — when the runtime has no level applied, the picker shows **Disabled**. See "Thinking level contract" in [`docs/pintra-fork.md`](docs/pintra-fork.md).
 
-The five `notify*` keys are the only settings **not** part of `PiConfig`: they describe the UI, not the child
-process, so `notifySettings()` in [`src/config.ts`](src/config.ts) reads them at delivery time and a change
-takes effect on the next alert (never a restart). `notifySticky` and `notifyClickToFocus` are the two of them
-the webview **does** see: the menu has to show the switches, so `webviewConfig()` mirrors them (from
+None of the `notify*` keys, and not `reducedMotion` either, is part of `PiConfig`: they describe the UI and the
+bridge rather than the child process, so `notifySettings()` and `streamSettings()` in [`src/config.ts`](src/config.ts)
+read them when the event is delivered — a change takes effect on the next alert or the next chunk, never a
+restart. `notifySticky` and `notifyClickToFocus` are the two notify switches the webview **does** see: the menu has to show the switches, so `webviewConfig()` mirrors them (from
 `notifySettings()`, not from `readConfig()` — they stay out of `PiConfig` for the same reason as their three
 siblings) and the menu writes them back with the `setNotifySticky` / `setNotifyClickToFocus` `WebviewMessage`.
 Two alerts exist, and both are
@@ -328,6 +336,43 @@ touches nothing else. Read this before changing any of it:
   `startedAt` **widens** the next aim rather than narrowing it.
 - Verification: `pi-bridge/tool-stop.test.ts` (the aim against synthetic tables), `pi-bridge/process-tree.test.ts` (a **real** detached shell:
   group kill, grandchildren, exec'd command), and `scripts/stop-probe.mjs` for the whole chain against a live child.
+
+## A streamed reply is chunked only when asked
+
+`pi --mode rpc` emits one `message_update` per token, and `ChatBridge` forwards each one the moment it lands. That
+is the faithful reading of a stream, and it is also the whole cost of a long answer paid many times a second: one
+`postMessage`, one reducer pass over the message list, one render wave through the `useChatState()` subscribers, and
+— for the paragraph that just grew — a fresh `react-markdown` parse of **the entire block**, which the library does
+not cache (its sync `Markdown` rebuilds the processor on every call). **Reduced motion** (`amulet.reducedMotion`,
+menu: **Reduced motion**, default off) folds consecutive deltas of the same content slot together and hands them over
+on a `STREAM_PACE_MS` cadence instead. Read this before changing any of it:
+
+- **The pacer is the only thing that may move time, and it never reorders events.** A fragment is absorbed only by
+  the queue's *last* entry, and only when it is the same delta kind (`text_delta` / `thinking_delta` /
+  `toolcall_delta`) for the same `contentIndex`. A `*_start`/`*_end` therefore queues in place, and **every**
+  non-`message_update` event — `tool_execution_start`, `turn_end`, `agent_end` — flushes the queue first, so no
+  surface can ever see a delta land after the event that followed it on the wire.
+- **Per surface, not per runtime.** One child fans its events out to N bridges and each has its own pacer, because
+  what has to stay cheap is that webview's render. And **nothing is mutated**: the event object is shared by those
+  N bridges, so a merged fragment is always a new object.
+- **Folding is legal because the reducer only appends.** `applyAssistantEvent` concatenates a `*_delta` into its
+  block, so one folded delta and the tokens it replaced build the same blocks. That is a test, not an argument:
+  `src/webview/stream-pacer.test.ts` replays a wire-shaped stream through the webview reducer twice — raw and paced
+  — and compares the transcripts.
+- **`message_end` is still the runtime's own payload**, so a folded delta that was somehow wrong is corrected the
+  moment the message ends. `usage` on a merged event is the **newest** one, or the context meter would read a chunk
+  behind.
+- **The switch is live mid-answer.** `postConfig()` is what paces the stream (`setEnabled`) and it runs before the
+  config echo, so the menu, the Settings editor (`REDUCED_MOTION_KEY` in the watcher) and a reconnect all apply to
+  the next chunk; turning it off flushes what was queued rather than stranding a tail. `detach()` *drops* the queue
+  instead — a surface that is re-binding gets `pushSnapshot()`, not a stale fragment of the old child.
+- **What it does not do:** it does not touch the run, the session file, or anything sent back to pi. The only
+  observable cost is that a token can appear up to one interval late, and that `firstTokenAt` — and with it the
+  throughput readout's time-to-first-token — is stamped at the first *chunk*.
+- The webview half of the same path is **always on**, not a mode: `MdRender` parses through `useDeferredValue` with
+  a memoised element, so the parse runs in an interruptible pass and a paragraph whose text did not change is never
+  re-parsed; `ExecBlock` is memoised so a card whose call is not the one typing stays unrendered; and the transcript
+  follows the bottom once per frame instead of once per delta.
 
 ## Prompt templates and skills are inserted, never sent as commands
 

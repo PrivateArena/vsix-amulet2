@@ -933,6 +933,8 @@ export type WebviewMessage =
   | { type: 'setPrivacyMode'; enabled: boolean }
   /** Persist the "Line breaks" preference (`amulet.preserveLineBreaks`). */
   | { type: 'setPreserveLineBreaks'; enabled: boolean }
+  /** Persist the "Reduced motion" preference (`amulet.reducedMotion`). */
+  | { type: 'setReducedMotion'; enabled: boolean }
   /** Persist the "Sticky approval alerts" preference (`amulet.notifySticky`). */
   | { type: 'setNotifySticky'; enabled: boolean }
   /** Persist the "Click to focus" preference (`amulet.notifyClickToFocus`). */
@@ -1262,6 +1264,13 @@ export interface WebviewConfig {
    * anything sent back into the run keep the author's own bytes.
    */
   preserveLineBreaks: boolean;
+  /**
+   * Whether the host folds streamed deltas into chunks for this surface (menu: **Reduced motion**,
+   * `amulet.reducedMotion`). Unlike the other rendering switches it acts host-side — the bridge is what
+   * paces the stream — so this echo is the menu's checkmark, and the same value is what the bridge
+   * re-reads on the way out.
+   */
+  reducedMotion: boolean;
   /**
    * Whether the banner for an unanswered dialog is a `critical` one that the notification centre keeps
    * until it is dismissed (menu: **Sticky approval alerts**, `amulet.notifySticky`). Off — the default —

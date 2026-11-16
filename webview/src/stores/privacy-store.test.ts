@@ -9,6 +9,7 @@ import {
 const config = (over: Partial<WebviewConfig> = {}): WebviewConfig => ({
   expandThinking: false,
   preserveLineBreaks: true,
+  reducedMotion: false,
   notifySticky: false,
   notifyClickToFocus: true,
   privacyMode: true,

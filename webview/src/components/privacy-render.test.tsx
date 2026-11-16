@@ -22,6 +22,7 @@ const SHOWN = '/media/user/home/PortableApp';
 const config = (privacyMode: boolean) => ({
   expandThinking: false,
   preserveLineBreaks: true,
+  reducedMotion: false,
   notifySticky: false,
   notifyClickToFocus: true,
   privacyMode,

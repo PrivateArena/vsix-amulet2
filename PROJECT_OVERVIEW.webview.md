@@ -23,7 +23,9 @@ webview/src/contexts/           chat-context.tsx (useReducer(state, dispatch) + 
 webview/src/screens/            splash-screen.tsx (no runtime/auth), session-screen.tsx
 webview/src/stores/             zustand: composer-store, confirm-store, provider-login-store,
                                 session-info-store, compaction-history-store, turn-nav-store,
-                                context-surgery-store (in-flight op, live undo-revert offer)
+                                context-surgery-store (in-flight op, live undo-revert offer), line-breaks-store +
+                                privacy-store + notify-store + reduced-motion-store (the rendering switches the
+                                host echoes back on `config`)
 webview/src/components/entry-list/    message-list.tsx (scroll + stick-to-bottom host)
 webview/src/components/entry-view/    agent-timeline.tsx (blocks -> rows), message-view.tsx
 webview/src/components/exec-view/     tool-call-view.tsx, tool-display.ts, stream-tail.ts, card-menu.ts, subagent-calls/,

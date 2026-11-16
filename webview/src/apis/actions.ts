@@ -84,6 +84,8 @@ export const actions = {
     postMessage({ type: 'setPrivacyMode', enabled }),
   setPreserveLineBreaks: (enabled: boolean) =>
     postMessage({ type: 'setPreserveLineBreaks', enabled }),
+  setReducedMotion: (enabled: boolean) =>
+    postMessage({ type: 'setReducedMotion', enabled }),
   setNotifySticky: (enabled: boolean) =>
     postMessage({ type: 'setNotifySticky', enabled }),
   setNotifyClickToFocus: (enabled: boolean) =>

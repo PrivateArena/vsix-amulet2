@@ -103,7 +103,23 @@ export function EntryList({
       syncActiveTurn();
     });
   }, [syncActiveTurn]);
+  /**
+   * Hugging the bottom is per streamed delta: a new token has to be followed. One follow per frame
+   * though, not one per delta — `scrollHeight` is a layout read and `scrollTop` a layout write, so a
+   * write on the token path forces the whole transcript to lay out again. The callback re-reads
+   * `stickToBottom` rather than capturing it, so a scroll-up that lands in between is honoured.
+   */
+  const followFrame = useRef(0);
+  const followToBottom = useCallback(() => {
+    if (followFrame.current) return;
+    followFrame.current = requestAnimationFrame(() => {
+      followFrame.current = 0;
+      const el = listRef.current;
+      if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+    });
+  }, []);
   useEffect(() => () => cancelAnimationFrame(syncFrame.current), []);
+  useEffect(() => () => cancelAnimationFrame(followFrame.current), []);
 
   /** The composer floats over the log and keeps its own tail clear of it. */
   const attachLog = useCallback((el: HTMLDivElement | null) => {
@@ -121,19 +137,20 @@ export function EntryList({
     [],
   );
 
-  // Hugging the bottom is per streamed delta: a new token has to be followed.
+  // Streaming is also what pushes an earlier turn out from under the anchor
+  // edge, so the navigator gets one coalesced look per frame, not per delta.
   useEffect(() => {
-    const el = listRef.current;
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-    // ...and streaming is also what pushes an earlier turn out from under the anchor
-    // edge, so the navigator gets one coalesced look per frame, not per delta.
+    followToBottom();
     requestActiveTurnSync();
-  }, [messages, tools, streaming, compaction, requestActiveTurnSync]);
+  }, [messages, tools, streaming, compaction, followToBottom, requestActiveTurnSync]);
 
   // A changed anchor list is a structural fact, so it is resolved immediately rather
-  // than on the next frame.
+  // than on the next frame — and that includes the follow: loading a session must not paint one
+  // frame of its head before jumping to its tail.
   useEffect(() => {
     syncActiveTurn();
+    const el = listRef.current;
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [anchors, syncActiveTurn]);
 
   // Publish the scroll handle the topbar navigator jumps through.

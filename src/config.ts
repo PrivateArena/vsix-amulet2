@@ -122,6 +122,27 @@ export function notifySettings(): NotifySettings {
 }
 
 /**
+ * How the bridge forwards a running stream. Separate from {@link PiConfig} for the same reason as
+ * {@link NotifySettings}: none of it is about the child process, which streams every token either way,
+ * so it is read when events are forwarded rather than when the child is built.
+ */
+export interface StreamSettings {
+  /**
+   * Menu: **Reduced motion**. Fold consecutive deltas of one reply together and hand them to the
+   * webview on a fixed cadence, instead of forwarding every token as a message of its own. The events
+   * stay the same ones, in the same order, and `message_end` is still the runtime's own payload.
+   */
+  reducedMotion: boolean;
+}
+
+export function streamSettings(): StreamSettings {
+  // No {@link LEGACY_SECTION} twin: this key shipped after the rename, so the declared default in the
+  // manifest is its only other source.
+  const cfg = vscode.workspace.getConfiguration(SECTION);
+  return { reducedMotion: cfg.get<boolean>('reducedMotion', false) };
+}
+
+/**
  * The user name the built-in privacy rule censors. `os.userInfo()` is the only portable source (a
  * Windows service can have neither `USER` nor `LOGNAME`), and a machine that cannot say who is
  * running gets no built-in rule rather than a crash at activation.
@@ -176,6 +197,7 @@ export function webviewConfig(): WebviewConfig {
     expandThinking,
     privacyMode,
     preserveLineBreaks,
+    reducedMotion: streamSettings().reducedMotion,
     // The one notify switch the webview renders, and only to show its own menu checkmark: the tier of an
     // alert is decided host-side from {@link notifySettings} at delivery time, so this echo is a mirror of
     // a value the child process has no opinion about — which is why it stays out of `readConfig()`.
@@ -197,6 +219,12 @@ export const PRIVACY_KEYS = [
 
 /** Config key behind the "Line breaks" toggle. */
 export const PRESERVE_LINE_BREAKS_KEY = `${SECTION}.preserveLineBreaks`;
+
+/**
+ * Config key behind the "Reduced motion" toggle. Not a restart key: the child process streams every
+ * token either way, and only the pacing of the forward to the webview changes.
+ */
+export const REDUCED_MOTION_KEY = `${SECTION}.reducedMotion`;
 
 /** Config key behind the "approval waiting" status-bar entry (see `src/notify`). */
 export const NOTIFY_APPROVAL_KEY = `${SECTION}.notifyOnApproval`;
@@ -229,6 +257,17 @@ export async function setPreserveLineBreaks(enabled: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration(SECTION)
     .update('preserveLineBreaks', enabled, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * Persist {@link StreamSettings.reducedMotion} so the preference survives reloads. Same route as the
+ * other rendering toggles (`amulet.*`, never the child process), and the echo back is what repaces a
+ * stream that is already running.
+ */
+export async function setReducedMotion(enabled: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update('reducedMotion', enabled, vscode.ConfigurationTarget.Global);
 }
 
 /**

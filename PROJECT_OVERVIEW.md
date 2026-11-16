@@ -38,8 +38,9 @@ src/extension.ts          activate(): channel, SessionManager, surfaces, command
 src/provider.ts           PiSidebarProvider — sidebar WebviewView surface
 src/editor/panel-manager.ts  EditorChatManager — editor-tab chat surface
 src/webview/              chat-bridge.ts (host<->webview), webview-surface.ts, ui-surfaces.ts,
-                          ui-request-routing.ts, extension-ui.ts, html.ts, tool-image.ts,
-                          project-files.ts + project-paths.ts (`@`-mention file listing)
+                          ui-request-routing.ts, extension-ui.ts, html.ts, tool-image.ts, stream-pacer.ts
+                          (Reduced motion: folded deltas, per surface), project-files.ts + project-paths.ts
+                          (`@`-mention file listing)
 src/runtime/              bootstrap.ts (binary/env/args), pi-runtime.ts (lifecycle), pi-updater.ts
 src/rpc/                  jsonl.ts, rpc-client.ts (request/response + events), rpc-process.ts (spawn/stdio)
 src/session/              session-manager.ts (runtime pool), session-store.ts (session files on disk)
@@ -250,6 +251,7 @@ webview (React)              host (Node)                                pi --mod
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Change a wire/host/webview message or event shape                  | `shared/protocol.ts`, `src/webview/chat-bridge.ts`, `webview/src/store.ts`; capture real events with `scripts/rpc-probe.mjs` and replay in `webview/src/store.test.ts`                                                                                                                                                            |
 | Fix streaming/thinking/tool rendering                              | `shared/blocks.ts`, `webview/src/store.ts`, `webview/src/components/entry-view/agent-timeline.tsx`, `exec-view/tool-call-view.tsx`                                                                                                                                                                                                |
+| Change how a streamed reply is paced or painted                    | `src/webview/stream-pacer.ts` (Reduced motion), `src/webview/chat-bridge.ts` (`onRuntimeEvent`, `postConfig`), `webview/src/components/md-render.tsx`, `webview/src/store.ts` (`message_update`), `entry-list/message-list.tsx`                                                                                                   |
 | Change how/whether `pi` is spawned (binary, env, args, version)    | `src/runtime/bootstrap.ts`, `src/config.ts`, `src/runtime/pi-runtime.ts` (`doStart`, `applySettings`, `handleExit`)                                                                                                                                                                                                               |
 | Add a chat-box action / toolbar button                             | `webview/src/apis/actions.ts`, `shared/protocol.ts` (`WebviewMessage`), `src/webview/chat-bridge.ts` (`handleMessage`)                                                                                                                                                                                                            |
 | Work on sessions (list, switch, rename, delete, fork, export)      | `src/session/session-store.ts`, `src/webview/chat-bridge.ts` (session ops), `src/runtime/pi-runtime.ts`                                                                                                                                                                                                                           |

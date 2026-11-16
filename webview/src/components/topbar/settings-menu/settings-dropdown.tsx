@@ -14,12 +14,14 @@ import {
   LuRefreshCw,
   LuSettings,
   LuSettings2,
+  LuWaves,
   LuWrapText,
 } from 'react-icons/lu';
 import { actions } from '../../../apis/actions';
 import { useChatState } from '../../../contexts/chat-context';
 import { usePrivacyMode, usePrivacyStore } from '../../../stores/privacy-store';
 import { useLineBreaks } from '../../../stores/line-breaks-store';
+import { useReducedMotion } from '../../../stores/reduced-motion-store';
 import {
   useNotifyClickToFocus,
   useNotifySticky,
@@ -35,6 +37,8 @@ export function SettingsMenu() {
   const privacyMode = usePrivacyMode();
   /** `amulet.preserveLineBreaks` — how the author's newlines are painted. */
   const lineBreaks = useLineBreaks();
+  /** `amulet.reducedMotion` — whether the host chunks the streamed reply instead of every token. */
+  const reducedMotion = useReducedMotion();
   /** `amulet.notifySticky` — whether a parked dialog's system banner is kept until clicked. */
   const notifySticky = useNotifySticky();
   /** `amulet.notifyClickToFocus` — whether a banner can raise this window when clicked. */
@@ -84,6 +88,15 @@ export function SettingsMenu() {
       onSelect: () => actions.setPrivacyMode(!privacyMode),
       kind: 'toggle',
       checked: privacyMode,
+    },
+    {
+      // Chunks instead of tokens. The one entry here that changes how the host forwards a running
+      // stream rather than how a pixel is painted — and still never the child process or the session.
+      label: 'Reduced motion',
+      icon: LuWaves,
+      onSelect: () => actions.setReducedMotion(!reducedMotion),
+      kind: 'toggle',
+      checked: reducedMotion,
     },
     {
       label: 'Uncollapse thinking',

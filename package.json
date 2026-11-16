@@ -2,7 +2,7 @@
   "name": "amulet",
   "displayName": "Amulet — Pi Agent for VS Code",
   "description": "AI coding agent for VS Code, powered by the pi runtime.",
-  "version": "1.0.57",
+  "version": "1.0.59",
   "publisher": "gunir",
   "private": true,
   "icon": "media/icon.png",
@@ -230,6 +230,12 @@
           "default": true,
           "order": 7,
           "markdownDescription": "Render a single newline in a message as a line break, the way the composer wrote it, instead of collapsing it into a space the way plain Markdown does. Off restores the strict rule, where only a blank line (or two trailing spaces) starts a new line — which is what a model that hard-wraps its prose wants. Toggle this from the chat menu: **Line breaks**."
+        },
+        "amulet.reducedMotion": {
+          "type": "boolean",
+          "default": false,
+          "order": 17,
+          "markdownDescription": "Paint a streaming reply in chunks instead of token by token. Off (the default) every token the runtime reads is forwarded the moment it arrives, which is the most faithful view of the stream and also the most expensive one: each token is a message across the bridge, a reducer pass over the conversation, and a Markdown re-parse of the paragraph that just grew. On, consecutive deltas are folded together and handed over about eight times a second, so the text lands in small blocks and a long answer costs a fraction of the CPU. Nothing else changes — same events, same text, same session file, and the final payload is the runtime's own; flipping the switch mid-answer applies to the next chunk, and no restart is involved. Toggle this from the chat menu: **Reduced motion**."
         },
         "amulet.privacyMode": {
           "type": "boolean",

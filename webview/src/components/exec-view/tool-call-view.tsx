@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   LuBot,
   LuCheck,
@@ -231,7 +231,15 @@ function CardMenu({ tool }: { tool: ToolExec }) {
   );
 }
 
-export function ExecBlock({
+/**
+ * Memoised on the default shallow compare, which is exactly what the reducer feeds it: a streamed
+ * delta rebuilds one content block and leaves every other prop referentially equal, so a card whose
+ * call is not the one typing keeps its arguments, output and nested rows unrendered instead of
+ * rebuilding them once per token. The reads that *do* move with the run live in {@link CardMenu}.
+ */
+export const ExecBlock = memo(ExecBlockView);
+
+function ExecBlockView({
   tool,
   name,
   args,
