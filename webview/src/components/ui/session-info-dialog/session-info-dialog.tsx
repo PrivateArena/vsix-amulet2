@@ -89,6 +89,7 @@ export function SessionInfoDialog() {
               variant="ghost"
               size="sm"
               icon={LuRefreshCw}
+              id="session-info-refresh"
               label="Refresh"
               tooltipSide="bottom"
               onClick={refresh}
@@ -97,6 +98,7 @@ export function SessionInfoDialog() {
               variant="ghost"
               size="sm"
               icon={copied ? LuCheck : LuCopy}
+              id="session-info-copy"
               label={copied ? 'Copied' : 'Copy all'}
               tooltipSide="bottom"
               disabled={!info.text}
@@ -106,6 +108,7 @@ export function SessionInfoDialog() {
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="session-info-close"
               label="Close"
               tooltipSide="bottom"
               onClick={close}

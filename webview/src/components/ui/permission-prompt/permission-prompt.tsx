@@ -122,7 +122,11 @@ function PromptDialog({ request, queued }: PromptDialogProps) {
             {queueNote}
           </span>
           {request.method === 'select' && (
-            <Button variant="ghost" size="sm" onClick={cancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              id="permission-select-deny"
+              onClick={cancel}>
               Deny
             </Button>
           )}
@@ -228,8 +232,10 @@ function InputBody({
     <div className="pp-form">
       <input
         className="pp-input"
+        id="permission-answer-field"
         type="text"
         value={value}
+        aria-label="Your answer"
         placeholder={dialogDraft(request) || 'Type your answer…'}
         autoFocus
         onChange={(e) => setValue(e.target.value)}
@@ -241,10 +247,13 @@ function InputBody({
         }}
       />
       <div className="pp-form-actions">
-        <Button variant="ghost" onClick={() => onAnswer({ kind: 'cancelled' })}>
+        <Button
+          variant="ghost"
+          id="permission-cancel"
+          onClick={() => onAnswer({ kind: 'cancelled' })}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={submit}>
+        <Button variant="primary" id="permission-send" onClick={submit}>
           Send
         </Button>
       </div>
@@ -277,6 +286,8 @@ function EditorBody({
     <div className="pp-form">
       <textarea
         className="pp-report"
+        id="permission-editor-field"
+        aria-label="Report text"
         value={value}
         spellCheck={false}
         rows={16}
@@ -293,14 +304,18 @@ function EditorBody({
         <Button
           variant="ghost"
           className="pp-action-lead"
+          id="permission-copy"
           disabled={!value}
           onClick={() => copy(value)}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
-        <Button variant="ghost" onClick={() => onAnswer({ kind: 'cancelled' })}>
+        <Button
+          variant="ghost"
+          id="permission-close"
+          onClick={() => onAnswer({ kind: 'cancelled' })}>
           Close
         </Button>
-        <Button variant="primary" onClick={submit}>
+        <Button variant="primary" id="permission-editor-send" onClick={submit}>
           Send
         </Button>
       </div>
@@ -322,11 +337,13 @@ function ConfirmBody({
       <div className="pp-form-actions">
         <Button
           variant="ghost"
+          id="permission-deny"
           onClick={() => onAnswer({ kind: 'confirmed', confirmed: false })}>
           No
         </Button>
         <Button
           variant="primary"
+          id="permission-allow"
           autoFocus
           onClick={() => onAnswer({ kind: 'confirmed', confirmed: true })}>
           Yes

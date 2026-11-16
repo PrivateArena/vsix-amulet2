@@ -77,6 +77,7 @@ export function PackagesDialog() {
               variant="ghost"
               size="sm"
               icon={LuRefreshCw}
+              id="packages-refresh"
               label="Re-read the settings files"
               tooltipSide="bottom"
               disabled={!!busy}
@@ -86,6 +87,7 @@ export function PackagesDialog() {
               variant="ghost"
               size="sm"
               icon={LuPlus}
+              id="packages-install-toggle"
               label="Install a package"
               tooltip={
                 tab === 'installed'
@@ -100,6 +102,7 @@ export function PackagesDialog() {
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="packages-close"
               label="Close"
               tooltipSide="bottom"
               onClick={close}
@@ -156,7 +159,11 @@ export function PackagesDialog() {
                 {busy.op === 'install' ? 'Installing ' : 'Removing '}
                 <code>{busy.source}</code>…
               </span>
-              <Button variant="secondary" size="sm" onClick={cancel}>
+              <Button
+                variant="secondary"
+                size="sm"
+                id="packages-cancel"
+                onClick={cancel}>
                 Cancel
               </Button>
             </div>
@@ -182,6 +189,7 @@ export function PackagesDialog() {
               <Button
                 variant="secondary"
                 size="sm"
+                id="packages-reload"
                 disabled={!ready || !!busy || streaming}
                 title={
                   streaming

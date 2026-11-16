@@ -103,7 +103,9 @@ export function StopActions({
               a broken card, and `aria-disabled` (not `disabled`) is what lets its own tooltip report "Stopping…". */}
           <button
             type="button"
-            className={`exec-action exec-action-stop${stopping ? ' is-stopped' : ''}`}
+            className={`exec-action exec-action-stop ctl-stop-command${
+              stopping ? ' is-stopped' : ''
+            }`}
             aria-label={
               stopping ? STOP_LABELS.commandPending : STOP_LABELS.command
             }
@@ -120,7 +122,9 @@ export function StopActions({
           align="end">
           <button
             type="button"
-            className={`exec-action exec-action-stop${stopping ? ' is-stopped' : ''}`}
+            className={`exec-action exec-action-stop ctl-stop-with-reason${
+              stopping ? ' is-stopped' : ''
+            }`}
             aria-label={STOP_LABELS.commandWithReason}
             aria-disabled={!pressable || undefined}
             onClick={() => {
@@ -155,7 +159,9 @@ export function StopActions({
           align="end">
           <button
             type="button"
-            className={`exec-action exec-action-stop${aborting ? ' is-stopped' : ''}`}
+            className={`exec-action exec-action-stop ctl-abort-turn${
+              aborting ? ' is-stopped' : ''
+            }`}
             aria-label={aborting ? STOP_LABELS.turnPending : STOP_LABELS.turn}
             aria-disabled={aborting || undefined}
             onClick={() => {

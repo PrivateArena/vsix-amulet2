@@ -3,6 +3,8 @@ import { CtxMenu, ContextMenuItem } from './context-menu';
 
 export interface UseContextMenuOptions {
   minWidth?: number;
+  /** Id of the rendered menu, and the namespace of its item ids — see {@link CtxMenu}. */
+  id?: string;
   /** Runs when the menu dismisses, however it was dismissed. */
   onClose?: () => void;
 }
@@ -47,7 +49,7 @@ export function useCtxMenu(
     y: number;
     items: ContextMenuItem[];
   } | null>(null);
-  const { minWidth, onClose } = options;
+  const { minWidth, id, onClose } = options;
   // Refs, so `close` and `open` keep one identity across renders but still see the
   // latest callback and the live open state.
   const notifyClose = useRef(onClose);
@@ -78,6 +80,7 @@ export function useCtxMenu(
       x={anchor.x}
       y={anchor.y}
       items={anchor.items}
+      id={id}
       onClose={close}
       minWidth={minWidth}
     />

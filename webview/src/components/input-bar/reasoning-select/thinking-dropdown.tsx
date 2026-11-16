@@ -84,6 +84,7 @@ export function ReasoningSelect() {
         <Button
           ref={ref}
           variant="trigger"
+          id="thinking-level"
           aria-label={currentLabel}
           aria-haspopup="menu"
           startIcon={() =>

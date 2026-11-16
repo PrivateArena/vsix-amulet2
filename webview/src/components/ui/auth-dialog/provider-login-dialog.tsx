@@ -212,7 +212,9 @@ export function AuthDialog() {
           <button
             type="button"
             className="auth-close"
+            id="provider-login-close"
             aria-label="Close"
+            title="Close"
             onClick={close}>
             <LuX size={16} />
           </button>
@@ -236,6 +238,7 @@ export function AuthDialog() {
               <button
                 type="button"
                 className="auth-option"
+                id="provider-login-use-subscription"
                 onClick={() => chooseMethod('subscription')}>
                 <span className="auth-option-icon">
                   <LuLock size={16} />
@@ -250,6 +253,7 @@ export function AuthDialog() {
               <button
                 type="button"
                 className="auth-option"
+                id="provider-login-use-api-key"
                 onClick={() => chooseMethod('apiKey')}>
                 <span className="auth-option-icon">
                   <LuKeyRound size={16} />
@@ -270,10 +274,16 @@ export function AuthDialog() {
                 {API_KEY_PROVIDERS.map((p) => renderRow(p, chooseListProvider))}
               </div>
               <div className="auth-footer">
-                <Button variant="secondary" onClick={() => setStep('method')}>
+                <Button
+                  variant="secondary"
+                  id="provider-login-provider-switch-method"
+                  onClick={() => setStep('method')}>
                   Switch method
                 </Button>
-                <Button variant="ghost" onClick={close}>
+                <Button
+                  variant="ghost"
+                  id="provider-login-provider-cancel"
+                  onClick={close}>
                   Cancel
                 </Button>
               </div>
@@ -288,10 +298,16 @@ export function AuthDialog() {
                 )}
               </div>
               <div className="auth-footer">
-                <Button variant="secondary" onClick={() => setStep('method')}>
+                <Button
+                  variant="secondary"
+                  id="provider-login-subscription-switch-method"
+                  onClick={() => setStep('method')}>
                   Switch method
                 </Button>
-                <Button variant="ghost" onClick={close}>
+                <Button
+                  variant="ghost"
+                  id="provider-login-subscription-cancel"
+                  onClick={close}>
                   Cancel
                 </Button>
               </div>
@@ -302,6 +318,7 @@ export function AuthDialog() {
             <>
               <input
                 className="auth-input"
+                id="provider-login-api-key-field"
                 type="password"
                 autoFocus
                 autoComplete="off"
@@ -316,12 +333,14 @@ export function AuthDialog() {
               <div className="auth-actions">
                 <Button
                   variant="primary"
+                  id="provider-login-save-key"
                   disabled={!apiKey.trim()}
                   onClick={submitApiKey}>
                   Save key
                 </Button>
                 <Button
                   variant="ghost"
+                  id="provider-login-api-key-cancel"
                   onClick={() => setStep('provider-list')}>
                   Cancel
                 </Button>
@@ -335,6 +354,7 @@ export function AuthDialog() {
                 <button
                   type="button"
                   className="auth-row"
+                  id="provider-login-transport-browser"
                   onClick={() => submitTransport('browser')}>
                   <span className="auth-row-label">
                     Browser login (default)
@@ -343,6 +363,7 @@ export function AuthDialog() {
                 <button
                   type="button"
                   className="auth-row"
+                  id="provider-login-transport-device"
                   onClick={() => submitTransport('device')}>
                   <span className="auth-row-label">
                     Device code login (headless)
@@ -352,6 +373,7 @@ export function AuthDialog() {
               <div className="auth-footer">
                 <Button
                   variant="ghost"
+                  id="provider-login-transport-cancel"
                   onClick={() => setStep('subscription-list')}>
                   Cancel
                 </Button>
@@ -364,7 +386,9 @@ export function AuthDialog() {
               <div className="auth-inline-form">
                 <input
                   className="auth-input"
+                  id="provider-login-ghe-host"
                   type="text"
+                  aria-label="GitHub Enterprise server host"
                   autoFocus
                   autoComplete="off"
                   spellCheck={false}
@@ -376,18 +400,25 @@ export function AuthDialog() {
                   }}
                 />
                 <div className="auth-actions">
-                  <Button variant="primary" onClick={submitGhe}>
+                  <Button
+                    variant="primary"
+                    id="provider-login-ghe-continue"
+                    onClick={submitGhe}>
                     Continue
                   </Button>
                   <Button
                     variant="ghost"
+                    id="provider-login-ghe-cancel"
                     onClick={() => setStep('subscription-list')}>
                     Cancel
                   </Button>
                 </div>
               </div>
               <div className="auth-footer">
-                <Button variant="ghost" onClick={close}>
+                <Button
+                  variant="ghost"
+                  id="provider-login-ghe-close"
+                  onClick={close}>
                   Cancel
                 </Button>
               </div>
@@ -412,7 +443,11 @@ export function AuthDialog() {
                 </span>
               </div>
               <div className="auth-footer">
-                <Button variant="primary" autoFocus onClick={close}>
+                <Button
+                  variant="primary"
+                  id="provider-login-done"
+                  autoFocus
+                  onClick={close}>
                   Done
                 </Button>
               </div>
@@ -423,10 +458,14 @@ export function AuthDialog() {
             <div className="auth-footer">
               <Button
                 variant="secondary"
+                id="provider-login-try-again"
                 onClick={() => setStep('api-key-entry')}>
                 Try again
               </Button>
-              <Button variant="ghost" onClick={close}>
+              <Button
+                variant="ghost"
+                id="provider-login-error-close"
+                onClick={close}>
                 Close
               </Button>
             </div>

@@ -244,6 +244,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
       <input
         ref={inputRef}
         className="chat-find-input"
+        id="chat-find-input"
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -265,6 +266,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
       <div className="chat-find-actions">
         <IconButton
           icon={LuCaseSensitive}
+          id="chat-find-case"
           label="Match case (Alt+C)"
           tooltip="Match case (Alt+C)"
           size="sm"
@@ -274,6 +276,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
         />
         <IconButton
           icon={LuRegex}
+          id="chat-find-regex"
           label="Use regular expression (Alt+R)"
           tooltip="Use regular expression (Alt+R)"
           size="sm"
@@ -283,6 +286,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
         />
         <IconButton
           icon={LuChevronUp}
+          id="chat-find-previous"
           label="Previous match (Shift+Enter)"
           tooltip="Previous match (Shift+Enter)"
           size="sm"
@@ -291,6 +295,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
         />
         <IconButton
           icon={LuChevronDown}
+          id="chat-find-next"
           label="Next match (Enter)"
           tooltip="Next match (Enter)"
           size="sm"
@@ -299,6 +304,7 @@ export function ChatFind({ containerRef, onReveal }: ChatFindProps) {
         />
         <IconButton
           icon={LuX}
+          id="chat-find-close"
           label="Close (Escape)"
           tooltip="Close (Escape)"
           size="sm"

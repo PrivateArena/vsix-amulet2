@@ -478,6 +478,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
           className={`input-wrap${hasAttachments ? ' has-attachments' : ''}`}>
           <textarea
             ref={setRefs}
+            id="composer-input"
             className="input-field"
             placeholder={
               !ready
@@ -535,6 +536,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
               size="sm"
               variant="ghost"
               icon={LuPaperclip}
+              id="attach-files"
               label="Attach files"
               tooltip="Attach files"
               onClick={() => actions.pickFiles()}
@@ -557,6 +559,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                 size="sm"
                 variant="error"
                 icon={LuSquare}
+                id="stop"
                 label="Stop"
                 tooltip="Stop (Esc)"
                 onClick={() => actions.abort()}
@@ -566,6 +569,7 @@ export const InputBar = forwardRef<HTMLTextAreaElement, {}>(
                 size="sm"
                 variant="contained"
                 icon={LuArrowUp}
+                id="send"
                 label="Send (Enter)"
                 disabled={!ready || (!input.trim() && !hasAttachments)}
                 onClick={() => submit()}

@@ -205,6 +205,7 @@ function CardMenu({ tool }: { tool: ToolExec }) {
           x={anchor.x}
           y={anchor.y}
           items={menu}
+          id="card-menu"
           minWidth={216}
           onClose={() => setAnchor(null)}
         />
@@ -420,7 +421,7 @@ function ExecBlockView({
                 align="end">
                 <button
                   type="button"
-                  className={`exec-action${copied ? ' is-copied' : ''}`}
+                  className={`exec-action ctl-card-copy${copied ? ' is-copied' : ''}`}
                   aria-label={copied ? 'Copied' : `Copy the ${copyHint}`}
                   onClick={() => copy(copyText)}>
                   {copied ? <LuCheck aria-hidden /> : <LuCopy aria-hidden />}

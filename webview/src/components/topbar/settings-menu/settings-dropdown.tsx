@@ -84,6 +84,8 @@ export function SettingsMenu() {
       label: badRules
         ? `Privacy mode (${badRules} rule${badRules > 1 ? 's' : ''} unusable)`
         : 'Privacy mode',
+      // The label changes shape, so the id must not be derived from it.
+      id: 'privacy-mode',
       icon: LuEyeOff,
       onSelect: () => actions.setPrivacyMode(!privacyMode),
       kind: 'toggle',
@@ -153,5 +155,12 @@ export function SettingsMenu() {
     },
   ];
 
-  return <Menu items={items} triggerIcon={LuSettings2} />;
+  return (
+    <Menu
+      items={items}
+      triggerIcon={LuSettings2}
+      id="preferences-menu"
+      triggerLabel="Preferences"
+    />
+  );
 }

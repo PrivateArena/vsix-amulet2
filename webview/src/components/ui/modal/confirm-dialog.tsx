@@ -24,11 +24,15 @@ export function Modal() {
           <div className="modal-message">{options.message}</div>
         )}
         <div className="modal-actions">
-          <Button variant="ghost" onClick={() => respond(false)}>
+          <Button
+            variant="ghost"
+            id="modal-cancel"
+            onClick={() => respond(false)}>
             {options.cancelLabel ?? 'Cancel'}
           </Button>
           <Button
             variant={options.confirmVariant ?? 'primary'}
+            id="modal-confirm"
             autoFocus
             onClick={() => respond(true)}>
             {options.confirmLabel ?? 'Confirm'}

@@ -81,6 +81,7 @@ export function CompactionDialog() {
               variant="ghost"
               size="sm"
               icon={copied ? LuCheck : LuCopy}
+              id="compaction-copy"
               label={copied ? 'Copied' : 'Copy summary'}
               tooltipSide="bottom"
               disabled={!detail?.summary}
@@ -90,6 +91,7 @@ export function CompactionDialog() {
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="compaction-close"
               label="Close"
               tooltipSide="bottom"
               onClick={close}

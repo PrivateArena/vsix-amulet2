@@ -21,6 +21,7 @@ export function SessionList({
         type="button"
         role="option"
         aria-selected={false}
+        id="start-page"
         className="session-dd-start"
         onClick={() => {
           actions.newChat();

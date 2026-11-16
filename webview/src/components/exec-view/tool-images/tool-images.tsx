@@ -149,6 +149,7 @@ function ToolImage({ toolCallId, index, image, expanded }: ToolImageProps) {
             type="button"
             className="exec-image-zoom"
             aria-label={`Open ${label} in the editor`}
+            title={`Open ${label} in the editor`}
             onClick={() => actions.openToolImage(toolCallId, path)}>
             <LuMaximize2 aria-hidden />
           </button>

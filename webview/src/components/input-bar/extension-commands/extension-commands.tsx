@@ -36,8 +36,10 @@ export function ExtensionCommands() {
             ref={ref}
             variant="ghost"
             size="sm"
+            id="extension-commands"
             className="ext-commands-btn"
             icon={LuPuzzle}
+            title="Extension commands"
             aria-label={`Extension commands (${extension.length})`}
             {...triggerProps}
           />

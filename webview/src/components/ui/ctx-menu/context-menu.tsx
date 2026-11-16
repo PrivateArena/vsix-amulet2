@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { IconBaseProps } from 'react-icons';
+import { menuItemId } from '../../../utils/control-id';
 import './ctx-menu.scss';
 
 /** Root class of the menu, also the marker Escape checks for. */
@@ -15,6 +16,11 @@ export const CTX_MENU_CLASS = 'ctx-menu';
 
 export interface ContextMenuItem {
   label: string;
+  /**
+   * Stable part of this item's DOM id — only needed when `label` is not a fixed string,
+   * see {@link menuItemId}.
+   */
+  id?: string;
   hint?: string;
   icon?: ComponentType<IconBaseProps>;
   onSelect: () => void;
@@ -26,6 +32,12 @@ export interface ContextMenuProps {
   x: number;
   y: number;
   items: ContextMenuItem[];
+  /**
+   * Id of this menu, and the namespace of its item ids: item "Quote" of `id="transcript-menu"`
+   * is `#transcript-menu-quote`. Without it the items of a menu are unnamed to a selector — the
+   * same reason {@link Menu} takes one.
+   */
+  id?: string;
   onClose: () => void;
   minWidth?: number;
 }
@@ -34,6 +46,7 @@ export function CtxMenu({
   x,
   y,
   items,
+  id,
   onClose,
   minWidth = 200,
 }: ContextMenuProps) {
@@ -84,6 +97,7 @@ export function CtxMenu({
     <div
       ref={ref}
       className={CTX_MENU_CLASS}
+      id={id}
       role="menu"
       style={{ left: pos.left, top: pos.top, minWidth }}
       onContextMenu={(e) => e.preventDefault()}>
@@ -95,6 +109,7 @@ export function CtxMenu({
           <button
             type="button"
             role="menuitem"
+            id={id ? menuItemId(id, item) : undefined}
             className={`ctx-item${item.disabled ? ' disabled' : ''}`}
             disabled={item.disabled}
             onClick={() => {

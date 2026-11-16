@@ -223,6 +223,7 @@ export function useTranscriptMenu(
   );
 
   const ctx = useCtxMenu(buildItems, {
+    id: 'transcript-menu',
     minWidth: 216,
     onClose: () => {
       openUnit.current?.removeAttribute(OPEN_ATTRIBUTE);

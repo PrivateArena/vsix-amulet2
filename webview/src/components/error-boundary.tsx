@@ -47,6 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <button
           type="button"
           className="crash-retry"
+          id="crash-try-again"
           onClick={() => this.setState({ error: null, stack: '' })}>
           Try again
         </button>

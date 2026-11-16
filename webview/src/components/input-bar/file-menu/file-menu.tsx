@@ -73,6 +73,7 @@ export function FileMenu({
   return createPortal(
     <div
       className="file-menu"
+      id="file-menu"
       role="listbox"
       aria-label="Project files"
       title={cwd}

@@ -23,6 +23,7 @@ export function DiscoverPanel() {
       </p>
       <Button
         variant="secondary"
+        id="packages-open-gallery"
         startIcon={LuExternalLink}
         onClick={() => actions.openExternal(PI_PACKAGES_URL)}>
         Open {PI_PACKAGES_URL.replace(/^https:\/\//, '')}

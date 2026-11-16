@@ -49,6 +49,7 @@ export function CompactionHistory() {
             ref={ref}
             variant="ghost"
             size="sm"
+            id="compaction-history"
             className={`compact-history-btn${total ? ' has-history' : ''}`}
             icon={LuArchive}
             aria-label={

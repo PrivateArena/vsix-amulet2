@@ -99,11 +99,14 @@ export function PackageRow({
             <span>Remove files and declaration?</span>
             <button
               type="button"
-              className="pk-link danger"
+              className="pk-link danger pk-row-remove-confirm"
               onClick={() => onConfirmRemove(entry)}>
               Remove
             </button>
-            <button type="button" className="pk-link" onClick={onCancelRemove}>
+            <button
+              type="button"
+              className="pk-link pk-row-remove-cancel"
+              onClick={onCancelRemove}>
               Cancel
             </button>
           </span>
@@ -112,6 +115,7 @@ export function PackageRow({
             <IconButton
               variant="ghost"
               size="sm"
+              className="pk-row-remove"
               icon={LuTrash2}
               label={`Remove ${entry.name}`}
               tooltip={

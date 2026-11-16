@@ -171,6 +171,7 @@ export function Shell() {
           </span>
           <button
             className="ext-link"
+            id="undo-revert"
             onClick={() => {
               contextSurgery.setUndoRevert(null);
               actions.undoRevert();
@@ -179,6 +180,7 @@ export function Shell() {
           </button>
           <button
             className="ext-link"
+            id="undo-revert-keep"
             onClick={() => contextSurgery.setUndoRevert(null)}>
             Keep it this way
           </button>
@@ -191,6 +193,7 @@ export function Shell() {
           </span>
           <button
             className="ext-link"
+            id="fork-cancel"
             onClick={() => {
               setForkMode(null);
               composer.setText('');

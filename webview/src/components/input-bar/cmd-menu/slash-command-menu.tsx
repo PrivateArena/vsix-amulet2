@@ -65,6 +65,7 @@ export function CommandMenu({
   const menu = (
     <div
       className="cmd-menu"
+      id="slash-command-menu"
       role="listbox"
       aria-label="Slash commands"
       style={

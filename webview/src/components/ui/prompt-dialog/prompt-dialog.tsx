@@ -114,6 +114,7 @@ export function PromptDialog() {
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="prompt-close"
               label="Close"
               tooltipSide="bottom"
               onClick={close}
@@ -200,12 +201,17 @@ export function PromptDialog() {
             </span>
           )}
           <span className="pd-foot-actions">
-            <Button variant="ghost" size="sm" onClick={close}>
+            <Button
+              variant="ghost"
+              size="sm"
+              id="prompt-cancel"
+              onClick={close}>
               Cancel
             </Button>
             <Button
               variant="primary"
               size="sm"
+              id="prompt-insert"
               startIcon={LuCheck}
               disabled={expanded === null}
               title={

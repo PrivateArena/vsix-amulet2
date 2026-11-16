@@ -8,10 +8,16 @@ import {
   PopoverSide,
   PopoverTriggerApi,
 } from '../flyout';
+import { menuItemId } from '../../../utils/control-id';
 import './menu.scss';
 
 export interface MenuItem {
   label: string;
+  /**
+   * Stable part of this item's DOM id. Only needed when `label` is not a fixed string —
+   * see {@link menuItemId}.
+   */
+  id?: string;
   icon: ComponentType<IconBaseProps>;
   onSelect: () => void;
   kind?: 'toggle';
@@ -22,7 +28,18 @@ export interface MenuItem {
 export interface MenuProps {
   items: MenuItem[];
   triggerIcon?: ComponentType<IconBaseProps>;
+  /** Visible text of the trigger button. */
   label?: string;
+  /**
+   * Hover + accessible name of an icon-only trigger ("Preferences"). Without it a gear is
+   * unnamed — nothing to read, nothing to quote.
+   */
+  triggerLabel?: string;
+  /**
+   * Id of the trigger button, and the namespace of the item ids: item "Privacy mode" of
+   * `id="preferences-menu"` is `#preferences-menu-privacy-mode`.
+   */
+  id?: string;
   side?: PopoverSide;
   align?: PopoverAlign;
   minWidth?: number;
@@ -35,6 +52,8 @@ export function Menu({
   items,
   triggerIcon = LuChevronDown,
   label,
+  triggerLabel,
+  id,
   side = 'bottom-right',
   align = 'center',
   minWidth = 198,
@@ -62,9 +81,10 @@ export function Menu({
             ref={ref}
             variant="ghost"
             icon={triggerIcon}
-            aria-label={label}
+            id={id}
+            aria-label={triggerLabel ?? label}
             aria-haspopup="menu"
-            title={label}
+            title={triggerLabel ?? label}
             {...triggerProps}>
             {label}
           </Button>
@@ -77,6 +97,7 @@ export function Menu({
               key={`${item.label}#${i}`}
               type="button"
               role="menuitem"
+              id={id ? menuItemId(id, item) : undefined}
               className={`menu-item${item.kind === 'toggle' ? ' menu-toggle' : ''}${item.disabled ? ' disabled' : ''}`}
               disabled={item.disabled}
               onClick={() => {

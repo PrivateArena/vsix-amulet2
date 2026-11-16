@@ -50,7 +50,9 @@ export function InstallForm({ cwd, projectTrusted, busy }: InstallFormProps) {
         <button
           type="button"
           className="pk-link"
+          id="packages-install-close"
           aria-label="Close the install form"
+          title="Close the install form"
           onClick={() => close(false)}>
           <LuX aria-hidden />
         </button>
@@ -59,6 +61,7 @@ export function InstallForm({ cwd, projectTrusted, busy }: InstallFormProps) {
       <div className="pk-install-row">
         <input
           className="pk-install-input"
+          id="packages-install-source"
           type="text"
           value={source}
           autoFocus
@@ -70,6 +73,7 @@ export function InstallForm({ cwd, projectTrusted, busy }: InstallFormProps) {
         <Button
           type="submit"
           variant="contained"
+          id="packages-install"
           disabled={!!problem || busy}
           title={problem ?? `Install ${source.trim() || 'this package'}`}>
           {busy ? 'Working…' : 'Install'}
@@ -119,6 +123,7 @@ export function InstallForm({ cwd, projectTrusted, busy }: InstallFormProps) {
         <button
           type="button"
           className="pk-link"
+          id="packages-browse-gallery"
           onClick={() => actions.openExternal(PI_PACKAGES_URL)}>
           Browse {PI_PACKAGES_URL.replace(/^https:\/\//, '')}
         </button>

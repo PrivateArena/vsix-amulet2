@@ -36,6 +36,7 @@ export function CompactionProgress({ run }: { run: CompactionRun }) {
       <Button
         variant="ghost"
         size="sm"
+        id="cancel-compaction"
         className="compaction-cancel"
         title="Cancel compaction"
         onClick={() => actions.abort()}>

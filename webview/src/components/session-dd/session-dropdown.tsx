@@ -30,6 +30,7 @@ export function SessionDropdown() {
           ref={ref}
           variant="ghost"
           icon={LuHistory}
+          id="session-history"
           aria-label="Session history"
           title="Session history"
           aria-haspopup="listbox"

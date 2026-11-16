@@ -59,6 +59,7 @@ export function InstalledList({
         <LuSearch aria-hidden />
         <input
           type="search"
+          id="packages-filter"
           value={filter.text}
           placeholder="Filter installed"
           aria-label="Filter installed packages"

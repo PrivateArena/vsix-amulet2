@@ -64,6 +64,7 @@ export function ContextMeter() {
             ref={ref}
             variant="ghost"
             size="sm"
+            id="context-usage"
             className="ctx-meter-btn"
             aria-label={`Context usage: ${pct}%`}
             aria-haspopup="dialog"
@@ -136,6 +137,7 @@ export function ContextMeter() {
               <Button
                 type="button"
                 role="menuitem"
+                id="compact-conversation"
                 className={`menu-item${compactDisabled ? ' disabled' : ''}`}
                 disabled={compactDisabled}
                 onClick={() => {

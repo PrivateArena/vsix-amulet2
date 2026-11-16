@@ -12,6 +12,7 @@ export function TopbarRight() {
       <Button
         variant="ghost"
         icon={LuPackage}
+        id="pi-packages"
         aria-label="Pi packages"
         title="Pi packages"
         onClick={() => openPackages()}
@@ -20,6 +21,7 @@ export function TopbarRight() {
       <Button
         variant="ghost"
         icon={LuExternalLink}
+        id="open-chat-in-editor"
         aria-label="Open chat in editor"
         title="Open chat in editor"
         onClick={() => actions.openInEditor()}
@@ -28,6 +30,7 @@ export function TopbarRight() {
       <Button
         variant="ghost"
         icon={LuSquarePen}
+        id="new-chat"
         aria-label="New chat"
         title="New chat"
         onClick={() => actions.newChat()}

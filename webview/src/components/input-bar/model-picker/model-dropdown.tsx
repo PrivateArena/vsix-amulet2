@@ -161,7 +161,7 @@ export function ModelPicker() {
     ];
   }, [current]);
 
-  const contextMenu = useCtxMenu(menuItems);
+  const contextMenu = useCtxMenu(menuItems, { id: 'model-picker-menu' });
 
   const groups = useMemo(() => {
     const filtered = query
@@ -276,6 +276,8 @@ export function ModelPicker() {
           }>
           <Button
             variant="trigger"
+            id="provider-login"
+            title="Log in to a provider"
             startIcon={LuKeyRound}
             onClick={() => openProviderLogin()}
             onContextMenu={contextMenu.open}>
@@ -305,6 +307,7 @@ export function ModelPicker() {
             <Button
               ref={pickerRef}
               variant="trigger"
+              id="model-picker"
               aria-haspopup="listbox"
               aria-expanded={pickerProps['aria-expanded']}
               onClick={pickerProps.onClick}

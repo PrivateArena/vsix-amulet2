@@ -75,6 +75,7 @@ export function ReasonDialog({
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="reason-close"
               label="Cancel"
               tooltipSide="bottom"
               onClick={onCancel}
@@ -85,6 +86,8 @@ export function ReasonDialog({
         <input
           ref={fieldRef}
           className="rd-field"
+          id="reason-note"
+          aria-label="Reason"
           value={value}
           placeholder={placeholder}
           spellCheck={false}
@@ -104,12 +107,17 @@ export function ReasonDialog({
               : 'Enter stops it without a note'}
           </span>
           <span className="rd-foot-actions">
-            <Button variant="ghost" size="sm" onClick={onCancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              id="reason-cancel"
+              onClick={onCancel}>
               Cancel
             </Button>
             <Button
               variant="primary"
               size="sm"
+              id="reason-confirm"
               startIcon={LuCheck}
               title={`${confirmLabel} (Enter)`}
               onClick={() => onConfirm(note)}>

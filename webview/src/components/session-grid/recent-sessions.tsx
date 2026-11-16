@@ -31,6 +31,7 @@ export function SessionGrid({ sessions }: { sessions: SessionInfo[] }) {
         <span className="session-grid-label-text">Recent sessions</span>
         <button
           type="button"
+          id="delete-all-sessions"
           className="session-grid-delete-all"
           onClick={() => actions.deleteAllSessions()}>
           Delete all sessions
@@ -39,6 +40,7 @@ export function SessionGrid({ sessions }: { sessions: SessionInfo[] }) {
 
       <div
         className="session-grid-list"
+        id="recent-sessions"
         role="listbox"
         aria-label="Recent sessions">
         {sessions.map((s) => {
@@ -72,6 +74,7 @@ export function SessionGrid({ sessions }: { sessions: SessionInfo[] }) {
                         className="session-grid-rename-input"
                         value={draft}
                         placeholder="Session name"
+                        aria-label="Session name"
                         autoFocus
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={(e) => {

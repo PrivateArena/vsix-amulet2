@@ -137,7 +137,10 @@ export function TopbarLeft() {
     ],
     [current, messages, redact],
   );
-  const ctx = useCtxMenu(menuItems, { minWidth: 210 });
+  const ctx = useCtxMenu(menuItems, {
+    id: 'turn-nav-menu',
+    minWidth: 210,
+  });
 
   const title = current
     ? `${sessionName} · prompt ${current.ordinal} of ${prompts.length}${
@@ -147,7 +150,7 @@ export function TopbarLeft() {
 
   return (
     <div className="topbar-left">
-      <div className="topbar-logo" title={sessionName}>
+      <div className="topbar-logo" id="amulet-logo" title={sessionName}>
         <LogoIcon size={16} />
       </div>
 
@@ -157,6 +160,7 @@ export function TopbarLeft() {
             variant="ghost"
             size="sm"
             icon={LuChevronLeft}
+            id="previous-prompt"
             label="Previous prompt"
             disabled={activeIndex <= 0}
             onClick={() => jumpTo(activeIndex - 1)}
@@ -165,6 +169,7 @@ export function TopbarLeft() {
             variant="ghost"
             size="sm"
             icon={LuChevronRight}
+            id="next-prompt"
             label="Next prompt"
             disabled={activeIndex >= prompts.length - 1}
             onClick={() => jumpTo(activeIndex + 1)}
@@ -185,6 +190,7 @@ export function TopbarLeft() {
           <button
             ref={ref}
             type="button"
+            id="turn-nav"
             className={`turn-nav-trigger${open ? ' is-open' : ''}`}
             title={title}
             aria-haspopup="listbox"

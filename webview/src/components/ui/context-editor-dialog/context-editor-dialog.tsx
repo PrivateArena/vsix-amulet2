@@ -74,6 +74,7 @@ export function ContextEditorDialog({
               variant="ghost"
               size="sm"
               icon={LuX}
+              id="context-editor-close"
               label="Cancel"
               tooltipSide="bottom"
               onClick={onCancel}
@@ -84,6 +85,8 @@ export function ContextEditorDialog({
         <textarea
           ref={areaRef}
           className="ce-area"
+          id="context-editor-text"
+          aria-label="Tool result text"
           value={value}
           spellCheck={false}
           onChange={(e) => setValue(e.target.value)}
@@ -102,12 +105,17 @@ export function ContextEditorDialog({
             {unchanged ? '' : ' · replaces what the model reads'}
           </span>
           <span className="ce-foot-actions">
-            <Button variant="ghost" size="sm" onClick={onCancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              id="context-editor-cancel"
+              onClick={onCancel}>
               Cancel
             </Button>
             <Button
               variant="primary"
               size="sm"
+              id="context-editor-apply"
               startIcon={LuCheck}
               disabled={unchanged}
               title={
