@@ -137,6 +137,32 @@ export function basename(p: string): string {
   return idx >= 0 ? clean.slice(idx + 1) : clean;
 }
 
+/** The two halves of a header path — see {@link splitPath}. */
+export interface PathLabel {
+  /** The directory without its trailing separator; empty for a bare file name. */
+  dir: string;
+  /** The file name, with the separator it was addressed through and any `:120-161` window. */
+  file: string;
+}
+
+/**
+ * Split a path into the half a card may elide and the half it may not.
+ *
+ * A card names its call by the full path — it is the answer to "which `store.ts`", and a transcript
+ * of a real session is full of files that share a basename. While the row has room, both halves fit.
+ * When it does not, the directory takes the ellipsis and the file name survives, which is the opposite
+ * of what a single ellipsized span does to an absolute path: that one cuts the name off.
+ *
+ * The separator travels with the file name, so a squeezed row reads
+ * `/home/user/project/webview/src…/store.ts` — the ellipsis sits inside the path instead of eating the
+ * name that identifies the call.
+ */
+export function splitPath(target: string): PathLabel {
+  const idx = Math.max(target.lastIndexOf('/'), target.lastIndexOf('\\'));
+  if (idx < 0) return { dir: '', file: target };
+  return { dir: target.slice(0, idx), file: target.slice(idx) };
+}
+
 export function statusClass(status: string): string {
   switch (status) {
     case 'running':

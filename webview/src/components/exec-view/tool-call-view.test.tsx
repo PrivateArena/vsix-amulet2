@@ -309,9 +309,9 @@ describe('read card line window', () => {
       name: 'read',
       tool: readTool({ offset: 120, limit: 42 }),
     });
-    // The header shortens the path but keeps the window, which is what says what the card
-    // covers; the tooltip carries the path in full and still ends with it.
-    expect(html).toContain('watch_test.go:120-161');
+    // The header shows the whole path and keeps the window with the file name, so a squeezed row can
+    // lose directories and still say what it covers; the tooltip carries the path in full.
+    expect(html).toContain('/watch_test.go:120-161');
     expect(html).toContain('title="/a/b/watch_test.go:120-161"');
     // The code body reads its highlight language from the bare path, not from the suffixed one.
     expect(html).toContain('language-go');
@@ -319,7 +319,7 @@ describe('read card line window', () => {
 
   it('says nothing about a read of the whole file', () => {
     const html = card({ name: 'read', tool: readTool({}) });
-    expect(html).toContain('>watch_test.go<');
+    expect(html).toContain('>/watch_test.go<');
     expect(html).not.toContain('watch_test.go:');
   });
 
@@ -329,6 +329,65 @@ describe('read card line window', () => {
       partialArgs: '{"path":"notes/a.md","offset":16,"limit":8}',
     });
     expect(html).toContain('a.md:16-23');
+  });
+});
+
+describe('file path in the card header', () => {
+  const fileTool = (toolName: string, path: string): ToolExec => ({
+    toolCallId: 'f1',
+    toolName,
+    args: { path },
+    status: 'done',
+    durationMs: 4,
+    resultText: 'ok',
+  });
+
+  it('names a file call by its whole path, not by its basename', () => {
+    // Two `store.ts` files in one session are only told apart by the directories — and the row has
+    // the horizontal room for them.
+    const html = card({
+      name: 'edit',
+      tool: fileTool('edit', '/home/dev/proj/webview/src/store.ts'),
+    });
+    expect(html).toContain(
+      '<span class="exec-summary-dir">/home/dev/proj/webview/src</span>',
+    );
+    expect(html).toContain(
+      '<span class="exec-summary-file">/store.ts</span>',
+    );
+  });
+
+  it('keeps a bare name in one half', () => {
+    // Nothing may be elided from a path that has no directory to give away.
+    const html = card({ name: 'read', tool: fileTool('read', 'a.md') });
+    expect(html).not.toContain('exec-summary-dir');
+    expect(html).toContain('<span class="exec-summary-file">a.md</span>');
+  });
+
+  it('splits a relative path too', () => {
+    const html = card({ name: 'read', tool: fileTool('read', 'notes/a.md') });
+    expect(html).toContain('<span class="exec-summary-dir">notes</span>');
+    expect(html).toContain('<span class="exec-summary-file">/a.md</span>');
+  });
+
+  it('leaves a command or a search pattern alone', () => {
+    // Only a path is split in two: a `bash` command has no directory to give away, and cutting one out
+    // of it would lie about what ran.
+    const html = card({
+      name: 'bash',
+      tool: {
+        toolCallId: 'b1',
+        toolName: 'bash',
+        args: { command: 'ls -la /home/dev/proj/webview/src' },
+        status: 'done',
+        durationMs: 4,
+        resultText: 'ok',
+      },
+    });
+    expect(html).not.toContain('exec-summary-dir');
+    expect(html).toContain(
+      '<span class="exec-summary-file">ls -la /home/dev/proj/webview/src</span>',
+    );
   });
 });
 

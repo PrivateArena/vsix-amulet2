@@ -238,14 +238,29 @@ body.spacing-compact .exec-block.exec-joined-prev {
 
 /* Summary text (file path, argument, etc.) */
 .exec-summary-text {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--amulet-fg);
+  font-family: var(--amulet-monospace);
+  font-variation-settings: 'MONO' 1;
+}
+
+/*
+ * The path of a file call in its two halves (see `splitPath`): the directory and the file name, which
+ * carries its own separator so a squeezed row still reads as a path. Both shrink with an ellipsis, and
+ * flex shrink is weighted by base width — so the long directory gives way first and the file name only
+ * loses characters when it alone cannot fit the row.
+ */
+.exec-summary-dir,
+.exec-summary-file {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--amulet-fg);
-  font-family: var(--amulet-monospace);
-  font-variation-settings: 'MONO' 1;
 }
 
 /* The subagent's task in full. The header only has room for a line of it, so the

@@ -9,6 +9,7 @@ import {
   countCallRows,
   formatDuration,
   readLineRange,
+  splitPath,
   summarize,
   tipHead,
   tipTail,
@@ -159,6 +160,33 @@ describe('readLineRange / toolTarget', () => {
     expect(toolTarget('write', { path: 'a.md', offset: 3, limit: 8 })).toBe(
       'a.md',
     );
+  });
+});
+
+describe('splitPath', () => {
+  it('gives the file name its own separator', () => {
+    // So a truncated header reads `…/src/store.ts` — an ellipsis inside the path, not one that ate
+    // the name the card is named by.
+    expect(splitPath('/home/dev/proj/webview/src/store.ts')).toEqual({
+      dir: '/home/dev/proj/webview/src',
+      file: '/store.ts',
+    });
+    expect(splitPath('C:\\dev\\proj\\store.ts')).toEqual({
+      dir: 'C:\\dev\\proj',
+      file: '\\store.ts',
+    });
+  });
+
+  it('keeps a read window attached to the name', () => {
+    expect(splitPath('/a/b/store.ts:443-562')).toEqual({
+      dir: '/a/b',
+      file: '/store.ts:443-562',
+    });
+  });
+
+  it('elides nothing from a name with no directory', () => {
+    expect(splitPath('store.ts')).toEqual({ dir: '', file: 'store.ts' });
+    expect(splitPath('')).toEqual({ dir: '', file: '' });
   });
 });
 

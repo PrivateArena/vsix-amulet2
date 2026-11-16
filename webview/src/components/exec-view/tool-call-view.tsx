@@ -35,15 +35,16 @@ import {
   TOOL_ICONS,
   TOOL_LABELS,
   asRecord,
-  basename,
   childCalls,
   oneLine,
+  splitPath,
   statusClass,
   summarize,
   tipHead,
   toolDuration,
   toolFullText,
   toolTarget,
+  type PathLabel,
 } from './tool-display';
 import {
   SUBAGENT_TITLE,
@@ -262,8 +263,8 @@ export function ExecBlock({
   // card at all: the header shows one line of it, the tooltip and the copy button the
   // whole text.
   const prompt = subagent ? subagentPrompt(effectiveArgs, subagent) : '';
-  // A `read` names its line window too (see `readLineRange`); the header shortens the path but
-  // keeps the window, which is the part that tells the reader what the card actually covers.
+  // A `read` names its line window too (see `readLineRange`), and it travels with the file name so a
+  // squeezed row still says which window of which file it is.
   const summary = prompt || toolTarget(name, effectiveArgs);
   const nested = childCalls(tool, tools);
   const report = subagent
@@ -321,11 +322,13 @@ export function ExecBlock({
 
   const Icon = subagent ? LuBot : (TOOL_ICONS[name] ?? LuWrench);
   const label = subagent ? SUBAGENT_TITLE : (TOOL_LABELS[name] ?? name);
-  const displaySummary = subagent
-    ? oneLine(summary)
-    : FILE_TOOLS.has(name) && summary
-      ? basename(summary)
-      : summary;
+  // The path a card names its call by is shown whole (see `splitPath`): a transcript of one real
+  // session is full of files sharing a basename. Only when the row runs out of room does the
+  // directory take the ellipsis, and the file name is the half that keeps its characters.
+  const headerTarget: PathLabel =
+    summary && !subagent && FILE_TOOLS.has(name)
+      ? splitPath(summary)
+      : { dir: '', file: subagent ? oneLine(summary) : summary };
   // Elapsed time on every card, counting live while the call runs (from its own
   // `startedAt`, or from the subagent's `elapsedMs` progress field when it has one).
   const duration = toolDuration(tool, now, subagent?.elapsedMs);
@@ -386,8 +389,13 @@ export function ExecBlock({
             title={subagent ? undefined : summary || undefined}>
             <Icon className="exec-type-icon" aria-hidden />
             <span className="exec-name">{label}</span>
-            {displaySummary && (
-              <span className="exec-summary-text">{displaySummary}</span>
+            {summary && (
+              <span className="exec-summary-text">
+                {headerTarget.dir && (
+                  <span className="exec-summary-dir">{headerTarget.dir}</span>
+                )}
+                <span className="exec-summary-file">{headerTarget.file}</span>
+              </span>
             )}
           </button>
         </Tooltip>
