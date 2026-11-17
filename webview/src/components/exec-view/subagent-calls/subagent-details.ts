@@ -32,6 +32,11 @@ export interface SubagentDetailsView {
   activity?: string;
   elapsedMs?: number;
   childSessionFile?: string;
+  /**
+   * The human's own sentence, set when a client stopped this run through the subagent stop API rather than
+   * letting it report. Its presence is the fact the card needs — that *they* ended it, not that it failed.
+   */
+  stoppedBy?: string;
 }
 
 function str(value: unknown): string | undefined {
@@ -82,6 +87,7 @@ export function readSubagentDetails(
     activity: str(raw.activity),
     elapsedMs: num(raw.elapsedMs),
     childSessionFile: str(raw.childSessionFile),
+    stoppedBy: str(raw.stoppedBy),
   };
 }
 
@@ -143,6 +149,10 @@ export function subagentMetaLine(
     if (details.activity) parts.push(`calling ${details.activity}`);
   } else {
     if (details.exit && details.exit !== 'done') parts.push(details.exit);
+    // The one difference between a child that was stopped and a child that failed that the human can act on,
+    // and it is otherwise invisible here: the note itself sits in the model-facing header, which `cleanReport`
+    // strips out of the report the card shows. The sentence is not repeated back — they wrote it.
+    if (details.stoppedBy) parts.push('stopped by you');
     if (details.turns != null) parts.push(`${details.turns} turns`);
     if (details.toolCalls != null) parts.push(`${details.toolCalls} tool uses`);
   }

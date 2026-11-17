@@ -18,6 +18,7 @@
 
 import type { PrivacyRule } from './privacy';
 import type { BridgeCapabilities } from './bridge-protocol';
+import type { StopKind } from './stop-command';
 
 /**
  * Thinking levels known to the pi runtime (mirrors pi's own `ThinkingLevel`).
@@ -924,6 +925,15 @@ export type WebviewMessage =
    * which works for a nested (subagent) call too — the child has no session entry, but its command really runs.
    */
   | { type: 'stopToolCall'; toolCallId: string; note?: string }
+  /**
+   * Stop one running **subagent** — the child, not the turn, and not one command inside it.
+   *
+   * A subagent is an in-process session, so there is no process for the bridge to signal: the lever belongs to
+   * the extension that started the child, and the bridge calls it through the shared stop API. `note` reaches
+   * the parent model at the head of the child's report, and the parent's turn goes on with whatever the child
+   * managed to write. Addressed by the id of the `subagent` tool call, never by "whichever run is live".
+   */
+  | { type: 'stopSubagentCall'; toolCallId: string; note?: string }
   | { type: 'exportChat' }
   | { type: 'openInEditor' }
   | { type: 'setAutoCompaction'; enabled: boolean }
@@ -1030,6 +1040,23 @@ export type HostMessage =
    * `role: 'system'` row, outside anybody's reply.
    */
   | { type: 'notice'; text: string }
+  /**
+   * What a Stop button actually did, keyed by the call it was pressed on.
+   *
+   * The ack exists because the alternative is a button that lies: pi settles a stopped call in milliseconds, so
+   * a card cannot tell "the runtime signalled my process" from "the runtime refused, and that command is still
+   * hanging" — and a refusal the human only reads in a toast that already disappeared is the experience this
+   * feature was reported as broken for.
+   */
+  | {
+      type: 'toolStopResult';
+      toolCallId: string;
+      /** Which of the two levers was pulled: one command's process, or one subagent run. */
+      kind: StopKind;
+      ok: boolean;
+      /** The bridge's own sentence for why nothing was stopped. */
+      error?: string;
+    }
   | { type: 'pickedFiles'; files: Attachment[] }
   /**
    * Answer to `loadToolImage`, keyed by the call and position that asked for it. `error`

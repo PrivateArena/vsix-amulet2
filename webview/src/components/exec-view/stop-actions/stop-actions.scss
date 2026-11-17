@@ -59,3 +59,14 @@
   opacity: 0.55;
   pointer-events: none;
 }
+
+/*
+ * A stop the runtime refused. Still pressable — the command is still hanging, and retrying is the point — but
+ * tinted as a warning rather than left looking idle, because "nothing happened when I clicked" and "the runtime
+ * explained itself" feel identical otherwise. That is the whole difference between this and `.is-stopped`, which
+ * must *not* be pressable and reads as deliberately parked.
+ */
+.exec-action-stop.is-refused {
+  color: var(--amulet-warning);
+  opacity: 1;
+}

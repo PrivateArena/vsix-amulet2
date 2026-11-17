@@ -34,6 +34,7 @@ import {
   type BridgeReply,
   type BridgeRequest,
   type BridgeTargetView,
+  type SubagentStopEvidence,
   type ToolStopEvidence,
 } from '../shared/bridge-protocol';
 import {
@@ -43,7 +44,12 @@ import {
   omittedReplacement,
   type PendingEdit,
 } from './pending-store';
-import { clampStopNote } from '../shared/stop-command';
+import { clampStopNote, stopRunNoteText } from '../shared/stop-command';
+import {
+  describeSubagentStopFailure,
+  readSubagentStopApi,
+  subagentStopPublished,
+} from './subagent-stop';
 import { resolveTargets } from './target-resolver';
 import {
   StopBoard,
@@ -242,6 +248,7 @@ function okReply(
     abandonedCount?: number;
     capabilities?: BridgeCapabilities;
     stop?: ToolStopEvidence;
+    subagent?: SubagentStopEvidence;
   } = {},
 ): BridgeReply {
   return {
@@ -298,6 +305,10 @@ async function runOp(
         // Whether this bundle can see and signal the child processes. `readProcessTable` answers for the
         // platform, and a table it cannot read is reported per request, not here.
         toolStop: true,
+        // Whether a `subagent` extension in this very process published a stop API the bridge may call.
+        // Asked now rather than at load: pi's load order is not a contract, and a bridge that guessed would
+        // either hide the control or advertise one that cannot be honoured.
+        subagentStop: subagentStopPublished(),
         // pi's own version is the host's fact (`pi --version`), not one the child has to re-derive.
         piVersion: '',
       },
@@ -308,6 +319,7 @@ async function runOp(
   // Every other op moves persistent state, so all of them are idle-only: `navigateTree` rejects during a run,
   // and a turn boundary is the only place a `context_edit` may be written.
   if (req.op === 'stop') return runStop(req, stops);
+  if (req.op === 'stopSubagent') return runStopSubagent(req);
 
   if (!ctx.isIdle()) {
     return failure(
@@ -434,6 +446,53 @@ async function runStop(
       candidates: plan.candidates,
       liveCalls: plan.liveCalls,
     },
+  });
+}
+
+/**
+ * End one running subagent, addressed by its tool call id, and hand its report the human's words.
+ *
+ * This is the half of the feature the bridge cannot do on its own: a subagent is an in-process session, so
+ * there is no process to signal and no hook that would end it — only the extension that started the child holds
+ * the lever. It is reached through the stop API pi-subagent publishes on the shared symbol
+ * (`pi-bridge/subagent-stop.ts`), and it is the difference between "that child is stuck" and "the whole turn
+ * is over": the child comes back as a normal tool result whose head is the human's sentence, and the parent
+ * reads it and carries on.
+ *
+ * Never a fallback to "whatever is running": an id that names no live run is refused, exactly as a command the
+ * bridge cannot tie to a process is refused.
+ */
+async function runStopSubagent(req: BridgeRequest): Promise<BridgeReply> {
+  const callId =
+    req.handle?.kind === 'toolCall' ? req.handle.toolCallId : undefined;
+  if (!callId)
+    return failure(req.reqId, req.op, 'unknown-handle', 'missing call id');
+  const api = readSubagentStopApi();
+  if (!api) {
+    return failure(
+      req.reqId,
+      req.op,
+      'unsupported',
+      'no subagent tool is loaded in this child, so there is no run to stop.',
+    );
+  }
+  // The caller owns the sentence: pi-subagent only places this text, so the vocabulary stays where the other
+  // stop says it and a parent reads one phrase for "a human ended that".
+  const note = stopRunNoteText(clampStopNote(req.content ?? ''));
+  // `answered: true` is the truth here, not a courtesy: both Amulet controls are an explicit press on a control
+  // that names the run it ends, so the person has decided. A client that stops without ever asking a person must
+  // leave it off, and the child's own extension then puts the question up itself and treats no answer as no.
+  const result = await api.stop({ callId, reason: note, answered: true });
+  if (!result.ok) {
+    const refusal = describeSubagentStopFailure(result);
+    log(`stop ${callId} refused: ${refusal.error}`);
+    return failure(req.reqId, req.op, refusal.code, refusal.error);
+  }
+  log(
+    `stop ${callId}: stopped the ${result.role} subagent with "${note}" — the parent keeps its turn.`,
+  );
+  return okReply(req, {
+    subagent: { callId: result.callId, role: result.role, note },
   });
 }
 

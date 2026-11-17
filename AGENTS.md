@@ -46,7 +46,7 @@ The two communicate only via `postMessage`. Both share a single source of truth 
 | "Look at this" notifications (host-side)                                                 | [`src/notify/`](src/notify/) — `run-report.ts` (which wire event is the final report), `approval-prompt.ts` (which dialog parks the run), `approval-ledger.ts` (which ones are still unanswered), `system-channel.ts` (OS notifier), `window-focus.ts` (click → raise this window), `notify-service.ts` (VS Code toast + status bar)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | pi package manager (installed list, enable/disable, install/remove)                      | [`src/packages/`](src/packages/) — `package-settings.ts` reads/edits the `packages` arrays of pi's `settings.json`, `package-catalog.ts` resolves a source to its on-disk package, `package-service.ts` runs the `pi install`/`pi remove` child; state in [`webview/src/stores/packages-store.ts`](webview/src/stores/packages-store.ts), UI in [`webview/src/components/ui/packages-dialog/`](webview/src/components/ui/packages-dialog/), shared source rules in [`shared/pi-packages.ts`](shared/pi-packages.ts)                                                                                                                                                                                                                                                                                                                            |
 | Context surgery (Omit from context / Edit context content / Revert to this message)      | contract [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · the pi extension Amulet ships: [`pi-bridge/`](pi-bridge/) (`amulet-bridge.ts` command + hooks, `target-resolver.ts` handle→entry ids, `pending-store.ts` override map + sidecar) · loaded by [`src/runtime/bridge-args.ts`](src/runtime/bridge-args.ts) (`pi -e`) · host client [`src/webview/bridge-client.ts`](src/webview/bridge-client.ts) (reqId↔ack, 15 s watchdog) · durable state reader [`src/session/session-store.ts`](src/session/session-store.ts) (`readBranchContextEdits`) · transcript repair [`src/webview/history-repair.ts`](src/webview/history-repair.ts) · badges `ToolExec.ctxEdit` in [`webview/src/store.ts`](webview/src/store.ts), menu rules [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) |
-| Stop one command (Stop / Stop with reason, on a card **and** on a subagent's nested row) | same bridge, new op: [`pi-bridge/tool-stop.ts`](pi-bridge/tool-stop.ts) (live-call board, the aim, the note) + [`pi-bridge/process-tree.ts`](pi-bridge/process-tree.ts) (process table, group kill) · vocabulary + shell tool list [`shared/stop-command.ts`](shared/stop-command.ts) · `op: 'stop'` in [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · host `runStopCommand` in [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts) · buttons [`webview/src/components/exec-view/stop-actions/`](webview/src/components/exec-view/stop-actions/) + [`webview/src/components/ui/reason-dialog/`](webview/src/components/ui/reason-dialog/) · rules in [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) · runtime proof [`scripts/stop-probe.mjs`](scripts/stop-probe.mjs)    |
+| Stop one command (Stop / Stop with reason, on a card **and** on a subagent's nested row), or stop one subagent run | same bridge, two ops: [`pi-bridge/tool-stop.ts`](pi-bridge/tool-stop.ts) (live-call board, the aim, the note) + [`pi-bridge/process-tree.ts`](pi-bridge/process-tree.ts) (process table, group kill) for `op: 'stop'`, and [`pi-bridge/subagent-stop.ts`](pi-bridge/subagent-stop.ts) (client of pi-subagent's `Symbol.for("pi-subagent.stop")`) for `op: 'stopSubagent'` · vocabulary + shell tool list + `StopKind` in [`shared/stop-command.ts`](shared/stop-command.ts) · ops and both acks in [`shared/bridge-protocol.ts`](shared/bridge-protocol.ts) · host `runStop`/`runStopSubagent` in [`src/webview/chat-bridge.ts`](src/webview/chat-bridge.ts), which posts `toolStopResult` · buttons [`webview/src/components/exec-view/stop-actions/`](webview/src/components/exec-view/stop-actions/) + in-flight/refusal state [`webview/src/stores/tool-stop-store.ts`](webview/src/stores/tool-stop-store.ts) + [`webview/src/components/ui/reason-dialog/`](webview/src/components/ui/reason-dialog/) · one gate `stopGateOf` in [`webview/src/components/exec-view/card-menu.ts`](webview/src/components/exec-view/card-menu.ts) · runtime proof [`scripts/stop-probe.mjs`](scripts/stop-probe.mjs) (`NESTED=1`, `STOP_RUN=1`) |
 | React app root + state                                                                   | [`webview/src/App.tsx`](webview/src/App.tsx), [`webview/src/store.ts`](webview/src/store.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | React components                                                                         | [`webview/src/components/`](webview/src/components/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
@@ -93,7 +93,8 @@ suite built from such a capture.
 Two more harnesses drive the bridge, which is the half of Amulet that only exists inside the child process:
 `node scripts/bridge-probe.mjs '{"op":"omit",...}'` sends one bridge op (or a `hello` capability probe) and prints
 the ack, and `node scripts/stop-probe.mjs "note"` runs the whole stop-a-hung-command chain against a live model turn
-(`NESTED=1` stops a command a _subagent_ made instead). Both need `node esbuild.mjs` to have produced the bundle.
+(`NESTED=1` stops a command a _subagent_ made instead; `STOP_RUN=1` stops the _run_, through pi-subagent's stop API, which
+`WITH_EXTENSIONS=a.ts:b.ts` puts in front of the copy your settings autoload). Both need `node esbuild.mjs` to have produced the bundle.
 A third harness skips Amulet entirely and drives the OS notification chain against the live desktop —
 `node scripts/notify-probe.mjs` resolves the window, posts a banner with a click action, prints the id it gets
 back and activates the window if the banner is clicked.
@@ -334,16 +335,65 @@ touches nothing else. Read this before changing any of it:
   through `ctx.executeTool`, so the parent's `tool_call`/`tool_result` hooks see it as `<subagentCallId>/<n>` and the process is a child of the
   same pid. Stopping it ends that command and the _subagent continues with what it learned_ — verified by `node scripts/stop-probe.mjs` with
   `NESTED=1`, which is the case that motivated the whole feature (one hung command spending a child's entire time budget).
-- **Two Stop controls, two icons, one row.** `card-menu.ts` owns the wording so a card and a nested row cannot disagree: the command stop is
-  offered only for a live shell call with `bridge.capabilities.toolStop`, and the run-level control stays as **Abort this turn**
-  (`LuOctagonX`). A nested row deliberately gets no abort control — it does not own the run.
-- **The ack does not come back to the webview.** The stopped command's own result, carrying the note, is the confirmation, and a refusal is
-  a VS Code toast from `runStopCommand`; the controls stay visible-but-not-pressable meanwhile (`canStopCommand` offers them,
-  `canPressCommandStop` lets them fire) and a local watchdog past the host's ack budget hands them back. No new `HostMessage`, no badge state
-  to retire. `turn_end` clears the board, because a run that aborted gets pi's own error result and never runs `tool_result` — and a stale
+- **Two Stop controls, two icons, one gate.** `card-menu.ts` owns the wording so a card and a nested row cannot
+  disagree: the command stop is offered only for a live shell call with `bridge.capabilities.toolStop`, and the
+  run-level control stays as **Abort this turn** (`LuOctagonX`). A nested row deliberately gets no abort control — it
+  does not own the run.
+- **One gate, read twice: by the render and by the click.** `stopGateOf(eligibility, inFlight)` is computed once in
+  `stop-actions.tsx` and both consumers take their answer from it. This is a rule because of what came before it:
+  the handler asked a *second* question of a *second* function and passed a literal for "is a stop already in
+  flight", so the handler refused every press, the buttons posted nothing, and every pure rule around them kept
+  passing its own test. A gate whose "in flight" input is optional is how that survives typecheck — `inFlight` is
+  required now, and the value is the store's, never a caller's guess.
+- **The ack comes back to the card, in both directions.** `toolStopResult` (`shared/protocol.ts`) is what retires
+  "Stopping…": the call settles in milliseconds, so a card cannot tell *stopped* from *refused* without it, and a
+  refusal that only ever reached a VS Code toast is the experience this feature was reported as broken for. The
+  refusal stays on the control (`.is-refused`, its tooltip carries the bridge's sentence) until the human presses
+  again; the toast rides along because the hanging card may be off-screen. State lives in
+  `webview/src/stores/tool-stop-store.ts`, keyed by call id like `context-surgery-store.ts` — two surfaces, one
+  control, one answer. No timer guesses how long a `SIGKILL` takes; only the **abort** control still has one, since
+  `abort` has no ack of its own. `turn_end` clears the board, because a run that aborted gets pi's own error result and never runs `tool_result` — and a stale
   `startedAt` **widens** the next aim rather than narrowing it.
 - Verification: `pi-bridge/tool-stop.test.ts` (the aim against synthetic tables), `pi-bridge/process-tree.test.ts` (a **real** detached shell:
   group kill, grandchildren, exec'd command), and `scripts/stop-probe.mjs` for the whole chain against a live child.
+
+## Stopping a subagent is a different extension's lever
+
+A hung command inside a subagent is stoppable with the machinery above, because that command really is a child of the runtime's own
+ process. A subagent that hangs *elsewhere* — a provider request that never returns, an in-process tool, a budget dialog nobody answers —
+is not, because **the child is not a process at all**: `pi-subagent/child.ts` builds an in-process `AgentSession` (`createAgentSession`) and
+its nested calls run on the parent's own tool pipeline through `ctx.executeTool`. So there is nothing to signal, and the only lever left was
+`abort`, which ends the parent's turn with the child's. The bridge cannot invent one; the extension that started the child can.
+
+- **The API is a well-known symbol, and that is the whole transport.** pi loads each extension as its own module graph, so the bridge cannot
+  `import` from pi-subagent — and must not want to, since the bridge loads on every runtime, with or without that package. What they share is
+  one process, so pi-subagent publishes `{ version, running(), stop(request): Promise<…> }` at `Symbol.for("pi-subagent.stop")` **at load** and
+  `pi-bridge/subagent-stop.ts` is the client's declared mirror of it, checked at the boundary: a shared *name* is not a capability, so the
+  version and the shape are verified before a click becomes somebody's `abort()`. Two keys on the pi-subagent side, deliberately: the
+  published one holds exactly the callable API (a wrapper there reads as "no API here" forever), the private one holds the live-run map that
+  has to outlive a `/reload`.
+- **Addressed, never broadcast.** `stop` takes the id of the `subagent` tool call the human is looking at and refuses anything else — including
+  "whatever is running now", which is the fallback a tired user would want and the one thing that could end a child they did not point at.
+- **A human answers for a stop, always — `answered` says who.** Stopping a child is the extension's own decision rule, not a caller's to
+  waive, so a request that arrives with nobody asked gets a dialog (`pi-subagent/stop-dialog.ts`) and **only an explicit "Stop it" ends it**:
+  "Keep it running" leads the option list (a stray Enter must not destroy a report still being written), and a dismissed, timed-out or
+  un-drawable dialog answers `not-answered` and leaves the run going. `answered: true` is the truth for both Amulet controls — an explicit press
+  on a control that names the run it ends — and it exists so the human is not asked twice for one decision. `stop` therefore *resolves*: the
+  child keeps running while the question is open, because there is no pause and a slow answer should not throw the work away.
+- **The caller owns the sentence.** The bridge formats the note (`stopRunNoteText`, same `Stopped by user…` vocabulary as a command stop) and
+  pi-subagent only *places* it: line 2 of the model-facing result, plus `details.stoppedBy` so the card can say `stopped by you` — the note
+  itself is stripped from the card's report by `cleanReport`, which is why the flag has to travel in `details` at all.
+- **Taken at composition, not at the click.** `liveRun.takeStop()` runs where `composeResult` is called, so a stop that raced the child's own
+  report still lands on the report instead of looking like a run that ended itself.
+- **Capability-gated like everything else here:** `hello` answers `subagentStop`, asked at probe time rather than at bridge load, because pi's
+  extension load order is not a contract. No API ⇒ no button ⇒ the human has the controls the runtime can honour.
+- Verification: `pi-subagent/__tests__/stop-api.test.ts` + `stop-dialog.test.ts` (address rule, ask rule, reload survival, one-reader reason)
+  in the other repo, `pi-bridge/subagent-stop.test.ts` (the mirror's refusals) here, `node verification/rpc-stop-ask.mjs "Keep it running"` /
+  `"Stop it"` for the dialog across the wire (with `verification/stop-client.ts`, a client that does *not* claim an answer), and
+  `STOP_RUN=1 node scripts/stop-probe.mjs "note"` for Amulet's own answered click — which needs the local pi-subagent in front of the copy your
+  settings autoload: `WITH_EXTENSIONS=…/pi-gate/index.ts:…/pi-subagent/index.ts` (colon-separated, and it implies `--no-extensions`). The probe
+  arms the stop on the child's first nested call so the evidence is a run with turns to lose; what must come back is an ack naming that call,
+  the note on line 2 of the parent's `subagent` result, and `agent_settled.aborted === false`.
 
 ## A streamed reply is chunked only when asked
 

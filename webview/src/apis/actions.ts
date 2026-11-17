@@ -42,6 +42,13 @@ export const actions = {
    */
   stopToolCall: (toolCallId: string, note?: string) =>
     postMessage({ type: 'stopToolCall', toolCallId, note }),
+  /**
+   * Stop one running subagent instead of one of its commands: the bridge asks the extension that started the
+   * child to end it, the report comes back with the human's note at its head, and the parent's turn continues.
+   * Same ack (`toolStopResult`), same note vocabulary, different lever — a subagent has no process to signal.
+   */
+  stopSubagentCall: (toolCallId: string, note?: string) =>
+    postMessage({ type: 'stopSubagentCall', toolCallId, note }),
   compact: () => postMessage({ type: 'compact' }),
   editAndFork: (entryId: string, text: string) =>
     postMessage({ type: 'editAndFork', entryId, text }),

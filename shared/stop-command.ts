@@ -20,6 +20,16 @@
 export const SHELL_TOOLS: readonly string[] = ['bash', 'powershell'];
 
 /**
+ * Which of the two levers a Stop press pulls, and the answer the runtime gives back.
+ *
+ * `command` signals the process pi spawned for one call — works for a subagent's nested command too, because
+ * that really is a child of the runtime's process. `run` ends a subagent through the extension that started it,
+ * which is the only lever over an in-process child. Both travel the same wire and share the note vocabulary
+ * below, which is exactly why one union names them.
+ */
+export type StopKind = 'command' | 'run';
+
+/**
  * Whether this call has a process to stop.
  *
  * Every other pi tool runs in-process — a hung `grep` is a hung regexp, and no signal reaches it. One list for
@@ -70,7 +80,23 @@ export function clampStopNote(text: string): string {
  * a human ended that call, which is also the only honest account of a result with no exit code.
  */
 export function stopNoteText(note?: string): string {
+  return withStopPrefix(note, 'the command was terminated before it finished.');
+}
+
+/**
+ * The same sentence for a stopped **run** — a subagent the human ended rather than a command it was running.
+ *
+ * The `with note:` half is shared on purpose: a client that stopped a subagent's command an hour ago and the
+ * subagent now is using one vocabulary, which is the point of routing both through `STOP_NOTE_PREFIX`. Only the
+ * no-reason fallback differs, because the thing that ended is different — and a run stop always has a note when
+ * the human typed one, so this is the sentence they get when they did not.
+ */
+export function stopRunNoteText(note?: string): string {
+  return withStopPrefix(note, 'the subagent was stopped before it reported.');
+}
+
+function withStopPrefix(note: string | undefined, fallback: string): string {
   return note
     ? `${STOP_NOTE_PREFIX} with note: ${note}`
-    : `${STOP_NOTE_PREFIX}: the command was terminated before it finished.`;
+    : `${STOP_NOTE_PREFIX}: ${fallback}`;
 }

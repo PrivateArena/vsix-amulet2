@@ -717,6 +717,9 @@ export class ChatBridge implements vscode.Disposable {
         case 'stopToolCall':
           await this.runStopCommand(message.toolCallId, message.note);
           return;
+        case 'stopSubagentCall':
+          await this.runStopSubagent(message.toolCallId, message.note);
+          return;
         case 'revertToMessage':
           await this.revertToMessage(message.text, message.occurrence);
           return;
@@ -1217,19 +1220,60 @@ export class ChatBridge implements vscode.Disposable {
     toolCallId: string,
     note?: string,
   ): Promise<void> {
+    await this.runStop('stop', 'command', toolCallId, note);
+  }
+
+  /**
+   * Stop one running subagent through the bridge, for the case a command stop cannot reach.
+   *
+   * Same route and same discipline as {@link runStopCommand} — one addressed bridge call, no state invented on
+   * this side — but the lever itself is pi-subagent's: a child is an in-process session, so the only thing that
+   * can end it is the extension that started it, which the bridge reaches over the shared stop API. A runtime
+   * without that API answers `unsupported`, and the webview never drew the button in the first place (the
+   * `subagentStop` capability).
+   */
+  private async runStopSubagent(
+    toolCallId: string,
+    note?: string,
+  ): Promise<void> {
+    await this.runStop('stopSubagent', 'run', toolCallId, note);
+  }
+
+  /**
+   * The one submission behind both stops: ask the bridge, tell the card what came back, log the evidence.
+   *
+   * The ack is posted before anything is shown, because the card is the surface the human clicked and the only
+   * place a refusal still means something after the toast is gone. A VS Code warning rides along on failure:
+   * a call that refused to stop may be hanging off-screen, and a card the reader has scrolled past is not an
+   * answer they will find.
+   */
+  private async runStop(
+    op: 'stop' | 'stopSubagent',
+    kind: 'command' | 'run',
+    toolCallId: string,
+    note?: string,
+  ): Promise<void> {
+    const unavailable = (reason: string): void => {
+      this.post({
+        type: 'toolStopResult',
+        toolCallId,
+        kind,
+        ok: false,
+        error: reason,
+      });
+      void vscode.window.showWarningMessage(`Amulet: ${reason}`);
+    };
     if (!this.runtime?.isReady) {
-      void vscode.window.showWarningMessage(
-        'Amulet: the pi runtime is not running.',
-      );
+      unavailable('the pi runtime is not running.');
       return;
     }
     if (!this.bridge.isAvailable()) {
-      void vscode.window.showWarningMessage(
-        'Amulet: stopping one command needs the Amulet bridge, which "amulet.contextEditing" loads on pi 1.4 or newer.',
+      unavailable(
+        'stopping one command needs the Amulet bridge, which "amulet.contextEditing" loads on pi 1.4 or newer.',
       );
       return;
     }
-    const reply = await this.bridge.call('stop', {
+    const reply = await this.bridge.call(op, {
       // The command text is *not* sent: the bridge recorded it from the same call it is being asked about,
       // and it is the aim of a process kill. Never trust a webview restatement for that — the rule
       // `src/prompts/prompt-resource.ts` applies to paths applies harder here.
@@ -1237,16 +1281,20 @@ export class ChatBridge implements vscode.Disposable {
       content: note ?? '',
     });
     if (!reply.ok) {
-      void vscode.window.showWarningMessage(`Amulet: ${reply.error}`);
+      unavailable(reply.error);
       return;
     }
+    this.post({ type: 'toolStopResult', toolCallId, kind, ok: true });
     const stop = reply.stop;
+    const subagent = reply.subagent;
     this.log.info(
       stop
         ? `Stopped ${stop.toolName} call ${toolCallId}: ${
             stop.signals.join(' then ') || 'already gone'
           } ${stop.group ? 'process group' : 'process'} ${stop.pids.join(', ')} (${stop.matched}).`
-        : `Stopped call ${toolCallId}: the bridge confirmed it but named no process.`,
+        : subagent
+          ? `Stopped ${subagent.role} subagent ${toolCallId}: ${subagent.note}`
+          : `Stopped call ${toolCallId}: the bridge confirmed it but named nothing.`,
     );
   }
 

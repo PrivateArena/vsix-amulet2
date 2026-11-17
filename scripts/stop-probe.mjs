@@ -6,6 +6,13 @@
 //   node scripts/stop-probe.mjs "the dev server is already on :3000"
 //   STOP_DELAY=6 COMMAND='sleep 900' node scripts/stop-probe.mjs
 //   NESTED=1 node scripts/stop-probe.mjs "that task is already done"   # a subagent's own command
+//   STOP_RUN=1 node scripts/stop-probe.mjs "I found the answer myself" # the subagent run itself
+//
+// Two levers, because there are two things to stop. `stop` signals the process pi spawned for one command — a
+// subagent's hung `bash` included, since that really is a child of the runtime. `stopSubagent` ends the *child
+// run*, an in-process session with no process of its own, through the stop API pi-subagent publishes on the
+// shared symbol; that one needs a local pi-subagent in front of whatever your settings autoload, which is what
+// WITH_EXTENSIONS is for.
 //
 // What it does: starts a child with the Amulet bridge, asks the model to run a command that cannot finish,
 // waits for `tool_execution_start`, sends `/amulet {"op":"stop", …}` for that very call id, and then reports
@@ -39,13 +46,29 @@ const timeoutMs = Number(process.env.PROBE_TIMEOUT || 180_000);
  * nested id: the call has no session entry, only `<subagentCallId>/<n>`, but it really runs a process.
  */
 const nested = process.env.NESTED === '1';
+/**
+ * Stop the *run* rather than one command inside it. The child never finishes, so the only evidence that the lever
+ * worked is the parent's `subagent` result: its head must be the human's sentence, and the run around it must
+ * continue rather than abort — which is the whole difference from the composer's Stop button.
+ */
+const stopRun = process.env.STOP_RUN === '1';
+/**
+ * Extra `pi -e` targets, colon-separated: how a local pi-subagent checkout gets in front of the copy the
+ * settings autoload, so one probe can drive two repositories at once.
+ */
+const extra = (process.env.WITH_EXTENSIONS || '').split(':').filter(Boolean);
+
+const childArgs = ['--mode', 'rpc'];
+if (extra.length) childArgs.push('--no-extensions');
+childArgs.push('-e', bundle);
+for (const path of extra) childArgs.push('-e', path);
 
 if (!existsSync(bundle)) {
   console.error(`bridge bundle missing: ${bundle} (run \`node esbuild.mjs\`)`);
   process.exit(1);
 }
 
-const child = spawn(binary, ['--mode', 'rpc', '-e', bundle], {
+const child = spawn(binary, childArgs, {
   cwd,
   stdio: ['pipe', 'pipe', 'pipe'],
 });
@@ -54,6 +77,36 @@ const send = (obj) => child.stdin.write(JSON.stringify(obj) + '\n');
 let seq = 0;
 const pending = new Map();
 const seen = { stopAck: null, toolResult: null, agentEnd: null, settled: null };
+
+/**
+ * Ask the bridge to end the running subagent, once.
+ *
+ * Arming is not the same as firing: the delay trigger starts the clock, and the child's first nested call pulls
+ * it forward, because a run with turns to its name is better evidence than a run that was killed before it began
+ * to think. One timer, re-armed — never two stops of the same call, whose ack would answer a question nobody
+ * asked twice.
+ */
+let stopTimer = null;
+function askStopRun(delayMs, why) {
+  if (!seen.stoppedRunId || stopSent) return;
+  if (stopTimer) clearTimeout(stopTimer);
+  else console.log(`[probe] arming the run stop (${why})`);
+  const toolCallId = seen.stoppedRunId;
+  stopTimer = setTimeout(async () => {
+    if (stopSent) return;
+    stopSent = true;
+    console.log(
+      `[probe] asking the bridge to stop the run ${toolCallId} (note: ${note || '<none>'})`,
+    );
+    const reply = await callBridge({
+      op: 'stopSubagent',
+      handle: { kind: 'toolCall', toolCallId },
+      content: note,
+    });
+    seen.stopAck = reply;
+    console.log('[stop ack]', JSON.stringify(reply));
+  }, delayMs);
+}
 
 function callBridge(body) {
   const reqId = `probe-${++seq}`;
@@ -144,6 +197,16 @@ rl.on('line', (line) => {
     console.log(
       `[tool start] ${obj.toolName} ${obj.toolCallId} parent=${obj.parentToolCallId ?? '-'}`,
     );
+    if (stopRun) {
+      if (obj.toolName === 'subagent' && !obj.parentToolCallId && !seen.stoppedRunId) {
+        seen.stoppedRunId = obj.toolCallId;
+        seen.startedAtS = performance.now() / 1000;
+        askStopRun(stopDelayMs, `after ${stopDelayMs}ms`);
+      } else if (obj.parentToolCallId === seen.stoppedRunId) {
+        askStopRun(1_500, `the child started a ${obj.toolName} call`);
+      }
+      return;
+    }
     if (obj.toolName !== 'bash' || stopSent) return;
     // In nested mode the outer `subagent` call is not a bash call, so the first bash event is the child's. If it
     // is not, the probe is not testing the case it exists for, and must say so instead of passing anyway.
@@ -207,8 +270,12 @@ rl.on('line', (line) => {
     // Every result is kept: in nested mode the note lands on the *child's* result while the last tool to end is
     // the outer `subagent` call, so reading only the newest one would report a false negative.
     seen.results = [...(seen.results ?? []), { isError: obj.isError, text }];
+    // The whole head, not just its first line: for a stopped *run* the note is the second line, and a probe
+    // that prints only the first cannot tell "the reason travelled" from "the child finished and said nothing".
+    const clock = obj.toolCallId === seen.stoppedRunId ? ` +${Math.round(performance.now() / 1000 - seen.startedAtS)}s` : '';
+    const stoppedBy = obj.result?.details?.stoppedBy;
     console.log(
-      `[tool end] isError=${obj.isError} first line=${JSON.stringify(text.split('\n')[0] ?? '')}`,
+      `[tool end] ${obj.toolName}${clock} isError=${obj.isError} details.stoppedBy=${JSON.stringify(stoppedBy ?? null)} head=${JSON.stringify(text.split('\n').slice(0, 3).join(' ⏎ '))}`,
     );
     return;
   }
@@ -243,7 +310,9 @@ function finish() {
   const ack = seen.stopAck;
   verdict.push(`bridge acked: ${ack ? ack.ok === true : 'never answered'}`);
   verdict.push(
-    `signalled pids: ${JSON.stringify(ack?.stop?.pids ?? [])} (${ack?.stop?.matched ?? 'n/a'})`,
+    stopRun
+      ? `run the bridge named: ${JSON.stringify(ack?.subagent ?? null)} (asked for ${seen.stoppedRunId})`
+      : `signalled pids: ${JSON.stringify(ack?.stop?.pids ?? [])} (${ack?.stop?.matched ?? 'n/a'})`,
   );
   const results = seen.results ?? [seen.toolResult].filter(Boolean);
   const annotated = results.filter((r) => /Stopped by user/.test(r.text));
@@ -260,10 +329,12 @@ function finish() {
     `run continued: ${seen.settled ? seen.settled.aborted !== true : 'never settled'}`,
   );
   const hit = Array.isArray(aimed) ? aimed : [];
-  verdict.push(
-    `aim was a process of the child running the command: ${hit.some((row) => row.ofTheChild)} ` +
-      `(witnessed ${JSON.stringify(hit)})`,
-  );
+  if (!stopRun) {
+    verdict.push(
+      `aim was a process of the child running the command: ${hit.some((row) => row.ofTheChild)} ` +
+        `(witnessed ${JSON.stringify(hit)})`,
+    );
+  }
   if (seen.failed) verdict.push(`INCONCLUSIVE: ${seen.failed}`);
   console.log('\n=== verdict ===');
   for (const line of verdict) console.log(' -', line);
@@ -273,11 +344,12 @@ function finish() {
 
 const READY_MS = 2500;
 setTimeout(() => {
-  const prompt = nested
-    ? `Use the subagent tool with role "explore" and the task: "Run the bash command \`${command}\` exactly once and report what it printed. Do not run any other command." `
-    : `Run exactly this bash command and then tell me what it printed: ${command}. Do not run anything else, do not use a timeout argument. `;
+  const prompt =
+    nested || stopRun
+      ? `Use the subagent tool with role "explore" and the task: "Run the bash command \`${command}\` exactly once and report what it printed. Do not run any other command." `
+      : `Run exactly this bash command and then tell me what it printed: ${command}. Do not run anything else, do not use a timeout argument. `;
   console.log(
-    `[probe] ${nested ? 'delegating' : 'asking the model to run'}: ${command}`,
+    `[probe] ${nested || stopRun ? 'delegating' : 'asking the model to run'}: ${command}`,
   );
   send({ id: 'p1', type: 'prompt', message: prompt });
 }, READY_MS);

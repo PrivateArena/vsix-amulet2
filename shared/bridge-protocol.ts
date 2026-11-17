@@ -44,11 +44,19 @@ export const CONTEXT_OMIT_PLACEHOLDER = '[Omitted from context by the user.]';
  * `hello` is a capability probe with no side effect; `omit`/`replace`/`restore`/`revert`/`undo-revert` are
  * the context-surgery features plus their inverses — persistent state, so all of them idle-only.
  * `stop` is the exception and has to be: it interrupts a call that is executing *right now*, which is the
- * only moment it means anything. `undo-revert` is separate from `revert` because it targets the leaf the last
- * revert abandoned rather than a message the user picked.
+ * only moment it means anything. `stopSubagent` is the same kind of exception, for the other thing a client
+ * cannot reach from outside: a subagent run whose own command stop is not enough. `undo-revert` is separate
+ * from `revert` because it targets the leaf the last revert abandoned rather than a message the user picked.
  */
 export type BridgeOp =
-  'hello' | 'omit' | 'replace' | 'restore' | 'revert' | 'undo-revert' | 'stop';
+  | 'hello'
+  | 'omit'
+  | 'replace'
+  | 'restore'
+  | 'revert'
+  | 'undo-revert'
+  | 'stop'
+  | 'stopSubagent';
 
 export const BRIDGE_OPS: readonly BridgeOp[] = [
   'hello',
@@ -58,6 +66,7 @@ export const BRIDGE_OPS: readonly BridgeOp[] = [
   'revert',
   'undo-revert',
   'stop',
+  'stopSubagent',
 ];
 
 /**
@@ -79,7 +88,7 @@ export interface BridgeRequest {
   handle?: BridgeHandle;
   /** Required by `revert` and `undo-revert`: the entry to move the leaf to. */
   entryId?: string;
-  /** Required by `replace`: the text the model should read from now on. For `stop`: the human's note. */
+  /** Required by `replace`: the text the model should read from now on. For `stop`/`stopSubagent`: the human's note. */
   content?: string;
   /** Always false in v1 — a branch summary is an LLM call that appends content and busts the cache. */
   summarize?: false;
@@ -111,6 +120,12 @@ export interface BridgeCapabilities {
    * it, and the host must then hide the buttons rather than discover the answer by failing.
    */
   toolStop?: boolean;
+  /**
+   * Whether `stopSubagent` can be honoured here, i.e. a `subagent` tool is loaded in this child and publishes
+   * its stop API. Optional on the wire for the same reason as `toolStop`: no API, no button — the only other
+   * lever over a hanging subagent is `abort`, which takes the whole turn with it.
+   */
+  subagentStop?: boolean;
 }
 
 /** Why an operation did not happen. Each is a different sentence in the UI. */
@@ -128,7 +143,12 @@ export type BridgeErrorCode =
   /** `stop`: the named call is not one this child is executing. */
   | 'not-running'
   /** `stop`: the call is not a shell command, so there is no process to stop. */
-  | 'not-shell';
+  | 'not-shell'
+  /**
+   * `stopSubagent`: the child was asked whether it may end and nobody said yes — declined, dismissed, timed
+   * out, or no front-end to ask in. The run is still going, which is the whole difference from a refusal.
+   */
+  | 'not-answered';
 
 export const BRIDGE_ERROR_CODES: readonly BridgeErrorCode[] = [
   'busy',
@@ -142,6 +162,7 @@ export const BRIDGE_ERROR_CODES: readonly BridgeErrorCode[] = [
   'no-process',
   'not-running',
   'not-shell',
+  'not-answered',
 ];
 
 /**
@@ -182,6 +203,22 @@ export interface ToolStopEvidence {
   liveCalls: number;
 }
 
+/**
+ * What a `stopSubagent` did, in the terms the run itself reported.
+ *
+ * No pids: a subagent is not a process (it is an in-process session), so the evidence is the run that was
+ * addressed and the words the parent will read at the head of its report — which is what distinguishes a stop
+ * the human asked for from a child that died of its own accord.
+ */
+export interface SubagentStopEvidence {
+  /** The `subagent` tool call that was stopped. Echoed back so a UI can retire the right card's control. */
+  callId: string;
+  /** The role the child ran, from the run's own registration. */
+  role: string;
+  /** The sentence the parent model reads, empty when the human gave no reason. */
+  note: string;
+}
+
 export interface BridgeReplyOk {
   v: typeof BRIDGE_PROTOCOL_VERSION;
   reqId: string;
@@ -197,6 +234,8 @@ export interface BridgeReplyOk {
   capabilities?: BridgeCapabilities;
   /** `stop` only: what was signalled, and how certain the bridge was about the aim. */
   stop?: ToolStopEvidence;
+  /** `stopSubagent` only: which run was ended. */
+  subagent?: SubagentStopEvidence;
 }
 
 export interface BridgeReplyError {
@@ -355,6 +394,14 @@ function validateRequest(value: unknown): BridgeRequest | BridgeRequestError {
       if (request.handle.kind !== 'toolCall')
         return { error: 'stop can only address a tool call' };
       break;
+    case 'stopSubagent':
+      // Addressed by the id of the `subagent` call the human is looking at. A stop that could not name its
+      // run would be a lever over somebody else's child, so the id is required rather than inferred.
+      if (!request.handle)
+        return { error: 'stopSubagent needs the subagent call it should end' };
+      if (request.handle.kind !== 'toolCall')
+        return { error: 'stopSubagent can only address a tool call' };
+      break;
     case 'hello':
       break;
   }
@@ -488,6 +535,9 @@ function validateReply(value: unknown): BridgeReply | null {
       ...(typeof caps.toolStop === 'boolean'
         ? { toolStop: caps.toolStop }
         : {}),
+      ...(typeof caps.subagentStop === 'boolean'
+        ? { subagentStop: caps.subagentStop }
+        : {}),
     };
   }
   if (value.stop !== undefined) {
@@ -518,6 +568,22 @@ function validateReply(value: unknown): BridgeReply | null {
       toolName: stop.toolName,
       candidates: stop.candidates,
       liveCalls: stop.liveCalls,
+    };
+  }
+  if (value.subagent !== undefined) {
+    const subagent = value.subagent;
+    if (!isRecord(subagent)) return null;
+    if (
+      typeof subagent.callId !== 'string' ||
+      typeof subagent.role !== 'string' ||
+      typeof subagent.note !== 'string'
+    ) {
+      return null;
+    }
+    reply.subagent = {
+      callId: subagent.callId,
+      role: subagent.role,
+      note: subagent.note,
     };
   }
   return reply;

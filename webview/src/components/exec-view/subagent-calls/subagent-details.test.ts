@@ -110,6 +110,37 @@ describe('subagentMetaLine', () => {
       'Explore · timeout · 55 turns · 92 tool uses · 666k token · local/qwen',
     );
   });
+
+  it('says a human stopped it, which is not the same as a child that failed', () => {
+    // The note itself is in the model-facing header, and `cleanReport` strips that out of the card's report —
+    // so without this part a stopped run and a crashed one render identically.
+    const stopped = {
+      title: 'Explore',
+      exit: 'aborted',
+      turns: 6,
+      toolCalls: 11,
+      stoppedBy: 'Stopped by user with note: the build is already green',
+    };
+    expect(subagentMetaLine(stopped, false)).toBe(
+      'Explore · aborted · stopped by you · 6 turns · 11 tool uses',
+    );
+    // While it runs there is nothing to have said: a stop has not landed until the run settled.
+    expect(subagentMetaLine({ ...stopped, stoppedBy: undefined }, true)).toBe(
+      'Explore · 6 turns',
+    );
+  });
+
+  it('reads the stop reason off the details payload', () => {
+    const details = readSubagentDetails({
+      displayName: 'Explore',
+      role: 'explore',
+      status: 'stopped',
+      exit: 'aborted',
+      report: 'partial findings',
+      stoppedBy: 'Stopped by user: the subagent was stopped before it reported.',
+    });
+    expect(details?.stoppedBy).toContain('was stopped before it reported');
+  });
 });
 
 describe('cleanReport', () => {

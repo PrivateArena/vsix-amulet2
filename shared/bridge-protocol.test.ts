@@ -71,6 +71,14 @@ describe('encodeBridgeRequest', () => {
       ['undo-revert', { entryId: 'e9' }],
       // A stop with no note is a complete request: the human pressed Enter on an empty field.
       ['stop', { handle: { kind: 'toolCall', toolCallId: 'call_1/3' } }],
+      // Same shape for ending a subagent run: the id of the `subagent` call, and the human's words.
+      [
+        'stopSubagent',
+        {
+          handle: { kind: 'toolCall', toolCallId: 'call_1' },
+          content: 'the child is retrying the same build',
+        },
+      ],
     ];
     for (const [op, init] of cases) {
       expect(parseOk(encodeBridgeRequest(request(op, init)))).toEqual(
@@ -431,5 +439,119 @@ describe('the stop op', () => {
       navigateTree: true,
       piVersion: '1.5.0',
     });
+  });
+
+  it('keeps subagentStop optional, for a bridge or a runtime that never had it', () => {
+    const parse = (caps: Record<string, unknown>) =>
+      parseBridgeReply(
+        encodeBridgeReply({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'hello',
+          ok: true,
+          capabilities: {
+            contextEdit: true,
+            navigateTree: true,
+            piVersion: '1.5.2',
+            toolStop: true,
+            ...caps,
+          },
+        }),
+      );
+    expect(
+      parse({ subagentStop: true })?.ok === true &&
+        (
+          parse({ subagentStop: true }) as { capabilities?: unknown }
+        ).capabilities,
+    ).toEqual({
+      contextEdit: true,
+      navigateTree: true,
+      piVersion: '1.5.2',
+      toolStop: true,
+      subagentStop: true,
+    });
+    // A non-boolean claim is not a capability: the UI would draw a lever the child may not be able to pull.
+    expect(
+      parse({ subagentStop: 'yes' })?.ok === true &&
+        (
+          parse({ subagentStop: 'yes' }) as { capabilities?: unknown }
+        ).capabilities,
+    ).toEqual({
+      contextEdit: true,
+      navigateTree: true,
+      piVersion: '1.5.2',
+      toolStop: true,
+    });
+  });
+});
+
+/**
+ * `stopSubagent` — the lever over a run rather than a process.
+ *
+ * Its wire shape is deliberately smaller than `stop`'s: a subagent is an in-process session, so there are no
+ * pids to audit and no aim to be wrong about. What the answer does carry is the run that was addressed, because
+ * the difference between "stopped the child you pointed at" and "stopped a child" is the whole contract.
+ */
+describe('the stopSubagent op', () => {
+  it('can only address a live tool call', () => {
+    expect(
+      parseError(
+        JSON.stringify({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'stopSubagent',
+        }),
+      ),
+    ).toContain('needs the subagent call');
+    expect(
+      parseError(
+        JSON.stringify({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'stopSubagent',
+          handle: { kind: 'userText', text: 'the one running now' },
+        }),
+      ),
+    ).toContain('can only address a tool call');
+  });
+
+  it('round-trips the evidence of which run it ended', () => {
+    const reply: BridgeReply = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      reqId: 'r1',
+      op: 'stopSubagent',
+      ok: true,
+      subagent: {
+        callId: 'call_1',
+        role: 'explore',
+        note: 'Stopped by user with note: I found it myself',
+      },
+    };
+    expect(parseBridgeReply(encodeBridgeReply(reply))).toEqual(reply);
+  });
+
+  it('round-trips both refusals, and drops an evidence object that names nothing', () => {
+    for (const code of ['not-running', 'unknown-handle'] as const) {
+      const reply: BridgeReply = {
+        v: BRIDGE_PROTOCOL_VERSION,
+        reqId: 'r1',
+        op: 'stopSubagent',
+        ok: false,
+        code,
+        error: 'no subagent is running in this session.',
+      };
+      expect(parseBridgeReply(encodeBridgeReply(reply))).toEqual(reply);
+    }
+    expect(
+      parseBridgeReply(
+        `${BRIDGE_REPLY_PREFIX}${JSON.stringify({
+          v: BRIDGE_PROTOCOL_VERSION,
+          reqId: 'r1',
+          op: 'stopSubagent',
+          ok: true,
+          subagent: { callId: 'call_1', role: 'explore' },
+        })}`,
+      ),
+    ).toBeNull();
   });
 });

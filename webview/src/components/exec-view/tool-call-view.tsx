@@ -429,7 +429,12 @@ function ExecBlockView({
               </Tooltip>
             )}
             {live && toolCallId && (
-              <StopActions toolCallId={toolCallId} name={name} live={live} />
+              <StopActions
+                toolCallId={toolCallId}
+                name={name}
+                live={live}
+                run={subagent != null}
+              />
             )}
             {tool && <CardMenu tool={tool} />}
           </span>

@@ -4,6 +4,7 @@ import { actions } from './apis/actions';
 import { onHostMessage } from './apis/vscode';
 import { composer } from './stores/composer-store';
 import { contextSurgery } from './stores/context-surgery-store';
+import { toolStop } from './stores/tool-stop-store';
 import { projectFiles } from './stores/project-files-store';
 import { useCompactionHistoryStore } from './stores/compaction-history-store';
 import { useContextSurgeryStore } from './stores/context-surgery-store';
@@ -77,6 +78,15 @@ export function Shell() {
         contextSurgery.clearInFlight();
         dispatch({ type: 'host', message });
       },
+      // The bridge's answer to a Stop button, which is the only thing that retires a card's "Stopping…": the
+      // call itself settles in milliseconds, or it does not settle and the refusal has to stay on the card.
+      toolStopResult: (message) =>
+        toolStop.settle(
+          message.toolCallId,
+          message.ok
+            ? undefined
+            : { kind: message.kind, error: message.error ?? 'the bridge refused.' },
+        ),
       // The transcript row is the host's `notice`; this is only the panel's way back, and only while the
       // offer is live — a refused revert leaves nothing to undo.
       revertResult: (message) => {
@@ -137,6 +147,9 @@ export function Shell() {
   const sessionId = state.session?.sessionId;
   useEffect(() => {
     contextSurgery.clearAll();
+    // A stop asked of the previous child can never be answered by this one, and a card that still reads
+    // "Stopping…" across a session switch is a claim about a process that is gone.
+    toolStop.clearAll();
     // A prompt dialog is bound to one draft of one session: after a switch, an Insert would paste
     // the previous session's file into a draft whose offsets no longer describe the invocation.
     usePromptDialogStore.getState().close();
