@@ -969,6 +969,15 @@ export type WebviewMessage =
   /** Open the file behind a tool image in the VS Code viewer (full size). */
   | { type: 'openToolImage'; toolCallId: string; path: string }
   /**
+   * Open the transcript a subagent run wrote, in the workbench's own editor.
+   *
+   * Addressed by the **parent `subagent` tool call id**, never by a path: the file belongs to the child
+   * process, so the host is the only party that may name it, and it resolves the id against the paths it
+   * read off the wire itself ({@link ChatBridge.subagentLogs}). A path from this surface would be a request
+   * to open whatever a webview asks for — the same rule `prompt-resource.ts` applies to template files.
+   */
+  | { type: 'openSubagentLog'; toolCallId: string }
+  /**
    * Proof that this webview actually painted a forwarded dialog. The host cannot tell by itself:
    * `WebviewView.visible`/`WebviewPanel.visible` start out `false` and are only pushed by
    * `onDidChangeVisibility`, so a surface can be on screen and still report `false` (or the reverse).

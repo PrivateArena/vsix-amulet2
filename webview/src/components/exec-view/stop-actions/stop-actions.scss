@@ -60,6 +60,13 @@
   pointer-events: none;
 }
 
+/* Same restatement for the row's "Copied" confirmation, which the card header owns. */
+.sub-call-actions .exec-action.is-copied {
+  color: var(--amulet-success);
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /*
  * A stop the runtime refused. Still pressable — the command is still hanging, and retrying is the point — but
  * tinted as a warning rather than left looking idle, because "nothing happened when I clicked" and "the runtime

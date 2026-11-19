@@ -77,6 +77,8 @@ Sticky approval alerts · Click to focus · Auto compact · Export chat · Chang
 | Card overflow menu                 | `#card-menu` → `#card-menu-omit-from-context`, `#card-menu-edit-context-content`, `#card-menu-show-it-again` | `exec-view/tool-call-view.tsx`                       |
 | Card context trigger               | `.exec-ctx-trigger`                                                                                          | `exec-view/tool-call-view.tsx`                       |
 | Copy on a card                     | `.ctl-card-copy`                                                                                             | `exec-view/tool-call-view.tsx`                       |
+| Copy one nested call               | `.ctl-row-copy`                                                                                              | `exec-view/subagent-calls/subagent-calls.tsx`        |
+| Open a subagent transcript         | `.ctl-subagent-log`                                                                                          | same                                                 |
 | Stop this command                  | `.ctl-stop-command`                                                                                          | `exec-view/stop-actions/stop-actions.tsx`            |
 | Stop this command with reason…     | `.ctl-stop-with-reason`                                                                                      | same                                                 |
 | Abort this turn                    | `.ctl-abort-turn`                                                                                            | same                                                 |

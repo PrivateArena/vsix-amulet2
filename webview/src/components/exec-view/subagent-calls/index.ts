@@ -6,7 +6,14 @@ export {
   isSubagentTool,
   readSubagentDetails,
   resolveSubagentCard,
+  subagentHasLog,
   subagentMetaLine,
   subagentPrompt,
+  subagentStatusOf,
 } from './subagent-details';
-export type { SubagentDetailsView } from './subagent-details';
+export type {
+  SubagentDetailsView,
+  SubagentPhase,
+  SubagentReasoningTurn,
+  SubagentStatus,
+} from './subagent-details';

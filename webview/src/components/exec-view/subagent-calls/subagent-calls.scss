@@ -193,6 +193,58 @@
   border-top: 1px solid var(--amulet-block-divider);
 }
 
+/* What the child thought, between its calls and its report. Same disclosure idiom as a
+   call row — a line, and the body only when asked — because a run that thinks for twenty
+   turns is a wall of prose otherwise, and the interesting part is the newest thought. */
+.sub-agent-thinking {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--amulet-block-divider);
+}
+
+.sub-agent-thinking > .sub-agent-report-label {
+  margin: 0 12px 2px;
+}
+
+.sub-thought-list {
+  display: block;
+  margin: 0;
+  padding: 2px 0;
+  max-height: 180px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sub-thought-row {
+  grid-template-columns: 16px auto minmax(0, 1fr);
+}
+
+.sub-thought-row .sub-call-state {
+  color: var(--amulet-accent);
+}
+
+.sub-thought-row .sub-call-state svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* The thought's first line, standing in for the command a call row shows. */
+.sub-thought-preview {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--amulet-fg-muted);
+  font-style: italic;
+}
+
+.sub-thought-body {
+  font-family: inherit;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
 .sub-agent-report-label {
   margin-bottom: 4px;
   color: var(--amulet-fg-faint);
@@ -206,11 +258,110 @@
   font-size: 0.95em;
 }
 
+/* The card's footer: what the run is doing (or how it ended), then the counters, then the
+   one control that reaches outside the chat. `--amulet-fg-muted`, not `--amulet-fg-faint`: this
+   line is the only place a card states its own outcome, and on a dark theme the faint tier
+   sank into the card background until the status was unreadable. */
 .sub-agent-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 8px 12px 0;
   padding-top: 6px;
   border-top: 1px solid var(--amulet-block-divider);
-  color: var(--amulet-fg-faint);
+  color: var(--amulet-fg-muted);
   font-size: 0.82em;
   overflow-wrap: anywhere;
+}
+
+.sub-agent-summary {
+  display: inline;
+  min-width: 0;
+}
+
+.sub-agent-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--amulet-fg);
+  font-weight: 600;
+}
+
+/* The one thing that separates "still working" from "finished" at a glance. */
+.sub-agent-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sub-agent-state.is-working .sub-agent-dot,
+.sub-agent-state.is-report .sub-agent-dot {
+  animation: sub-agent-pulse 1.2s ease-in-out infinite;
+}
+
+body.animations-disabled .sub-agent-dot {
+  animation: none;
+}
+
+/* Working is the ordinary state and needs no colour of its own — the pulsing dot and the
+   word do the work, and `--amulet-accent` is what "done" is about to become. */
+.sub-agent-state.is-working {
+  color: var(--amulet-fg);
+}
+
+/* The report is the interesting half of a run, so it is the one state allowed its own colour. */
+.sub-agent-state.is-report {
+  color: var(--amulet-info);
+}
+
+.sub-agent-state.is-done {
+  color: var(--amulet-success);
+}
+
+.sub-agent-state.is-stopped {
+  color: var(--amulet-warning);
+}
+
+.sub-agent-state.is-failed {
+  color: var(--amulet-error);
+}
+
+.sub-agent-stats {
+  color: var(--amulet-fg-muted);
+}
+
+/* The join between the loud half and the quiet one. Written in CSS rather than in the markup so a
+   footer with no state (an unknown exit) does not lead with a stray separator. */
+.sub-agent-state + .sub-agent-stats::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--amulet-fg-faint);
+  font-weight: 400;
+}
+
+@keyframes sub-agent-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The footer sits in the card body, where no `.exec-header:hover` rule reaches, so its control
+   states itself — and stays half-visible rather than invisible, because "where do I read the whole
+   thinking of that run?" is a question the card has to answer without a hunt. */
+.ctl-subagent-log {
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.ctl-subagent-log:hover,
+.ctl-subagent-log:focus-visible {
+  opacity: 1;
 }

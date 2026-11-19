@@ -1024,6 +1024,76 @@ describe('reducer — nested (subagent) tool calls', () => {
     );
   });
 
+  it('carries the live phase, the reasoning trail and the transcript path to the card', () => {
+    let s = reducer(initialState, event(start));
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_update',
+        toolCallId: PARENT,
+        toolName: 'subagent',
+        partialResult: {
+          content: [{ type: 'text', text: 'subagent running · turn 2' }],
+          details: {
+            status: 'running',
+            role: 'explore',
+            displayName: 'Explore',
+            phase: 'thinking',
+            childSessionFile: '/home/u/.pi/sessions/--p--/subagent/a.jsonl',
+            turnLogFile: '/tmp/pi-subagent/a.jsonl',
+            reasoning: { turns: [{ turn: 1, text: 'Start with the tree.' }] },
+          },
+        },
+      }),
+    );
+    // The card reads all four off one payload: the phase drives the footer state, the trail is the
+    // thinking section, and a reported path is the only thing that makes "open the transcript" appear.
+    expect(s.tools[PARENT].details).toMatchObject({
+      phase: 'thinking',
+      childSessionFile: '/home/u/.pi/sessions/--p--/subagent/a.jsonl',
+      turnLogFile: '/tmp/pi-subagent/a.jsonl',
+      reasoning: { turns: [{ turn: 1, text: 'Start with the tree.' }] },
+    });
+
+    // The settled payload is a complete replacement, and the trail it reports is the whole run's.
+    s = reducer(
+      s,
+      event({
+        type: 'tool_execution_end',
+        toolCallId: PARENT,
+        toolName: 'subagent',
+        result: {
+          content: [
+            { type: 'text', text: '[subagent explore · DONE]\n\nTwo files.' },
+          ],
+          details: {
+            status: 'completed',
+            exit: 'done',
+            report: 'Two files.',
+            childSessionFile: '/home/u/.pi/sessions/--p--/subagent/a.jsonl',
+            reasoning: {
+              turns: [
+                { turn: 1, text: 'Start with the tree.' },
+                { turn: 2, text: 'Now the manifest.' },
+              ],
+              truncated: true,
+            },
+          },
+        },
+        isError: false,
+      }),
+    );
+    expect(s.tools[PARENT].details).toMatchObject({
+      reasoning: {
+        turns: [
+          { turn: 1, text: 'Start with the tree.' },
+          { turn: 2, text: 'Now the manifest.' },
+        ],
+        truncated: true,
+      },
+    });
+  });
+
   it('records a truncated nested-call list from the settled tool result', () => {
     let s = reducer(initialState, event(start));
     s = reducer(s, event(nestedStart(1, 'ls')));

@@ -509,6 +509,7 @@ function ToolBody({
       <>
         {imageTiles}
         <SubagentCalls
+          toolCallId={toolCallId}
           calls={view.nested}
           tools={view.tools}
           details={view.subagent ?? {}}

@@ -91,6 +91,12 @@ import { restoreOmittedToolResults } from './history-repair';
 import { BridgeClient } from './bridge-client';
 import { listProjectFiles } from './project-files';
 import {
+  SubagentLogIndex,
+  isReadableLogfile,
+  noteSubagentEventLogs,
+  pickSubagentLog,
+} from './subagent-logs';
+import {
   isSupportedImage,
   readToolImage,
   resolveToolImagePath,
@@ -222,6 +228,11 @@ export class ChatBridge implements vscode.Disposable {
    * moved on, "back to the old leaf" would strand what the user has since written.
    */
   private lastRevert: { revertedFrom: string } | undefined;
+  /**
+   * Which files each subagent run wrote, read off the wire by this bridge. The webview is never allowed to
+   * name the transcript a click opens, so the host has to remember it — see {@link subagent-logs}.
+   */
+  private readonly subagentLogs = new SubagentLogIndex();
 
   constructor(
     private readonly sessions: SessionManager,
@@ -379,6 +390,10 @@ export class ChatBridge implements vscode.Disposable {
     // Image payloads are the one part of a tool result no renderer can show, and the
     // one part big enough to matter: redact them, then hand the reference over.
     const stripped = stripEventImages(event as RpcEvent) as RpcEvent;
+    // A subagent reports its own transcript and run log inside `details`, from the first progress tick
+    // onwards. Noted off the stripped event: image redaction never touches `details`, and this is the only
+    // place the host learns a path it is later willing to open.
+    noteSubagentEventLogs(this.subagentLogs, stripped);
     // Reduced motion folds streamed deltas into chunks and flushes the queue ahead of anything else,
     // so the surface sees the wire in order and only the deltas move later.
     this.pacer.route(stripped);
@@ -449,12 +464,14 @@ export class ChatBridge implements vscode.Disposable {
     const file =
       sessionFile === undefined ? await this.sessionFileOf() : sessionFile;
     const edits = await this.contextEdits(file);
-    this.post({
-      type: 'history',
-      messages: stripHistoryImagePayloads(
-        restoreOmittedToolResults(stripCompactionBoundaries(messages), edits),
-      ),
-    });
+    const posted = stripHistoryImagePayloads(
+      restoreOmittedToolResults(stripCompactionBoundaries(messages), edits),
+    );
+    // A settled subagent row carries the same `details` a live update did, so a card reopened in a fresh
+    // window is still able to name its transcript — and the click is still answered from the host's own
+    // record rather than from a path the webview repeats back.
+    this.subagentLogs.seed(posted);
+    this.post({ type: 'history', messages: posted });
     this.post({
       type: 'contextEdits',
       edits: this.contextEditViews(file, edits),
@@ -586,6 +603,7 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'newChat':
           await runtime?.newSession();
+          this.subagentLogs.clear();
           this.post({ type: 'history', messages: [] });
           await this.pushState();
           void this.pushThinkingLevels();
@@ -817,6 +835,9 @@ export class ChatBridge implements vscode.Disposable {
           return;
         case 'openToolImage':
           await this.openToolImage(message.path);
+          return;
+        case 'openSubagentLog':
+          await this.openSubagentLog(message.toolCallId);
           return;
         case 'openExternal': {
           // SECURITY: the URL originates from assistant markdown output
@@ -1406,6 +1427,9 @@ export class ChatBridge implements vscode.Disposable {
       await this.pushState();
       return;
     }
+    // The transcript index describes the runs of the session being left behind; the snapshot below
+    // re-seeds it with the ones this file actually holds.
+    this.subagentLogs.clear();
     await this.pushSnapshot();
   }
 
@@ -2400,6 +2424,34 @@ export class ChatBridge implements vscode.Disposable {
     );
   }
 
+  /**
+   * Show one subagent run's own transcript in the workbench.
+   *
+   * Nothing here comes from the webview but the tool call id: the path is looked up in the host's record of
+   * what this session's `details` payloads reported, then re-checked against the disk, because a run may have
+   * been pruned (`subagent.keepTranscripts`) since the card was drawn. A card that names no file, or one that
+   * is gone, says so — a control that silently does nothing is what reads as broken.
+   */
+  private async openSubagentLog(toolCallId: string): Promise<void> {
+    const target = pickSubagentLog(this.subagentLogs.pathsOf(toolCallId));
+    if (!target) {
+      void vscode.window.showWarningMessage(
+        'Amulet: that runtime reported no transcript for this subagent run.',
+      );
+      return;
+    }
+    if (!isReadableLogfile(target)) {
+      void vscode.window.showWarningMessage(
+        `Amulet: that subagent transcript is no longer on disk: ${target}`,
+      );
+      return;
+    }
+    await vscode.commands.executeCommand(
+      'vscode.open',
+      vscode.Uri.file(target),
+    );
+  }
+
   // --- Extension UI dialogs ------------------------------------------------
 
   /**
@@ -2475,6 +2527,9 @@ export class ChatBridge implements vscode.Disposable {
     this.bridge.cancelOutstanding(
       'The chat reconnected before the bridge answered.',
     );
+    // ...and the transcript index is rebuilt from the snapshot `connect()` is about to push, so holding
+    // the old child's paths would only let a click open a run of a dead session.
+    this.subagentLogs.clear();
   }
 
   dispose(): void {

@@ -30,6 +30,12 @@ export const actions = {
     postMessage({ type: 'loadToolImage', toolCallId, index, path }),
   openToolImage: (toolCallId: string, path: string) =>
     postMessage({ type: 'openToolImage', toolCallId, path }),
+  /**
+   * Open the transcript a subagent run wrote. Addressed by the parent call id and **not** by a path: the
+   * host resolves the file from the `details` it read off the wire, so no surface can name a file to open.
+   */
+  openSubagentLog: (toolCallId: string) =>
+    postMessage({ type: 'openSubagentLog', toolCallId }),
   steer: (text: string) => postMessage({ type: 'steer', text }),
   abort: () => postMessage({ type: 'abort' }),
   /**
